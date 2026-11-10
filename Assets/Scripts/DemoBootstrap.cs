@@ -107,6 +107,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void BuildUI()
     {
+        EnsureCamera();
         var cgo = new GameObject("Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
         canvas = cgo.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         var sc = cgo.GetComponent<CanvasScaler>(); sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -116,6 +117,7 @@ public partial class DemoBootstrap : MonoBehaviour
             new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
         root = cgo.GetComponent<RectTransform>();
         var bg = Rect("Paper", root, 0, 0, W, H); Img(bg, Paper);
+
         BuildMap();
         BuildStationViews();
         BuildSceneryViews();
@@ -126,6 +128,22 @@ public partial class DemoBootstrap : MonoBehaviour
         CreateLineVisuals();
         RefreshAllLines();
         InvokeRepeating(nameof(RPTick), 6f, 6f);
+    }
+
+    void EnsureCamera()
+    {
+        if (Camera.main != null) return;
+        var camGo = new GameObject("UICamera", typeof(Camera));
+        camGo.tag = "MainCamera";
+        camGo.transform.SetParent(transform, false);
+        var cam = camGo.GetComponent<Camera>();
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0.66f, 0.79f, 0.81f);
+        cam.cullingMask = 0;
+        cam.orthographic = true;
+        cam.depth = -10;
+        if (UnityEngine.Object.FindFirstObjectByType<AudioListener>() == null)
+            camGo.AddComponent<AudioListener>();
     }
 
     void BuildTopBar()
@@ -380,7 +398,6 @@ public partial class DemoBootstrap : MonoBehaviour
         CreateLineVisuals(); RefreshAllLines(); RefreshStationDots(); RecalcIncome(); RefreshHUD();
         nextLineId++;
         CheckSceneryOnLine(snapshot);
-        if (pendingCheckin.Count == 0) OpenLineScreen(line.id); else pendingDetailId = line.id;
     }
 
     void CommitExtend(Line line, List<int> newPath, List<int> draftStations, int cost)
@@ -391,7 +408,6 @@ public partial class DemoBootstrap : MonoBehaviour
         ClearDraftState();
         CreateLineVisuals(); RefreshAllLines(); RefreshStationDots(); RecalcIncome(); RefreshHUD();
         CheckSceneryOnLine(draftStations);
-        if (pendingCheckin.Count == 0) OpenLineScreen(line.id); else pendingDetailId = line.id;
     }
 
     List<int> BuildExtendPath(Line line, int from, List<int> draftStations)
@@ -991,7 +1007,7 @@ public partial class DemoBootstrap : MonoBehaviour
     }
 
     // ---------- scenery ----------
-    void CheckSceneryOnLine(List<int> st)
+    void CheckSceneryOnLine(List<int> st, bool show = true)
     {
         for (int i = 0; i < st.Count-1; i++)
         {
@@ -1004,7 +1020,7 @@ public partial class DemoBootstrap : MonoBehaviour
                 if (DistToSeg(p,a,b) < 80f) pendingCheckin.Add(sc);
             }
         }
-        if (pendingCheckin.Count > 0) ShowCheckin(pendingCheckin[0]);
+        if (show && pendingCheckin.Count > 0) ShowCheckin(pendingCheckin[0]);
     }
     float DistToSeg(Vector2 p, Vector2 a, Vector2 b)
     {

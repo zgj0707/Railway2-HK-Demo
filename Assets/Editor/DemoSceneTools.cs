@@ -41,6 +41,33 @@ static class DemoSceneTools
             EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
     }
 
+
+
+    [MenuItem("铁路大亨2/选择 Bootstrap（查看编辑说明）", false, 3)]
+    static void SelectBootstrap()
+    {
+        var go = GameObject.Find("Bootstrap");
+        if (go != null) { Selection.activeGameObject = go; EditorGUIUtility.PingObject(go); }
+    }
+
+    [MenuItem("铁路大亨2/打开 UI 脚本", false, 4)]
+    static void OpenUIScripts()
+    {
+        var asset = AssetDatabase.LoadAssetAtPath<MonoScript>("Assets/Scripts/DemoBootstrap.cs");
+        if (asset != null) AssetDatabase.OpenAsset(asset);
+    }
+
+    [MenuItem("铁路大亨2/开始游戏（Play）", false, 0)]
+    static void PlayMain()
+    {
+        if (EditorApplication.isPlaying) return;
+        if (EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+        {
+            EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            EditorApplication.isPlaying = true;
+        }
+    }
+
     [MenuItem("铁路大亨2/打开主场景 Main", false, 1)]
     static void OpenMainScene()
     {

@@ -25,7 +25,13 @@ public partial class DemoBootstrap
         }
         return pageRoot;
     }
-    void GoBackPage() { var b = pageBack; pageBack = null; if (b != null) b(); else ClosePage(); }
+    void GoBackPage()
+    {
+        var b = pageBack; pageBack = null;
+        if (b != null) { b(); return; }
+        ClosePage();
+        if (pendingCheckin.Count > 0) ShowCheckin(pendingCheckin[0]);
+    }
     void ClosePage() { if (pageRoot) Destroy(pageRoot); pageRoot = null; }
 
     void HelpPopup(string text)
