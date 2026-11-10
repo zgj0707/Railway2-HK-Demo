@@ -10,13 +10,21 @@
 
 UI 不是场景里可拖拽的对象，而是代码生成的：
 
-- `Assets/Scripts/DemoBootstrap.cs`：地图、车站、顶部 HUD、弹窗、线路/列车逻辑
+- `Assets/Scripts/DemoBootstrap.cs`：车站、顶部 HUD、弹窗、线路/列车逻辑；地图底图在 `BuildCodeMap` 中用代码矢量绘制
+- `Assets/Scripts/DemoMapVector.cs`：地图矢量组件（陆地填色、海岸线、等高线、海浪笔触），不依赖底图图片
 - `Assets/Scripts/DemoScreens.cs`：线路、车库、公司、科技、图鉴等全屏页面
 - `Assets/Scripts/DemoMobile.cs`：长按、拖线、触感等移动端输入
 
 在 Hierarchy 选中 `Bootstrap`，Inspector 里有快捷按钮可直接打开这些脚本；菜单 `铁路大亨2` 下也有“打开 UI 脚本 / 开始游戏（Play）/ 打开主场景 Main”。
 
-> 如果你希望像普通 Unity 项目那样在 Scene 里直接拖 UI，需要把现在的代码生成 UI 改成场景/预制体驱动，这是结构性改造，可另行安排。
+> 当前不做 Scene 可视化编辑；UI 仍以代码生成，方便快速迭代和统一手机比例。
+
+## 当前交互
+
+- 长按车站 0.42s 开始拖线，44px 小热区吸附；拖回已连接站点会撤销后段。
+- 点线路弹出按线路颜色区分的小气泡：拆该段 / 拆整线 / 详情；多条线并行时同时弹多个。
+- 详情大弹窗显示近 7 日实收、今日实收、客流、运力、列车与升级情况。
+- 景观打卡不再自动弹窗，图鉴图标出现红点，进入图鉴点击待打卡卡片领取。
 
 ## 构建
 

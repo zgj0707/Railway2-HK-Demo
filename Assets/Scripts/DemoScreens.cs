@@ -11,6 +11,7 @@ public partial class DemoBootstrap
     GameObject OpenPage(string title, string help)
     {
         ClosePage();
+        CloseLineBubble();
         pageRoot = Rect("Page", root, 0, 0, W, H);
         Img(pageRoot, Paper);
         Img(Rect("PTop", pageRoot.transform, 0, H-260, W, 260), new Color(0.952f,0.922f,0.870f));
@@ -30,7 +31,6 @@ public partial class DemoBootstrap
         var b = pageBack; pageBack = null;
         if (b != null) { b(); return; }
         ClosePage();
-        if (pendingCheckin.Count > 0) ShowCheckin(pendingCheckin[0]);
     }
     void ClosePage() { if (pageRoot) Destroy(pageRoot); pageRoot = null; }
 
@@ -204,16 +204,23 @@ public partial class DemoBootstrap
     // ---------- 图鉴 ----------
     void OpenSceneryScreen()
     {
-        var pg = OpenPage("图鉴", "线路经过景观即打卡，获得附近客流与钻石。");
+        var pg = OpenPage("图鉴", "线路经过景观后，图鉴会出现红点；点击待打卡卡片领取客流加成与钻石。");
         for (int i = 0; i < sceneries.Count; i++)
         {
             var sc = sceneries[i];
+            bool pending = pendingCheckin.Contains(sc);
             var card = Rect("EC"+i, pg.transform, 28 + (i%2)*516, H-560 - (i/2)*300, 500, 270);
-            Rounded(card, sc.found ? new Color(0.91f,0.95f,0.85f,0.97f) : new Color(1,1,1,0.96f)); SoftShadow(card);
-            Txt(card.transform, sc.found ? "★" : "○", 44, sc.found ? Gold : InkSoft, 24, 176, 70, 56, TextAnchor.MiddleLeft);
+            Rounded(card, sc.found ? new Color(0.91f,0.95f,0.85f,0.97f) : pending ? new Color(0.99f,0.91f,0.87f,0.98f) : new Color(1,1,1,0.96f)); SoftShadow(card);
+            Txt(card.transform, sc.found ? "★" : pending ? "●" : "○", 44, sc.found ? Gold : pending ? Vermilion : InkSoft, 24, 176, 70, 56, TextAnchor.MiddleLeft);
             Txt(card.transform, sc.name, 36, Ink, 98, 178, 380, 50, TextAnchor.MiddleLeft);
             Txt(card.transform, sc.natural ? "自然景观" : "人文景观", 26, InkSoft, 98, 138, 380, 34, TextAnchor.MiddleLeft);
-            Txt(card.transform, sc.found ? "客流 +15% · 钻石 +20" : "未打卡", 24, sc.found?Matcha:InkSoft, 24, 50, 450, 34, TextAnchor.MiddleLeft);
+            Txt(card.transform, sc.found ? "客流 +15% · 钻石 +20" : pending ? "待打卡 · 点击领取" : "线路经过后点亮", 24, sc.found ? Matcha : pending ? Vermilion : InkSoft, 24, 50, 450, 34, TextAnchor.MiddleLeft);
+            if (pending)
+            {
+                var scLocal = sc;
+                var btn = card.AddComponent<Button>(); btn.targetGraphic = card.GetComponent<Image>();
+                btn.onClick.AddListener(() => ShowCheckin(scLocal, () => { ClosePage(); OpenSceneryScreen(); }));
+            }
         }
     }
 }

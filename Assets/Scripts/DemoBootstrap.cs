@@ -37,6 +37,8 @@ public partial class DemoBootstrap : MonoBehaviour
     public class Line {
         public int id; public string name; public Color color; public List<int> st = new List<int>();
         public int[] up = new int[3]; public int trains = 1;
+        public List<int> recent = new List<int>(); // 最近几个结算日的实收
+        public int todayRevenue;
     }
 
     // ---------- state ----------
@@ -58,9 +60,10 @@ public partial class DemoBootstrap : MonoBehaviour
     int panelOpenedFrame = -1;
     Text toastTxt; float toastTimer;
     GameObject buildBar; Text buildInfo; bool buildMode; bool dragging;
-    List<int> draft = new List<int>(); int draftCost; Image previewImg; int pendingDetailId = -1;
+    List<int> draft = new List<int>(); int draftCost; Image previewImg;
     int nextLineId = 2;
     List<Scenery> pendingCheckin = new List<Scenery>();
+    GameObject sceneryBadge;
 
     class LineVisual { public List<GameObject> segs = new List<GameObject>(); public GameObject train; public float t; public int lastSt = -1; public float credit; }
 
@@ -170,7 +173,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
         var gb = Btn(bar.transform, "Gear", "设", 26, 1004, 64, 60, 60, new Color(1,0.99f,0.96f,0.94f), () => Toast("设置（demo）"));
         gb.GetComponentInChildren<Text>().color = Ink;
-        var hb = Btn(bar.transform, "Help", "?", 30, 1004, 132, 60, 60, new Color(1,0.99f,0.96f,0.94f), () => HelpPopup("长按车站并拖到下一站开线，松手确认。若起点已在某条线路上，默认延长该线，也可另开新线；起点有多条线路时逐条选择。时间 60 秒为一天，每日收入即一天进账；1× 可切换 2×/3×，只放大收入。底栏进入线路 / 车库 / 公司 / 科技。"));
+        var hb = Btn(bar.transform, "Help", "?", 30, 1004, 132, 60, 60, new Color(1,0.99f,0.96f,0.94f), () => HelpPopup("长按车站并拖到下一站开线，松手确认；拖回已连接的站点会撤销后段。若起点已在某条线路上，默认延长该线，也可另开新线；起点有多条线路时逐条选择。点线路可拆该段、拆整线或看运营详情。景观打卡改为图鉴红点，进入图鉴点击领取。时间 60 秒为一天，每日收入即一天进账；1× 可切换 2×/3×，只放大收入。底栏进入线路 / 车库 / 公司 / 科技。"));
         hb.GetComponentInChildren<Text>().color = InkSoft;
     }
 
@@ -178,8 +181,7 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         var map = Rect("Map", root, 0, 0, W, H);
         mapRect = map.GetComponent<RectTransform>();
-        var tex = MakeMapTexture2(900, 1600);
-        var raw = map.AddComponent<RawImage>(); raw.texture = tex; raw.color = Color.white;
+        BuildCodeMap(map.transform);
         lineLayer = Rect("Lines", mapRect, 0, 0, W, H).GetComponent<RectTransform>();
         previewLayer = Rect("Preview", mapRect, 0, 0, W, H).GetComponent<RectTransform>();
         var pv = Rect("PreviewLine", previewLayer, 0, 0, 1, 12);
@@ -209,6 +211,132 @@ public partial class DemoBootstrap : MonoBehaviour
         var bri = bot.AddComponent<RawImage>(); bri.texture = fade; bri.color = new Color(0.985f,0.97f,0.93f,0.85f); bri.raycastTarget = false;
         bri.uvRect = new Rect(0, 1, 1, -1);
     }
+
+    void BuildCodeMap(Transform parent)
+    {
+        var sea = Rect("Sea", parent, 0, 0, W, H);
+        var bg = sea.AddComponent<MapBackdropGraphic>(); bg.raycastTarget = false;
+
+        var wavesGo = Rect("Waves", parent, 0, 0, W, H);
+        var waves = wavesGo.AddComponent<MapStrokeGraphic>(); waves.raycastTarget = false;
+        for (int i = 0; i < 18; i++)
+        {
+            float yy = 230f + i * 92f;
+            var pts = new List<Vector2>();
+            for (int x = -40; x <= W + 40; x += 34)
+                pts.Add(new Vector2(x, yy + Mathf.Sin(x * 0.017f + i * 1.9f) * 5f));
+            waves.Add(pts, false, 1.1f, new Color(1f, 1f, 1f, 0.10f));
+        }
+
+        var polys = MapPolys();
+        var cols = new Color[] {
+            new Color(0.85f,0.87f,0.72f), new Color(0.87f,0.86f,0.74f), new Color(0.84f,0.86f,0.70f),
+            new Color(0.85f,0.87f,0.73f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f)
+        };
+        var shadowPolys = new Vector2[polys.Length][];
+        for (int i = 0; i < polys.Length; i++)
+        {
+            shadowPolys[i] = new Vector2[polys[i].Length];
+            for (int j = 0; j < polys[i].Length; j++) shadowPolys[i][j] = polys[i][j] + new Vector2(-3f, -9f);
+        }
+        var shadowCols = new Color[polys.Length];
+        for (int i = 0; i < shadowCols.Length; i++) shadowCols[i] = new Color(0.13f,0.18f,0.14f,0.13f);
+        var shadowGo = Rect("LandShadow", parent, 0, 0, W, H);
+        var shadow = shadowGo.AddComponent<MapPolygonGraphic>(); shadow.raycastTarget = false; shadow.SetData(shadowPolys, shadowCols);
+
+        var landGo = Rect("Land", parent, 0, 0, W, H);
+        var land = landGo.AddComponent<MapPolygonGraphic>(); land.raycastTarget = false; land.SetData(polys, cols);
+
+        var grainGo = Rect("LandGrain", parent, 0, 0, W, H);
+        var grain = grainGo.AddComponent<MapStrokeGraphic>(); grain.raycastTarget = false;
+        var grnd = new System.Random(13);
+        for (int i = 0; i < 520; i++)
+        {
+            float gx = grnd.Next(0, (int)W), gy = MAP_Y + grnd.Next(0, (int)MAP_H);
+            var gp = new Vector2(gx, gy);
+            if (!InsideLand(gp, polys)) continue;
+            float gl = grnd.Next(3, 10);
+            grain.Add(new List<Vector2> { gp, new Vector2(gx + gl, gy + (grnd.Next(0,3)-1)) }, false, 1f, new Color(0.40f,0.46f,0.34f,0.055f));
+        }
+
+        var coastGo = Rect("Coast", parent, 0, 0, W, H);
+        var coast = coastGo.AddComponent<MapStrokeGraphic>(); coast.raycastTarget = false;
+        for (int i = 0; i < polys.Length; i++)
+        {
+            var pts = new List<Vector2>(polys[i]);
+            coast.Add(pts, true, 3.0f, new Color(0.55f,0.63f,0.55f,0.55f));
+            coast.Add(pts, true, 1.6f, new Color(0.30f,0.38f,0.32f,0.72f));
+        }
+
+        var contourGo = Rect("Contours", parent, 0, 0, W, H);
+        var contours = contourGo.AddComponent<MapStrokeGraphic>(); contours.raycastTarget = false;
+        var hills = new[] {
+            new Vector4(0.530f,0.258f,0.085f,0.050f),
+            new Vector4(0.565f,0.248f,0.055f,0.035f),
+            new Vector4(0.760f,0.600f,0.080f,0.050f),
+            new Vector4(0.560f,0.790f,0.120f,0.070f),
+            new Vector4(0.620f,0.800f,0.075f,0.050f),
+            new Vector4(0.240f,0.292f,0.075f,0.045f),
+            new Vector4(0.860f,0.680f,0.070f,0.040f)
+        };
+        for (int k = 0; k < 3; k++)
+        {
+            float t = 0.42f + k * 0.20f;
+            float alpha = 0.30f - k * 0.05f;
+            for (int h = 0; h < hills.Length; h++)
+            {
+                var hill = hills[h];
+                var pts = new List<Vector2>();
+                for (int i = 0; i < 64; i++)
+                {
+                    float a = i / 64f * Mathf.PI * 2f;
+                    float wob = 1f + 0.045f * Mathf.Sin(a * 3f + k * 1.7f + h) + 0.02f * Mathf.Sin(a * 7f + h * 2f);
+                    float px = hill.x * W + Mathf.Cos(a) * hill.z * W * t * wob;
+                    float py = MAP_Y + (hill.y + Mathf.Sin(a) * hill.w * t * wob) * MAP_H;
+                    pts.Add(new Vector2(px, py));
+                }
+                AddClippedContour(contours, pts, polys, 1.15f, new Color(0.30f,0.36f,0.27f, alpha));
+            }
+        }
+    }
+
+    void AddClippedContour(MapStrokeGraphic g, List<Vector2> pts, Vector2[][] land, float width, Color color)
+    {
+        bool allInside = true;
+        for (int i = 0; i < pts.Count; i++) if (!InsideLand(pts[i], land)) { allInside = false; break; }
+        if (allInside) { g.Add(pts, true, width, color); return; }
+        var seg = new List<Vector2>();
+        for (int i = 0; i < pts.Count; i++)
+        {
+            if (InsideLand(pts[i], land)) seg.Add(pts[i]);
+            else
+            {
+                if (seg.Count >= 2) g.Add(new List<Vector2>(seg), false, width, color);
+                seg.Clear();
+            }
+        }
+        if (seg.Count >= 2) g.Add(seg, false, width, color);
+    }
+
+    bool InsideLand(Vector2 p, Vector2[][] land)
+    {
+        for (int i = 0; i < land.Length; i++) if (PtInPoly(p.x, p.y, land[i])) return true;
+        return false;
+    }
+
+    Vector2[][] MapPolys()
+    {
+        return new Vector2[][] {
+            new []{ P(0.50f,0.225f), P(0.56f,0.215f), P(0.63f,0.22f), P(0.70f,0.215f), P(0.77f,0.235f), P(0.83f,0.23f), P(0.90f,0.24f), P(0.945f,0.27f), P(0.94f,0.30f), P(0.90f,0.33f), P(0.84f,0.335f), P(0.78f,0.35f), P(0.71f,0.34f), P(0.65f,0.35f), P(0.59f,0.335f), P(0.54f,0.32f), P(0.50f,0.29f) },
+            new []{ P(0.52f,0.395f), P(0.60f,0.385f), P(0.68f,0.39f), P(0.74f,0.40f), P(0.80f,0.42f), P(0.845f,0.46f), P(0.86f,0.52f), P(0.83f,0.56f), P(0.77f,0.595f), P(0.70f,0.60f), P(0.64f,0.575f), P(0.58f,0.555f), P(0.53f,0.52f), P(0.50f,0.47f) },
+            new []{ P(0.18f,0.56f), P(0.24f,0.60f), P(0.30f,0.585f), P(0.36f,0.61f), P(0.43f,0.59f), P(0.50f,0.605f), P(0.57f,0.59f), P(0.64f,0.615f), P(0.71f,0.63f), P(0.78f,0.66f), P(0.84f,0.69f), P(0.90f,0.72f), P(0.96f,0.77f), P(1.0f,0.82f), P(1.0f,1.0f), P(0.30f,1.0f), P(0.24f,0.93f), P(0.20f,0.85f), P(0.17f,0.76f), P(0.16f,0.68f) },
+            new []{ P(0.04f,0.20f), P(0.10f,0.17f), P(0.17f,0.16f), P(0.24f,0.14f), P(0.31f,0.155f), P(0.37f,0.19f), P(0.40f,0.245f), P(0.38f,0.30f), P(0.34f,0.36f), P(0.28f,0.40f), P(0.21f,0.415f), P(0.14f,0.40f), P(0.08f,0.36f), P(0.04f,0.30f), P(0.03f,0.25f) },
+            new []{ P(0.58f,0.115f), P(0.63f,0.11f), P(0.66f,0.145f), P(0.63f,0.175f), P(0.58f,0.165f), P(0.56f,0.14f) },
+            new []{ P(0.36f,0.19f), P(0.395f,0.185f), P(0.41f,0.215f), P(0.385f,0.235f), P(0.355f,0.225f) },
+            new []{ P(0.455f,0.235f), P(0.48f,0.23f), P(0.49f,0.255f), P(0.47f,0.27f), P(0.445f,0.26f) }
+        };
+    }
+    Vector2 P(float u, float v) { return new Vector2(u * W, MAP_Y + v * MAP_H); }
 
     void BuildStationViews()
     {
@@ -263,6 +391,13 @@ public partial class DemoBootstrap : MonoBehaviour
             Rounded(b, new Color(1,0.99f,0.96f,0.88f)); SoftShadow(b);
             Txt(b.transform, names[i], 24, Ink, 0, 54, 86, 34, TextAnchor.MiddleCenter);
             Txt(b.transform, "◇", 24, LineColors[i], 0, 14, 86, 30, TextAnchor.MiddleCenter);
+            if (i == 1)
+            {
+                Img(Rect("BadgeRing", b.transform, 62, 76, 24, 24), new Color(1,0.98f,0.94f,0.98f), spriteCircle).raycastTarget = false;
+                var dotGo = Rect("Badge", b.transform, 65, 79, 18, 18); Img(dotGo, Vermilion, spriteCircle).raycastTarget = false;
+                sceneryBadge = dotGo;
+                dotGo.SetActive(false);
+            }
             var btn = b.AddComponent<Button>(); btn.targetGraphic = b.GetComponent<Image>();
             btn.onClick.AddListener(() => {
                 if (k == 1) OpenSceneryScreen();
@@ -568,17 +703,20 @@ public partial class DemoBootstrap : MonoBehaviour
             {
                 AddSeg(line.st[i], line.st[i+1], new Color(0.19f,0.18f,0.14f,0.82f), 10, lineLayer);
                 AddSeg(line.st[i], line.st[i+1], line.color, 6, lineLayer);
+                var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer);
+                var lt = hit.AddComponent<LineTapPress>(); lt.boot = this;
+                lv.segs.Add(hit);
             }
             var t = Rect("Train" + line.id, trainLayer, 0, 0, 34, 34);
             t.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
-            Img(t, new Color(0.20f,0.18f,0.14f,0.85f), spriteCircle);
-            var body = Rect("Body", t.transform, 3, 3, 28, 28); Img(body, Gold, spriteCircle);
-            var nose = Rect("Nose", t.transform, 23, 14, 7, 7); Img(nose, new Color(0.99f,0.95f,0.85f), spriteCircle);
+            Img(t, new Color(0.20f,0.18f,0.14f,0.85f), spriteCircle).raycastTarget = false;
+            var body = Rect("Body", t.transform, 3, 3, 28, 28); Img(body, Gold, spriteCircle).raycastTarget = false;
+            var nose = Rect("Nose", t.transform, 23, 14, 7, 7); Img(nose, new Color(0.99f,0.95f,0.85f), spriteCircle).raycastTarget = false;
             lv.train = t;
             lineVisuals[line.id] = lv;
         }
     }
-    void AddSeg(int a, int b, Color c, float width, RectTransform layer)
+    GameObject AddSeg(int a, int b, Color c, float width, RectTransform layer)
     {
         var p1 = Pos(a); var p2 = Pos(b);
         var d = p2 - p1;
@@ -586,6 +724,7 @@ public partial class DemoBootstrap : MonoBehaviour
         var rt = go.GetComponent<RectTransform>(); rt.pivot = new Vector2(0, 0.5f);
         Img(go, c, spriteWhite);
         rt.localRotation = Quaternion.Euler(0,0, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+        return go;
     }
     Vector2 Pos(int i) { return new Vector2(MAP_X + stations[i].x*MAP_W, MAP_Y + stations[i].y*MAP_H); }
 
@@ -622,15 +761,20 @@ public partial class DemoBootstrap : MonoBehaviour
         {
             if (dragFrom < 0) dragFrom = draft[draft.Count-1];
             Vector2 local; RectTransformUtility.ScreenPointToLocalPointInRectangle(mapRect, Input.mousePosition, null, out local);
-            int hov = NearestStation(local, 76f);
-            Vector2 end = hov >= 0 ? Pos(hov) : local;
+            const float snapR = 44f;
+            int near = NearestStationAny(local, snapR);
+            bool backtracked = false;
+            if (near >= 0 && draft.Contains(near) && near != dragFrom)
+                backtracked = BacktrackDraft(near);
+            int hov = near >= 0 && !draft.Contains(near) ? near : -1;
+            Vector2 end = backtracked ? Pos(dragFrom) : (hov >= 0 ? Pos(hov) : local);
             var p1 = Pos(dragFrom); var d = end - p1;
             previewImg.rectTransform.anchoredPosition = p1;
             previewImg.rectTransform.sizeDelta = new Vector2(Mathf.Max(1, d.magnitude), 16);
             previewImg.rectTransform.localRotation = Quaternion.Euler(0,0, Mathf.Atan2(d.y,d.x)*Mathf.Rad2Deg);
             if (dragTip) dragTip.rectTransform.anchoredPosition = end;
             hoverStation = hov;
-            if (hov >= 0 && hov != dragFrom && TryConnect(dragFrom, hov))
+            if (!backtracked && hov >= 0 && hov != dragFrom && TryConnect(dragFrom, hov))
             {
                 dragFrom = hov; hoverStation = -1;
                 RedrawDraft();
@@ -655,6 +799,34 @@ public partial class DemoBootstrap : MonoBehaviour
             if (d < bd) { bd = d; best = i; }
         }
         return best;
+    }
+    int NearestStationAny(Vector2 p, float radius)
+    {
+        int best = -1; float bd = radius;
+        for (int i = 0; i < stations.Count; i++)
+        {
+            float d = Vector2.Distance(p, Pos(i));
+            if (d < bd) { bd = d; best = i; }
+        }
+        return best;
+    }
+    int DraftCostOf(List<int> path)
+    {
+        int c = 0;
+        for (int i = 0; i < path.Count-1; i++)
+            c += Mathf.RoundToInt(30 + Vector2.Distance(Pos(path[i]), Pos(path[i+1])) * 0.75f);
+        return c;
+    }
+    bool BacktrackDraft(int station)
+    {
+        int idx = draft.IndexOf(station);
+        if (idx < 0 || idx >= draft.Count-1) return false;
+        draft.RemoveRange(idx+1, draft.Count-idx-1);
+        dragFrom = station; hoverStation = -1;
+        draftCost = DraftCostOf(draft);
+        RedrawDraft(); UpdateBuildBar(); UpdateRings();
+        PulseStation(station); PlayTone(false);
+        return true;
     }
     void UpdateRings()
     {
@@ -715,7 +887,7 @@ public partial class DemoBootstrap : MonoBehaviour
             {
                 lv.lastSt = near;
                 int amt = Mathf.RoundToInt(lv.credit);
-                if (amt > 0) { lv.credit -= amt; coins += amt; SpawnFloater(amt, Pos(line.st[near]) + new Vector2(0, 34)); }
+                if (amt > 0) { lv.credit -= amt; coins += amt; line.todayRevenue += amt; SpawnFloater(amt, Pos(line.st[near]) + new Vector2(0, 34)); }
             }
         }
     }
@@ -779,6 +951,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     GameObject OpenPanel(string title, float h)
     {
+        CloseLineBubble();
         ClosePanel(true);
         scrim = Rect("Scrim", root, 0, 0, W, H); Img(scrim, new Color(0.12f,0.10f,0.09f,0.26f));
         var sb = scrim.AddComponent<Button>(); sb.transition = Selectable.Transition.None; sb.onClick.AddListener(ClosePanel);
@@ -796,6 +969,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     GameObject OpenPopup(string title, float h, float w)
     {
+        CloseLineBubble();
         ClosePanel(true);
         scrim = Rect("Scrim", root, 0, 0, W, H); Img(scrim, new Color(0.12f,0.10f,0.09f,0.30f));
         var sb = scrim.AddComponent<Button>(); sb.transition = Selectable.Transition.None; sb.onClick.AddListener(ClosePanel);
@@ -1007,7 +1181,7 @@ public partial class DemoBootstrap : MonoBehaviour
     }
 
     // ---------- scenery ----------
-    void CheckSceneryOnLine(List<int> st, bool show = true)
+    void CheckSceneryOnLine(List<int> st)
     {
         for (int i = 0; i < st.Count-1; i++)
         {
@@ -1020,26 +1194,31 @@ public partial class DemoBootstrap : MonoBehaviour
                 if (DistToSeg(p,a,b) < 80f) pendingCheckin.Add(sc);
             }
         }
-        if (show && pendingCheckin.Count > 0) ShowCheckin(pendingCheckin[0]);
+        RefreshPendingBadge();
+    }
+    void RefreshPendingBadge()
+    {
+        if (sceneryBadge) sceneryBadge.SetActive(pendingCheckin.Count > 0);
     }
     float DistToSeg(Vector2 p, Vector2 a, Vector2 b)
     {
         var ab = b-a; float t = Mathf.Clamp01(Vector2.Dot(p-a,ab)/Mathf.Max(0.001f,ab.sqrMagnitude));
         return Vector2.Distance(p, a + ab*t);
     }
-    void ShowCheckin(Scenery sc)
+    void ShowCheckin(Scenery sc, Action after = null)
     {
+        if (sc == null || sc.found) { if (after != null) after(); return; }
         sc.found = true; diamonds += 20;
+        pendingCheckin.Remove(sc);
+        RecalcIncome(); RefreshHUD(); RefreshPendingBadge();
         var p = OpenPopup("打卡成功", 500, 660);
         Txt(p.transform, "★", 72, Gold, 0, 350, 660, 90, TextAnchor.MiddleCenter);
         Txt(p.transform, sc.name, 40, Ink, 0, 274, 600, 56, TextAnchor.MiddleCenter);
         Txt(p.transform, (sc.natural?"自然景观":"人文景观") + " · 已收入明信片册", 22, InkSoft, 0, 236, 600, 32, TextAnchor.MiddleCenter);
         Txt(p.transform, "附近车站客流 +15%  ·  钻石 +20", 24, Ink, 0, 152, 600, 36, TextAnchor.MiddleCenter);
         Btn(p.transform, "Ok", "收 下", 32, 40, 36, 580, 92, Vermilion, () => {
-            ClosePanel(); RecalcIncome(); RefreshHUD();
-            pendingCheckin.Remove(sc);
-            if (pendingCheckin.Count > 0) ShowCheckin(pendingCheckin[0]);
-            else if (pendingDetailId >= 0) { int id = pendingDetailId; pendingDetailId = -1; OpenLineScreen(id); }
+            ClosePanel();
+            if (after != null) after();
         });
     }
 
@@ -1175,206 +1354,6 @@ public partial class DemoBootstrap : MonoBehaviour
         }
         t.SetPixels(px); t.Apply(); t.wrapMode = TextureWrapMode.Clamp;
         return t;
-    }
-
-    Texture2D MakeMapTexture(int w, int h)
-    {
-        var px = new Color[w*h];
-        Vector2[][] land = new Vector2[][] {
-            new []{ new Vector2(0.50f,0.225f), new Vector2(0.70f,0.22f), new Vector2(0.79f,0.245f), new Vector2(0.90f,0.235f), new Vector2(0.95f,0.275f), new Vector2(0.91f,0.335f), new Vector2(0.75f,0.35f), new Vector2(0.58f,0.335f), new Vector2(0.50f,0.29f) },
-            new []{ new Vector2(0.52f,0.395f), new Vector2(0.72f,0.39f), new Vector2(0.82f,0.44f), new Vector2(0.86f,0.55f), new Vector2(0.72f,0.60f), new Vector2(0.58f,0.55f), new Vector2(0.50f,0.47f) },
-            new []{ new Vector2(0.20f,0.555f), new Vector2(0.32f,0.585f), new Vector2(0.46f,0.555f), new Vector2(0.58f,0.585f), new Vector2(0.74f,0.62f), new Vector2(0.90f,0.70f), new Vector2(1.0f,0.80f), new Vector2(1.0f,1.0f), new Vector2(0.30f,1.0f), new Vector2(0.22f,0.85f), new Vector2(0.18f,0.70f) },
-            new []{ new Vector2(0.04f,0.18f), new Vector2(0.32f,0.13f), new Vector2(0.40f,0.24f), new Vector2(0.33f,0.40f), new Vector2(0.16f,0.44f), new Vector2(0.03f,0.36f) }
-        };
-        Color[] landCols = { new Color(0.86f,0.87f,0.72f), new Color(0.87f,0.86f,0.74f), new Color(0.84f,0.86f,0.70f), new Color(0.85f,0.87f,0.73f) };
-        System.Random rnd = new System.Random(7);
-        for (int y=0;y<h;y++) for (int x=0;x<w;x++)
-        {
-            float u=(x+0.5f)/w, v=(y+0.5f)/h;
-            int region=-1;
-            for (int k=0;k<land.Length;k++) if (PtInPoly(u,v,land[k])) { region=k; break; }
-            Color c;
-            if (region>=0) c = landCols[region];
-            else { float depth = Mathf.Clamp01((0.45f-v)*1.2f); c = Color.Lerp(new Color(0.73f,0.84f,0.85f), new Color(0.52f,0.70f,0.75f), depth); }
-            float n = (float)rnd.NextDouble();
-            c = c * (0.97f + n*0.06f);
-            if (region>=0 && (x<1||y<1||x>=w-1||y>=h-1)) c = c*0.9f;
-            px[y*w+x] = c;
-        }
-        // coastline + hills
-        for (int y=1;y<h-1;y++) for (int x=1;x<w-1;x++)
-        {
-            float u=(x+0.5f)/w, v=(y+0.5f)/h;
-            bool isLand = false;
-            for (int k=0;k<land.Length;k++) if (PtInPoly(u,v,land[k])) { isLand = true; break; }
-            if (!isLand) continue;
-            bool coast = false;
-            float uu=(x+1.5f)/w, vv=((y+0.5f)/h-BAND_T)/BAND_H; bool l2=false; for (int k=0;k<land.Length;k++) if (PtInPoly(uu,vv,land[k])) l2=true;
-            if (!l2) coast = true;
-            vv=((y+1.5f)/h-BAND_T)/BAND_H; l2=false; for (int k=0;k<land.Length;k++) if (PtInPoly((x+0.5f)/w, vv, land[k])) l2=true;
-            if (!l2) coast = true;
-            if (coast) px[y*w+x] = Color.Lerp(px[y*w+x], new Color(0.42f,0.50f,0.45f), 0.55f);
-        }
-        // mountains (simple triangles + ridges)
-        DrawHill(px,w,h,0.60f,0.68f,0.055f,new Color(0.50f,0.58f,0.44f));
-        DrawHill(px,w,h,0.75f,0.76f,0.05f,new Color(0.52f,0.60f,0.46f));
-        DrawHill(px,w,h,0.83f,0.86f,0.045f,new Color(0.54f,0.60f,0.47f));
-        DrawHill(px,w,h,0.24f,0.30f,0.05f,new Color(0.56f,0.61f,0.49f));
-        DrawHill(px,w,h,0.70f,0.27f,0.035f,new Color(0.50f,0.58f,0.44f));
-        DrawHill(px,w,h,0.62f,0.76f,0.045f,new Color(0.54f,0.60f,0.47f));
-        var tex = new Texture2D(w,h); tex.SetPixels(px); tex.Apply(); tex.wrapMode = TextureWrapMode.Clamp;
-        return tex;
-    }
-    void DrawHill(Color[] px,int w,int h,float cx,float cy,float r,Color c)
-    {
-        int x0=(int)(cx*w); int y0=(int)((BAND_T + cy*BAND_H)*h); int rr=(int)(r*w);
-        for (int y=-rr;y<=rr;y++) for (int x=-rr;x<=rr;x++)
-        {
-            if (x*x + y*y*2 > rr*rr) continue;
-            int xx=x0+x, yy=y0+y;
-            if (xx<0||yy<0||xx>=w||yy>=h) continue;
-            float a = 1f - Mathf.Sqrt((x*x+y*y*2f))/rr;
-            px[yy*w+xx] = Color.Lerp(px[yy*w+xx], c, Mathf.Clamp01(a*0.85f));
-        }
-    }
-
-    Texture2D MakeMapTexture2(int w, int h)
-    {
-        Vector2[][] polys = new Vector2[][] {
-            new []{ new Vector2(0.50f,0.225f), new Vector2(0.56f,0.215f), new Vector2(0.63f,0.22f), new Vector2(0.70f,0.215f), new Vector2(0.77f,0.235f), new Vector2(0.83f,0.23f), new Vector2(0.90f,0.24f), new Vector2(0.945f,0.27f), new Vector2(0.94f,0.30f), new Vector2(0.90f,0.33f), new Vector2(0.84f,0.335f), new Vector2(0.78f,0.35f), new Vector2(0.71f,0.34f), new Vector2(0.65f,0.35f), new Vector2(0.59f,0.335f), new Vector2(0.54f,0.32f), new Vector2(0.50f,0.29f) },
-            new []{ new Vector2(0.52f,0.395f), new Vector2(0.60f,0.385f), new Vector2(0.68f,0.39f), new Vector2(0.74f,0.40f), new Vector2(0.80f,0.42f), new Vector2(0.845f,0.46f), new Vector2(0.86f,0.52f), new Vector2(0.83f,0.56f), new Vector2(0.77f,0.595f), new Vector2(0.70f,0.60f), new Vector2(0.64f,0.575f), new Vector2(0.58f,0.555f), new Vector2(0.53f,0.52f), new Vector2(0.50f,0.47f) },
-            new []{ new Vector2(0.18f,0.56f), new Vector2(0.24f,0.60f), new Vector2(0.30f,0.585f), new Vector2(0.36f,0.61f), new Vector2(0.43f,0.59f), new Vector2(0.50f,0.605f), new Vector2(0.57f,0.59f), new Vector2(0.64f,0.615f), new Vector2(0.71f,0.63f), new Vector2(0.78f,0.66f), new Vector2(0.84f,0.69f), new Vector2(0.90f,0.72f), new Vector2(0.96f,0.77f), new Vector2(1.0f,0.82f), new Vector2(1.0f,1.0f), new Vector2(0.30f,1.0f), new Vector2(0.24f,0.93f), new Vector2(0.20f,0.85f), new Vector2(0.17f,0.76f), new Vector2(0.16f,0.68f) },
-            new []{ new Vector2(0.04f,0.20f), new Vector2(0.10f,0.17f), new Vector2(0.17f,0.16f), new Vector2(0.24f,0.14f), new Vector2(0.31f,0.155f), new Vector2(0.37f,0.19f), new Vector2(0.40f,0.245f), new Vector2(0.38f,0.30f), new Vector2(0.34f,0.36f), new Vector2(0.28f,0.40f), new Vector2(0.21f,0.415f), new Vector2(0.14f,0.40f), new Vector2(0.08f,0.36f), new Vector2(0.04f,0.30f), new Vector2(0.03f,0.25f) },
-            new []{ new Vector2(0.58f,0.115f), new Vector2(0.63f,0.11f), new Vector2(0.66f,0.145f), new Vector2(0.63f,0.175f), new Vector2(0.58f,0.165f), new Vector2(0.56f,0.14f) },
-            new []{ new Vector2(0.36f,0.19f), new Vector2(0.395f,0.185f), new Vector2(0.41f,0.215f), new Vector2(0.385f,0.235f), new Vector2(0.355f,0.225f) },
-            new []{ new Vector2(0.455f,0.235f), new Vector2(0.48f,0.23f), new Vector2(0.49f,0.255f), new Vector2(0.47f,0.27f), new Vector2(0.445f,0.26f) }
-        };
-        Color[] landCols = {
-            new Color(0.85f,0.87f,0.72f), new Color(0.87f,0.86f,0.74f), new Color(0.84f,0.86f,0.70f),
-            new Color(0.85f,0.87f,0.73f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f)
-        };
-        bool[] land = new bool[w*h]; int[] reg = new int[w*h];
-        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++)
-        {
-            float u = (x + 0.5f) / w, v = ((y + 0.5f) / h - BAND_T) / BAND_H;
-            int r = -1;
-            for (int k = 0; k < polys.Length; k++) if (PtInPoly(u, v, polys[k])) { r = k; break; }
-            land[y*w+x] = r >= 0; reg[y*w+x] = r;
-        }
-        int[] dist = new int[w*h]; int INF = 9999;
-        for (int i = 0; i < w*h; i++) dist[i] = land[i] ? 0 : INF;
-        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++)
-        {
-            int i = y*w+x; if (land[i]) continue;
-            int d = dist[i];
-            if (x > 0) d = Mathf.Min(d, dist[i-1] + 1);
-            if (y > 0) d = Mathf.Min(d, dist[i-w] + 1);
-            dist[i] = d;
-        }
-        for (int y = h-1; y >= 0; y--) for (int x = w-1; x >= 0; x--)
-        {
-            int i = y*w+x; if (land[i]) continue;
-            int d = dist[i];
-            if (x < w-1) d = Mathf.Min(d, dist[i+1] + 1);
-            if (y < h-1) d = Mathf.Min(d, dist[i+w] + 1);
-            dist[i] = d;
-        }
-        Color[] px = new Color[w*h];
-        Color deep = new Color(0.50f,0.69f,0.75f), shallow = new Color(0.71f,0.84f,0.85f), foam = new Color(0.83f,0.90f,0.88f);
-        for (int y = 0; y < h; y++) for (int x = 0; x < w; x++)
-        {
-            int i = y*w+x;
-            float u = (x + 0.5f) / w, v = ((y + 0.5f) / h - BAND_T) / BAND_H;
-            float n = Hash(x, y, 1) * 0.06f - 0.03f;
-            if (land[i])
-            {
-                Color c = landCols[reg[i]];
-                float e = Mathf.Sin(u*72f) + Mathf.Sin(v*54f) + Mathf.Sin((u+v)*41f);
-                if (Mathf.Abs(e) < 0.06f) c = Color.Lerp(c, new Color(0.60f,0.64f,0.52f), 0.20f);
-                px[i] = c * (1f + n);
-            }
-            else
-            {
-                float depth = Mathf.Clamp01(dist[i] / 60f);
-                Color c = Color.Lerp(shallow, deep, depth);
-                if (dist[i] < 7) c = Color.Lerp(foam, c, dist[i] / 7f * 0.8f);
-                px[i] = c * (1f + n);
-            }
-        }
-        System.Random rnd = new System.Random(23);
-        for (int k = 0; k < 1100; k++)
-        {
-            int x = rnd.Next(2, w-14), y = rnd.Next(2, h-2);
-            int i = y*w+x;
-            if (land[i] || dist[i] < 10) continue;
-            Color c = Color.Lerp(px[i], new Color(0.40f,0.58f,0.64f), 0.22f);
-            int len = rnd.Next(4,12);
-            for (int t = 0; t < len && x+t < w; t++) px[i+t] = c;
-        }
-        for (int s = 0; s < stations.Count; s++)
-        {
-            if (stations[s].portal) continue;
-            int cx = (int)(stations[s].x * w), cy = (int)((BAND_T + stations[s].y * BAND_H) * h);
-            int r = Mathf.Max(12, (int)(0.038f * w));
-            for (int k = 0; k < 90; k++)
-            {
-                int ox = rnd.Next(-r, r), oy = rnd.Next(-r, r);
-                if (ox*ox + oy*oy > r*r) continue;
-                int x = cx + ox, y = cy + oy;
-                if (x < 1 || y < 1 || x >= w-1 || y >= h-1) continue;
-                int i = y*w+x;
-                if (!land[i]) continue;
-                Color c = Color.Lerp(px[i], new Color(0.52f,0.47f,0.41f), 0.20f);
-                px[i] = c; if (x+1 < w) px[i+1] = c; if (y+1 < h) px[i+w] = c;
-            }
-        }
-        for (int y = 1; y < h-1; y++) for (int x = 1; x < w-1; x++)
-        {
-            int i = y*w+x;
-            if (land[i])
-            {
-                if (!land[i-1] || !land[i+1] || !land[i-w] || !land[i+w])
-                    px[i] = Color.Lerp(px[i], new Color(0.34f,0.42f,0.38f), 0.75f);
-            }
-            else if (dist[i] == 1)
-                px[i] = Color.Lerp(px[i], new Color(0.46f,0.56f,0.54f), 0.5f);
-        }
-        DrawRidge(px, w, h, 0.530f, 0.258f, 0.085f, 0.050f, new Color(0.49f,0.57f,0.43f), new Color(0.33f,0.40f,0.32f));
-        DrawRidge(px, w, h, 0.565f, 0.248f, 0.055f, 0.035f, new Color(0.55f,0.62f,0.48f), new Color(0.33f,0.40f,0.32f));
-        DrawRidge(px, w, h, 0.760f, 0.600f, 0.080f, 0.050f, new Color(0.50f,0.58f,0.44f), new Color(0.33f,0.40f,0.32f));
-        DrawRidge(px, w, h, 0.560f, 0.790f, 0.120f, 0.070f, new Color(0.54f,0.61f,0.47f), new Color(0.35f,0.42f,0.34f));
-        DrawRidge(px, w, h, 0.620f, 0.800f, 0.075f, 0.050f, new Color(0.50f,0.58f,0.44f), new Color(0.35f,0.42f,0.34f));
-        DrawRidge(px, w, h, 0.240f, 0.292f, 0.075f, 0.045f, new Color(0.53f,0.59f,0.46f), new Color(0.35f,0.42f,0.34f));
-        DrawRidge(px, w, h, 0.860f, 0.680f, 0.070f, 0.040f, new Color(0.50f,0.58f,0.44f), new Color(0.35f,0.42f,0.34f));
-        var tex = new Texture2D(w, h); tex.SetPixels(px); tex.Apply(); tex.wrapMode = TextureWrapMode.Clamp; tex.filterMode = FilterMode.Bilinear;
-        return tex;
-    }
-
-    float Hash(int x, int y, int s)
-    {
-        int n = x * 374761393 + y * 668265263 + s * 1442695041;
-        n = (n ^ (n >> 13)) * 1274126177;
-        n = n ^ (n >> 16);
-        return (n & 0x7fffffff) / (float)0x7fffffff;
-    }
-
-    void DrawRidge(Color[] px, int w, int h, float cx, float cy, float rx, float ry, Color fill, Color ink)
-    {
-        int x0 = Mathf.Max(0, (int)((cx - rx) * w)), x1 = Mathf.Min(w-1, (int)((cx + rx) * w));
-        int y0 = Mathf.Max(0, (int)((BAND_T + (cy - ry) * BAND_H) * h)), y1 = Mathf.Min(h-1, (int)((BAND_T + (cy + ry) * BAND_H) * h));
-        for (int y = y0; y <= y1; y++) for (int x = x0; x <= x1; x++)
-        {
-            float u = (x + 0.5f) / w, v = ((y + 0.5f) / h - BAND_T) / BAND_H;
-            if (v < cy - ry || v > cy + ry) continue;
-            float t = (v - (cy - ry)) / (2f * ry);
-            float hw = rx * (1f - t);
-            float dx = Mathf.Abs(u - cx);
-            if (dx > hw) continue;
-            int i = y*w+x;
-            float edge = hw - dx;
-            if (edge < 0.007f || t < 0.04f) px[i] = Color.Lerp(px[i], ink, 0.55f);
-            else px[i] = Color.Lerp(px[i], fill, Mathf.Clamp01(0.30f + edge / rx * 0.55f));
-        }
     }
 
     bool PtInPoly(float x, float y, Vector2[] poly)

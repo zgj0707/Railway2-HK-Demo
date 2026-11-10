@@ -66,7 +66,16 @@ public partial class DemoBootstrap
     void TickClock(float dt)
     {
         dayClock += dt;
-        if (dayClock >= 60f) { dayClock -= 60f; day++; }
+        if (dayClock >= 60f)
+        {
+            dayClock -= 60f; day++;
+            foreach (var line in lines)
+            {
+                line.recent.Add(line.todayRevenue);
+                if (line.recent.Count > 7) line.recent.RemoveAt(0);
+                line.todayRevenue = 0;
+            }
+        }
         UpdateTimeText();
     }
     void UpdateTimeText()
@@ -151,6 +160,7 @@ public partial class DemoBootstrap
     void StartDraw(int idx)
     {
         if (dragging || idx < 0 || idx >= stations.Count) return;
+        CloseLineBubble();
         draft.Clear(); draft.Add(idx); draftCost = 0;
         dragFrom = idx; dragging = true; hoverStation = -1;
         RedrawDraft();
