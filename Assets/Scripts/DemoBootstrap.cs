@@ -113,12 +113,34 @@ public partial class DemoBootstrap : MonoBehaviour
         EnsureCamera();
         var cgo = new GameObject("Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
         canvas = cgo.GetComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        var sc = cgo.GetComponent<CanvasScaler>(); sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        sc.referenceResolution = new Vector2(W, H); sc.matchWidthOrHeight = 0.5f;
+        // 画布自适应：宽屏按高度、窄屏按宽度，保证 1080x1920 设计内容永远完整可见
+        cgo.AddComponent<CanvasLetterbox>().designSize = new Vector2(W, H);
         raycaster = cgo.GetComponent<GraphicRaycaster>();
         if (UnityEngine.Object.FindFirstObjectByType<EventSystem>() == null)
             new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-        root = cgo.GetComponent<RectTransform>();
+
+        // 铺满整屏的海面底，letterbox 区域不露相机纯色
+        var backdrop = Rect("Backdrop", cgo.transform, 0, 0, 0, 0);
+        var backdropRt = backdrop.GetComponent<RectTransform>();
+        backdropRt.anchorMin = Vector2.zero; backdropRt.anchorMax = Vector2.one;
+        backdropRt.pivot = new Vector2(0.5f, 0.5f);
+        backdropRt.offsetMin = Vector2.zero; backdropRt.offsetMax = Vector2.zero;
+        backdrop.AddComponent<MapBackdropGraphic>().raycastTarget = false;
+
+        // 设计画布 1080x1920 居中；所有 UI 都挂在它下面，内部坐标不用改
+        var stage = Rect("Stage", cgo.transform, 0, 0, W, H);
+        var stageRt = stage.GetComponent<RectTransform>();
+        stageRt.anchorMin = stageRt.anchorMax = new Vector2(0.5f, 0.5f);
+        stageRt.pivot = new Vector2(0.5f, 0.5f);
+        stageRt.anchoredPosition = Vector2.zero;
+        stageRt.sizeDelta = new Vector2(W, H);
+        root = stageRt;
+
+        // 画布边缘淡投影，宽屏下让纸面像浮在海面上的图
+        var stageShadow = Rect("StageShadow", root, -26, -26, W + 52, H + 52);
+        Rounded(stageShadow, new Color(0.10f, 0.14f, 0.16f, 0.22f));
+        stageShadow.GetComponent<Image>().raycastTarget = false;
+
         var bg = Rect("Paper", root, 0, 0, W, H); Img(bg, Paper);
 
         BuildMap();
