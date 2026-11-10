@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>铁路大亨2 · 界面信息架构思维导图</title>
+<style>
+  :root{
+    --paper:#F7EDD3; --paper2:#EFE3C4; --ink:#3A2E22; --ink2:#6B5A45;
+    --line:#C9B894; --card:#FFFDF6; --accent:#E8894A;
+    --shadow:0 6px 18px rgba(58,46,34,.14);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:"MiSans","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(circle at 18% 12%, rgba(255,255,255,.65), transparent 42%),
+      radial-gradient(circle at 82% 88%, rgba(255,255,255,.45), transparent 40%),
+      var(--paper);
+    overflow:hidden;
+  }
+  body:before{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.35;
+    background-image:radial-gradient(rgba(58,46,34,.12) 1px, transparent 1px);
+    background-size:18px 18px;
+  }
+  #app{position:relative;display:flex;flex-direction:column;height:100%;}
+  header{
+    position:relative;z-index:5;display:flex;align-items:center;gap:16px;
+    padding:12px 18px 10px;border-bottom:2px solid rgba(58,46,34,.14);
+    background:linear-gradient(180deg,rgba(255,253,246,.92),rgba(247,237,211,.72));
+    backdrop-filter:blur(4px);
+  }
+  .brand{display:flex;flex-direction:column;gap:2px;min-width:230px;}
+  .brand h1{font-size:20px;margin:0;letter-spacing:.5px;}
+  .brand p{margin:0;font-size:11.5px;color:var(--ink2);}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  button.tool{
+    appearance:none;border:1.5px solid var(--ink);background:var(--card);
+    color:var(--ink);font-size:12px;padding:6px 12px;border-radius:999px;
+    cursor:pointer;box-shadow:0 2px 0 rgba(58,46,34,.9);transition:transform .08s;
+    font-family:inherit;
+  }
+  button.tool:hover{background:#fff;}
+  button.tool:active{transform:translateY(2px);box-shadow:0 0 0 rgba(0,0,0,0);}
+  button.tool.primary{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 0 #B5672F;}
+  .search{
+    display:flex;align-items:center;gap:6px;background:var(--card);
+    border:1.5px solid rgba(58,46,34,.5);border-radius:999px;padding:4px 10px;
+  }
+  .search input{
+    border:0;outline:0;background:transparent;font-family:inherit;font-size:12px;
+    width:150px;color:var(--ink);
+  }
+  .search span{font-size:12px;opacity:.55;}
+  #hint{font-size:11px;color:var(--ink2);margin-left:auto;white-space:nowrap;}
+  main{position:relative;flex:1;display:flex;min-height:0;}
+  #viewport{
+    position:relative;flex:1;min-width:0;overflow:hidden;cursor:grab;
+    background-image:radial-gradient(rgba(58,46,34,.09) 1px, transparent 1px);
+    background-size:22px 22px;
+  }
+  #viewport.dragging{cursor:grabbing;}
+  #stage{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;}
+  #links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;}
+  .node{
+    position:absolute;width:216px;height:46px;border-radius:12px;
+    background:var(--card);border:2px solid rgba(58,46,34,.75);
+    box-shadow:0 3px 0 rgba(58,46,34,.16);
+    display:flex;align-items:center;gap:8px;padding:0 12px 0 10px;
+    font-size:13px;line-height:1.18;cursor:pointer;user-select:none;
+    transition:box-shadow .15s,transform .15s,opacity .2s;
+    border-left:8px solid var(--c,#999);
+  }
+  .node .dot{width:9px;height:9px;border-radius:50%;background:var(--c,#999);flex:0 0 auto;}
+  .node .txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .node.d0{
+    width:250px;height:58px;border-radius:18px;font-size:15.5px;font-weight:700;
+    background:var(--ink);color:#fff;border-color:var(--ink);border-left-width:2px;
+    box-shadow:0 5px 0 rgba(0,0,0,.25);justify-content:center;
+  }
+  .node.d0 .dot{display:none;}
+  .node.d1{
+    font-weight:700;font-size:13.5px;background:var(--c);color:#fff;border-color:var(--c);
+    border-left-color:rgba(0,0,0,.22);box-shadow:0 4px 0 rgba(58,46,34,.25);
+  }
+  .node.d1 .dot{background:rgba(255,255,255,.85);}
+  .node:hover{box-shadow:0 5px 0 rgba(58,46,34,.2);}
+  .node.sel{outline:3px solid var(--c,#999);outline-offset:2px;}
+  .node.match{outline:3px solid #E8894A;outline-offset:2px;}
+  .node.dim{opacity:.22;}
+  .toggler{
+    position:absolute;right:-11px;top:50%;transform:translateY(-50%);
+    width:22px;height:22px;border-radius:50%;background:var(--card);
+    border:2px solid var(--ink);color:var(--ink);font-size:13px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:3;
+    line-height:1;box-shadow:0 2px 0 rgba(58,46,34,.25);font-family:inherit;
+  }
+  .toggler:hover{background:#fff;}
+  .badge{
+    position:absolute;left:-8px;top:-8px;min-width:18px;height:18px;border-radius:9px;
+    background:var(--c,#999);color:#fff;font-size:10px;display:flex;align-items:center;
+    justify-content:center;padding:0 4px;border:1.5px solid var(--card);
+  }
+  aside{
+    width:320px;flex:0 0 320px;border-left:2px solid rgba(58,46,34,.14);
+    background:rgba(255,253,246,.86);backdrop-filter:blur(4px);
+    display:flex;flex-direction:column;min-height:0;z-index:4;
+  }
+  aside .hd{padding:14px 16px 10px;border-bottom:1.5px dashed rgba(58,46,34,.2);}
+  aside .crumb{font-size:11px;color:var(--ink2);margin-bottom:4px;word-break:break-all;}
+  aside h2{font-size:17px;margin:0;line-height:1.3;}
+  aside .note{padding:14px 16px;font-size:12.5px;line-height:1.7;color:var(--ink2);overflow:auto;}
+  aside .note b{color:var(--ink);}
+  aside .chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 16px;}
+  .chip{
+    font-size:11.5px;padding:4px 9px;border-radius:999px;border:1.5px solid rgba(58,46,34,.35);
+    background:#fff;cursor:pointer;
+  }
+  .chip:hover{border-color:var(--ink);}
+  .sect-label{font-size:11px;letter-spacing:1px;color:var(--ink2);padding:12px 16px 6px;}
+  .empty{padding:30px 16px;font-size:12.5px;color:var(--ink2);line-height:1.7;}
+  .zoom{
+    position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;gap:6px;z-index:6;
+  }
+  .zoom button{
+    width:34px;height:34px;border-radius:10px;border:2px solid var(--ink);background:var(--card);
+    font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;
+    box-shadow:0 3px 0 rgba(58,46,34,.3);
+  }
+  .zoom button:active{transform:translateY(2px);box-shadow:none;}
+  .legend{
+    position:absolute;left:16px;bottom:16px;display:flex;gap:8px;flex-wrap:wrap;max-width:calc(100% - 90px);
+    z-index:5;pointer-events:none;
+  }
+  .legend i{
+    font-style:normal;font-size:11px;color:var(--ink);background:rgba(255,253,246,.9);
+    border:1.5px solid rgba(58,46,34,.3);border-radius:999px;padding:3px 8px;
+    display:inline-flex;align-items:center;gap:5px;
+  }
+  .legend i:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c);}
+  @media (max-width:980px){
+    aside{width:260px;flex-basis:260px;}
+    #hint{display:none;}
+  }
+  @media (max-width:720px){
+    aside{display:none;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">
+      <h1>铁路大亨 2 · 界面信息架构</h1>
+      <p>v0.2 · 日系手绘水彩 · 国家即关卡 · 建线模式拖拽 · 钢铁雄心式科技树</p>
+    </div>
+    <div class="toolbar">
+      <button class="tool primary" id="btnExpand">全部展开</button>
+      <button class="tool" id="btnCollapse">全部收起</button>
+      <button class="tool" id="btnFit">适应屏幕</button>
+      <div class="search"><span>🔍</span><input id="q" placeholder="搜索节点…" /></div>
+    </div>
+    <div id="hint">滚轮缩放 · 拖拽平移 · 点节点看说明 · 点圆点折叠</div>
+  </header>
+  <main>
+    <div id="viewport">
+      <div id="stage">
+        <svg id="links"></svg>
+      </div>
+    </div>
+    <aside>
+      <div class="hd">
+        <div class="crumb" id="crumb">全部</div>
+        <h2 id="title">铁路大亨 2 · 界面信息架构</h2>
+      </div>
+      <div class="note" id="note">点击左侧任意节点查看说明。</div>
+      <div class="sect-label" id="kidsLabel" style="display:none">子项</div>
+      <div class="chips" id="chips"></div>
+    </aside>
+    <div class="zoom">
+      <button id="zin">+</button>
+      <button id="zout">−</button>
+    </div>
+    <div class="legend" id="legend"></div>
+  </main>
+</div>
+<script>
+(function(){
+  var COLORS = ['#C8452E','#E8894A','#4E9BC4','#6FA653','#8C5BA6','#C9A227','#D96C8E','#7A6A55','#3E8E7E','#B5672F'];
+  var DATA = {
+    n:'铁路大亨 2 · 界面信息架构',
+    d:'<b>v0.2</b>：竖屏 · 日系手绘水彩 · 国家即关卡 · 建线模式拖拽 · 钢铁雄心式科技树。四层结构不变：国家地图常驻 HUD → 底部抽屉 → 全屏二级页 → 压暗浮层。地图从「单城街区」升级为「国家铁路图」：城市是节点，山川与景观是沿途风景。',
+    c:[
+      {n:'世界与国家', d:'跨国家经营的元层：世界地图选国家，国家即关卡；3 星通关解锁下一国；公司资产/科技/图鉴跨国家继承。', c:[
+        {n:'世界地图', d:'手绘区域图 + 国家明信片卡；顶部公司总资产/总星数。', c:[{n:'国家卡与星级'},{n:'已通关印章'},{n:'解锁条件'},{n:'当前国家高亮'}]},
+        {n:'国家关卡', d:'首版 4 国：日本（教学·蒸汽·岛国）、英国（工业密集）、美国（内燃·长距离）、瑞士（电气化·山地）。', c:[{n:'日本'},{n:'英国'},{n:'美国'},{n:'瑞士'}]},
+        {n:'国家目标', d:'3 条目标 = 3 星：连通 6 城 / 客流 1200/分 / 累计净利 50K。全达成即通关。', c:[{n:'连通城市'},{n:'客流目标'},{n:'累计净利'}]},
+        {n:'国家进度', d:'目标完成度 60% + 城市连通率 25% + 景观收集 15%，即顶栏进度条。'},
+        {n:'切换国家', d:'已解锁国家可随时切换，各国进度独立保留；通关国可回去补星/补景观。'}
+      ]},
+      {n:'画线', d:'v0.2 最大改动：从「常驻拖拽」改为显式建线模式。进入模式后 UI 让位，只能拖拽连线，完成或取消才退出。', c:[
+        {n:'线路列表', d:'「已建 3/6 条线 · 全国 12 城连通 7 城」；行显示站数/里程/收入/运力；底部新建与操作说明。', c:[{n:'已建线路'},{n:'新建线路'},{n:'线路指引'},{n:'未解锁线路'}]},
+        {n:'建线模式', d:'模式条替换顶栏：选起点→拖到下一站→松手成段；实时显示里程/造价/地形加成；非建线 UI 淡出到 15%。', c:[{n:'拖拽连接'},{n:'地形造价'},{n:'撤销 10 秒窗'},{n:'完成与取消'},{n:'草稿保存 10 分钟'}]},
+        {n:'建设确认', d:'贴地图气泡：预计客流 +N/分、造价、地形附加；确认建设 / 取消 / 改终点 / 另开新线。', c:[{n:'预计客流'},{n:'造价'},{n:'改线建议'}]},
+        {n:'线路详情', d:'经营中枢：三宫格（客流/运力/收入）+ 站点序列 + 票价滑杆 + 列车 n/8 加车 + 延长/升级/拆除。', c:[{n:'客流 运力 收入'},{n:'站点序列'},{n:'票价滑杆'},{n:'列车与加车'},{n:'延长线路'},{n:'线路升级'},{n:'拆除'}]},
+        {n:'换乘与跨线', d:'两条线共用城市站=换乘，客流 ×1.8；科技解锁后开跨线车。', c:[{n:'换乘判定'},{n:'客流 ×1.8'},{n:'跨线车'}]}
+      ]},
+      {n:'列车', d:'按线路管运力，解决拥挤；车库为全屏二级页，tab 用线路身份色。', c:[
+        {n:'车库', d:'线路 tab + 当前线路摘要 + 三档升级卡（车速 / 编组 40→60 / 班次 1→2 列）；金币不足按钮原位变「看视频立减」。', c:[{n:'线路 tab'},{n:'车速'},{n:'编组'},{n:'班次'},{n:'看视频立减'}]},
+        {n:'车辆详情', d:'机车立绘 + 属性四宫格 + 升级 + 编组 + 涂装 + 调配 + 退役返金币。', c:[{n:'属性面板'},{n:'编组'},{n:'涂装'},{n:'调配线路'},{n:'退役'}]},
+        {n:'列车商店', d:'钻石消耗：车型 / 涂装 / 钻石特权（账号级：研究槽+1、离线时长+）。', c:[{n:'车型'},{n:'涂装'},{n:'钻石特权'}]},
+        {n:'列车图鉴', d:'首版 15–30 款，按时代/国家分类，收集不加数值。', c:[{n:'收集进度'},{n:'车型故事'}]}
+      ]},
+      {n:'车站', d:'城市即车站（首版一城一站），从「线」切到「站」的视角：找拥挤、可升级、可研发、可打卡。', c:[
+        {n:'车站列表', d:'筛选 chips（全部/换乘/拥挤/景观/可升级/未连通）+ 排序；点行相机飞过去。', c:[{n:'筛选'},{n:'排序'}]},
+        {n:'车站详情', d:'城市名+等级+线路徽章；三宫格客流/拥挤/收入；设施升级入口。', c:[{n:'客流 拥挤 收入'},{n:'改名'},{n:'收藏'}]},
+        {n:'车站设施', d:'站台容量 / 候车厅 / 出入口 / 商业设施 / 研发中心（产出研究点，科技树关键）。', c:[{n:'站台容量'},{n:'候车厅'},{n:'出入口'},{n:'商业设施'},{n:'研发中心'}]},
+        {n:'周边景观', d:'1–3 个景观 chip + 打卡状态；景观带来附近车站客流 +15%。', c:[{n:'景观 chip'},{n:'打卡状态'},{n:'客流加成'}]}
+      ]},
+      {n:'科技树', d:'钢铁雄心 IV 式：6 时代列 × 5 分支；2 研究槽 + 倒计时 + 前置连线 + 超前研究 ×2 惩罚；科技树公司级跨国家保留。', c:[
+        {n:'机车', d:'蒸汽 0 系 → 蒸汽 1 系 → 内燃 → 电力 → 高速动车组；决定速度与牵引。', c:[{n:'蒸汽'},{n:'内燃'},{n:'电力'},{n:'高速'}]},
+        {n:'车辆', d:'木制客车 → 钢制 → 餐车 → 观光车厢 → 双层客车；载客/舒适/观光收入。', c:[{n:'载客'},{n:'舒适度'},{n:'观光车厢'}]},
+        {n:'基建', d:'轻轨 → 标准轨 → 复线 → 桥梁加固 → 山岭隧道 → 海底隧道；解锁地形与造价下降。', c:[{n:'轨道等级'},{n:'桥梁'},{n:'隧道'},{n:'复线'}]},
+        {n:'电气化', d:'接触网 → 变电所 → 再生制动 → 自动闭塞；电力车型/能耗/班次上限。', c:[{n:'接触网'},{n:'变电所'},{n:'信号'}]},
+        {n:'经营', d:'票价策略 → 车站商业 → 广告合作 → 研发中心 → 观光营销；收入与研究点产出。', c:[{n:'票价策略'},{n:'商业'},{n:'研发中心'}]},
+        {n:'研究槽', d:'初始 2 槽（可扩 3），1–20 分钟倒计时，可广告加速；最多排 3 个；时代上限按国家设定。'}
+      ]},
+      {n:'景观图鉴', d:'替代城内街景地标：城市周边的人文自然景观，线路经过即打卡，收集不加数值但加客流与观光收入。', c:[
+        {n:'自然景观', d:'火山 / 湖泊 / 瀑布 / 海岸 / 温泉 / 樱花林 / 枫叶谷 / 雪山。', c:[{n:'火山'},{n:'湖泊'},{n:'温泉'},{n:'花季'}]},
+        {n:'人文景观', d:'古城 / 神社寺庙 / 城堡 / 灯塔 / 运河 / 老车站 / 铁道博物馆。', c:[{n:'古城'},{n:'神社'},{n:'城堡'},{n:'老车站'}]},
+        {n:'打卡奖励', d:'O05 明信片页：客流 +15%、钻石 ×20、看视频再领；集齐一国 6 景发套组奖励。', c:[{n:'明信片'},{n:'印章'},{n:'风物志'},{n:'套组奖励'}]},
+        {n:'观光列车', d:'P2：沿景观密集线路开行观光列车，票价更高、客流加成。'}
+      ]},
+      {n:'任务成长', d:'每日回访 + 长期目标；左侧「任务」入口。', c:[
+        {n:'每日任务', d:'活跃度 20/70/100 三宝箱 + 6 条任务行（钻石×10/条）+ 三态按钮「领取/已领/未完成」。', c:[{n:'活跃度'},{n:'宝箱'},{n:'三态按钮'},{n:'看视频再领'}]},
+        {n:'成就', d:'经营 / 路网 / 收藏 / 城市 / 挑战五类，达成给钻石与称号。'},
+        {n:'主线目标', d:'新手链 + 国家目标，在地图 HUD 上给下一步提示。'},
+        {n:'排行竞赛', d:'国家榜 / 好友榜 / 总资产；单机 + 云变量排行榜。'},
+        {n:'活动中心', d:'限时活动 banner、签到、礼包、兑换码；入口仅活动期出现。'},
+        {n:'邮件', d:'系统补偿与活动奖励，一键领取。'}
+      ]},
+      {n:'商店变现', d:'广告为主 + 可选内购；广告只放右侧竖排与按钮原位替换，永不弹窗。', c:[
+        {n:'钻石商店', d:'充值档位 / 礼包 / 特权；首充双倍。'},
+        {n:'金币商店', d:'钻石换金币 + 加速券/双倍卡。'},
+        {n:'涂装商店', d:'列车皮肤，纯外观。'},
+        {n:'广告位', d:'收入×2 / 加速 / 领金币 / 宝箱 / 打卡×2 / 离线×2 / 破产救援；频控 + 幂等 + 失败降级。', c:[{n:'收入翻倍'},{n:'加速'},{n:'宝箱'},{n:'打卡翻倍'},{n:'离线翻倍'}]},
+        {n:'福利中心', d:'签到 / 在线奖励 / 兑换码。'}
+      ]},
+      {n:'系统设置', d:'系统开关、存档、合规、日报、启动与错误处理。', c:[
+        {n:'设置', d:'音乐/音效/震动/省电/排行榜显示/上传存档/反馈/隐私/协议/关于/重开国家。', c:[{n:'音乐与音效'},{n:'省电模式'},{n:'排行榜显示'},{n:'上传存档'}]},
+        {n:'云存档', d:'本地 vs 云端对比；上传/下载/删除/冲突二选一；覆盖本地红色高危确认。', c:[{n:'上传'},{n:'下载'},{n:'冲突处理'}]},
+        {n:'离线收益', d:'离线 >10 分钟：时长 + 金币 + 领取/看视频×2 + 上限。'},
+        {n:'经营日报', d:'今日收支 + 7 日趋势 + 线路 Top5 + 拥挤 Top5 + 站长建议。', c:[{n:'今日收支'},{n:'线路排行'},{n:'趋势'}]},
+        {n:'启动与更新', d:'加载进度、贴士、版本公告、云存档恢复。'},
+        {n:'错误与反馈', d:'网络错误、广告失败、资源失败重试、存档损坏恢复。'}
+      ]},
+      {n:'2代特色', d:'差异化主张，放 P2；首版先跑通「一国、一线、一车、一科技」。', c:[
+        {n:'货运系统', d:'货场 / 货运车厢 / 运输合同；与客运共用轨道，做取舍。', c:[{n:'货场'},{n:'货运车厢'},{n:'运输合同'}]},
+        {n:'季节与天气', d:'春樱/夏绿/秋枫/冬雪，影响景观与客流，也影响地图配色。', c:[{n:'季节'},{n:'天气'}]},
+        {n:'城市发展', d:'线路覆盖带动城市地块成长（荒地→住宅→商业），地图越玩越好看。', c:[{n:'地块成长'},{n:'繁荣度'}]},
+        {n:'收藏', d:'车辆图鉴 + 景观图鉴 + 国家印章，承接前作资产。', c:[{n:'车辆图鉴'},{n:'景观图鉴'},{n:'国家印章'}]}
+      ]}
+    ]
+  };
+
+  var NODE_W=216, NODE_H=46, D0_W=250, D0_H=58, GAP_X=74, GAP_Y=14;
+  var state = {sel:null, scale:1, tx:0, ty:0, q:'', maxDepth:0};
+  var nodes=[], byId={}, uid=0;
+  var stage=document.getElementById('stage');
+  var svg=document.getElementById('links');
+  var viewport=document.getElementById('viewport');
+
+  function prep(node, depth, parentColor, branchIdx){
+    node.id='n'+(uid++);
+    node.depth=depth;
+    node.collapsed = depth>=2 ? true : false;
+    if(depth===1){ node.color = COLORS[branchIdx % COLORS.length]; node.branchIndex=branchIdx; }
+    else if(depth>1){ node.color = parentColor; }
+    node.lineColor = node.color;
+    byId[node.id]=node;
+    nodes.push(node);
+    (node.c||[]).forEach(function(ch, i){ prep(ch, depth+1, node.color, depth===0 ? i : branchIdx); });
+  }
+  prep(DATA, 0, null, 0);
+  state.maxDepth = 0;
+  nodes.forEach(function(n){ if(n.depth>state.maxDepth) state.maxDepth=n.depth; });
+
+  function isVisible(n){
+    var p=n.parent;
+    while(p){ if(p.collapsed) return false; p=p.parent; }
+    return true;
+  }
+  nodes.forEach(function(n){
+    (n.c||[]).forEach(function(ch){ ch.parent=n; });
+  });
+
+  function visibleList(){
+    return nodes.filter(isVisible);
+  }
+
+  function layout(){
+    var vis = visibleList();
+    var cursor = 0;
+    var stageW = 0;
+    function walk(n){
+      var kids = n.collapsed ? [] : (n.c||[]).filter(isVisible);
+      if(kids.length===0){
+        n.y = cursor; cursor += (n.depth===0?D0_H:NODE_H) + GAP_Y;
+      } else {
+        kids.forEach(walk);
+        n.y = (kids[0].y + kids[kids.length-1].y)/2;
+      }
+      n.x = n.depth===0 ? 0 : (D0_W + GAP_X + (n.depth-1)*(NODE_W + GAP_X));
+      var w = n.depth===0?D0_W:NODE_W;
+      if(n.x + w > stageW) stageW = n.x + w;
+    }
+    walk(DATA);
+    stage.style.width = (stageW + 60) + 'px';
+    stage.style.height = (cursor + 40) + 'px';
+    return {w: stageW+60, h: cursor+40};
+  }
+
+  function render(){
+    var dims = layout();
+    // nodes
+    var existing = {};
+    Array.prototype.forEach.call(stage.querySelectorAll('.node'), function(el){ existing[el.dataset.id]=el; });
+    var vis = visibleList();
+    vis.forEach(function(n){
+      var el = existing[n.id];
+      if(!el){
+        el = document.createElement('div');
+        el.dataset.id = n.id;
+        el.className = 'node d'+n.depth;
+        el.innerHTML = '<span class="dot"></span><span class="txt"></span>';
+        el.addEventListener('click', function(ev){ ev.stopPropagation(); select(n, true); });
+        el.addEventListener('dblclick', function(ev){ ev.stopPropagation(); toggle(n); });
+        stage.appendChild(el);
+      }
+      el.className = 'node d'+n.depth + (state.sel===n?' sel':'') + (state.q && !isMatch(n)?' dim':'') + (isMatch(n)&&state.q?' match':'');
+      el.style.setProperty('--c', n.color||'#999');
+      el.style.left = n.x+'px';
+      el.style.top = n.y+'px';
+      el.querySelector('.txt').textContent = n.n;
+      // toggler
+      var t = el.querySelector('.toggler');
+      if(n.c && n.c.length && n.depth>0){
+        if(!t){
+          t = document.createElement('button');
+          t.className='toggler';
+          t.type='button';
+          el.appendChild(t);
+          t.addEventListener('click', function(ev){ ev.stopPropagation(); toggle(n); });
+        }
+        t.textContent = n.collapsed ? '+' : '−';
+        t.title = n.collapsed ? '展开' : '收起';
+      } else if(t){ t.remove(); }
+    });
+    Object.keys(existing).forEach(function(id){
+      var n = byId[id];
+      if(!n || !isVisible(n)) existing[id].remove();
+    });
+    // links
+    drawLinks(vis);
+    applyTransform();
+    updateSidebar();
+  }
+
+  function isMatch(n){
+    if(!state.q) return false;
+    return n.n.toLowerCase().indexOf(state.q.toLowerCase())>=0;
+  }
+
+  function drawLinks(vis){
+    var paths = '';
+    vis.forEach(function(n){
+      if(!n.c || n.collapsed) return;
+      n.c.forEach(function(ch){
+        if(!isVisible(ch)) return;
+        var px = n.x + (n.depth===0?D0_W:NODE_W);
+        var py = n.y + (n.depth===0?D0_H:NODE_H)/2;
+        var cx = ch.x;
+        var cy = ch.y + (ch.depth===0?D0_H:NODE_H)/2;
+        var mx = (px+cx)/2;
+        paths += '<path d="M'+px+','+py+' C'+mx+','+py+' '+mx+','+cy+' '+cx+','+cy+'" fill="none" stroke="'+(ch.lineColor||'#C9B894')+'" stroke-width="2.2" stroke-opacity="0.55" stroke-linecap="round"/>';
+      });
+    });
+    svg.innerHTML = paths;
+    svg.setAttribute('width', stage.style.width);
+    svg.setAttribute('height', stage.style.height);
+    svg.style.width = stage.style.width;
+    svg.style.height = stage.style.height;
+  }
+
+  function select(n, ensureVisible){
+    state.sel = n;
+    render();
+  }
+
+  function toggle(n){
+    n.collapsed = !n.collapsed;
+    render();
+    refit();
+  }
+
+  function updateSidebar(){
+    var n = state.sel || DATA;
+    document.getElementById('title').textContent = n.n;
+    var path=[], p=n;
+    while(p){ path.unshift(p.n); p=p.parent; }
+    document.getElementById('crumb').textContent = path.join(' / ');
+    var note = n.d || (n.c && n.c.length ? '包含 '+n.c.length+' 个子项。' : '末端节点。');
+    document.getElementById('note').innerHTML = note;
+    var chips = document.getElementById('chips');
+    var label = document.getElementById('kidsLabel');
+    chips.innerHTML='';
+    if(n.c && n.c.length){
+      label.style.display='block';
+      n.c.forEach(function(ch){
+        var b=document.createElement('button');
+        b.className='chip'; b.textContent=ch.n;
+        b.addEventListener('click', function(){ state.sel=ch; ensureVisibleTo(ch); render(); refit(); });
+        chips.appendChild(b);
+      });
+    } else {
+      label.style.display='none';
+    }
+  }
+
+  function ensureVisibleTo(n){
+    var p=n.parent;
+    while(p){ p.collapsed=false; p=p.parent; }
+  }
+
+  function applyTransform(){
+    stage.style.transform='translate('+state.tx+'px,'+state.ty+'px) scale('+state.scale+')';
+  }
+
+  function fit(){
+    var dims = {w: parseFloat(stage.style.width), h: parseFloat(stage.style.height)};
+    var r = viewport.getBoundingClientRect();
+    var s = Math.min((r.width-40)/dims.w, (r.height-40)/dims.h, 1.1);
+    state.scale = Math.max(0.2, s);
+    state.tx = (r.width - dims.w*state.scale)/2;
+    state.ty = (r.height - dims.h*state.scale)/2;
+    applyTransform();
+  }
+
+  function refit(){
+    var dims = {w: parseFloat(stage.style.width), h: parseFloat(stage.style.height)};
+    var r = viewport.getBoundingClientRect();
+    var fs = Math.min((r.width-40)/dims.w, (r.height-40)/dims.h, 1.15);
+    if(state.scale > fs) state.scale = Math.max(0.2, fs);
+    state.tx = (r.width - dims.w*state.scale)/2;
+    state.ty = (r.height - dims.h*state.scale)/2;
+    applyTransform();
+  }
+
+  // interactions
+  var dragging=false, sx=0, sy=0, ox=0, oy=0, moved=false;
+  viewport.addEventListener('mousedown', function(e){
+    if(e.target.closest('.node') || e.target.closest('.toggler') || e.target.closest('.zoom')) return;
+    dragging=true; moved=false; sx=e.clientX; sy=e.clientY; ox=state.tx; oy=state.ty;
+    viewport.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', function(e){
+    if(!dragging) return;
+    var dx=e.clientX-sx, dy=e.clientY-sy;
+    if(Math.abs(dx)+Math.abs(dy)>3) moved=true;
+    state.tx=ox+dx; state.ty=oy+dy; applyTransform();
+  });
+  window.addEventListener('mouseup', function(){
+    if(dragging && !moved){ state.sel=null; render(); }
+    dragging=false; viewport.classList.remove('dragging');
+  });
+  viewport.addEventListener('wheel', function(e){
+    e.preventDefault();
+    var r = viewport.getBoundingClientRect();
+    var mx=e.clientX-r.left, my=e.clientY-r.top;
+    var old=state.scale;
+    var factor = e.deltaY<0 ? 1.12 : 0.89;
+    var ns = Math.min(2.4, Math.max(0.2, old*factor));
+    state.tx = mx - (mx-state.tx)*(ns/old);
+    state.ty = my - (my-state.ty)*(ns/old);
+    state.scale = ns;
+    applyTransform();
+  }, {passive:false});
+
+  document.getElementById('zin').addEventListener('click', function(){
+    state.scale=Math.min(2.4,state.scale*1.18); applyTransform();
+  });
+  document.getElementById('zout').addEventListener('click', function(){
+    state.scale=Math.max(0.2,state.scale/1.18); applyTransform();
+  });
+  document.getElementById('btnFit').addEventListener('click', fit);
+  document.getElementById('btnExpand').addEventListener('click', function(){
+    nodes.forEach(function(n){ n.collapsed=false; }); render(); refit();
+  });
+  document.getElementById('btnCollapse').addEventListener('click', function(){
+    nodes.forEach(function(n){ if(n.depth>=1) n.collapsed=true; }); render(); refit();
+  });
+  document.getElementById('q').addEventListener('input', function(e){
+    state.q = e.target.value.trim();
+    if(state.q){
+      nodes.forEach(function(n){
+        if(isMatch(n)) ensureVisibleTo(n);
+      });
+      nodes.forEach(function(n){ if(isMatch(n)) n.collapsed=false; });
+    }
+    render();
+    if(state.q) refit();
+  });
+
+  // legend
+  var legend=document.getElementById('legend');
+  DATA.c.forEach(function(b){
+    var i=document.createElement('i');
+    i.style.setProperty('--c', b.color);
+    i.textContent=b.n;
+    legend.appendChild(i);
+  });
+
+  // init：默认只展开一级分支，点节点圆点逐层展开
+  nodes.forEach(function(n){ n.collapsed = n.depth>=1; });
+  state.sel=null;
+  render();
+  fit();
+  window.addEventListener('resize', function(){ fit(); });
+})();
+</script>
+</body>
+</html>
