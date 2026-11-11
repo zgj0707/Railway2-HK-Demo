@@ -11,7 +11,7 @@ public partial class DemoBootstrap
 
     public void OnLineTap(Vector2 screen)
     {
-        if (dragging || buildMode || pageRoot != null || activePanel != null) return;
+        if (dragging || pageRoot != null || activePanel != null) return;
         Vector2 local;
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(mapRect, screen, null, out local)) return;
         var hits = FindLineHits(local, 24f);
@@ -27,6 +27,7 @@ public partial class DemoBootstrap
             if (line.st == null || line.st.Count < 2) continue;
             for (int i = 0; i < line.st.Count - 1; i++)
             {
+                if (SegmentRegion(line.st[i], line.st[i+1]) != currentRegion) continue;
                 float d = DistToSeg(point, Pos(line.st[i]), Pos(line.st[i+1]));
                 if (d > tolerance) continue;
                 LineHit h;
@@ -102,14 +103,14 @@ public partial class DemoBootstrap
     {
         if (line == null) return "";
         int refund = Mathf.RoundToInt(120f * (UniqueCount(line.st) - 1) * 0.6f);
-        return line.st.Count + " 站 · " + line.trains + " 列车\n拆除后退还 ¥" + refund + "。";
+        return UniqueCount(line.st) + " 站 · " + line.trains + " 列车\n拆除后退还 ¥" + refund + "。";
     }
 
     void DoDemolishSegment(Line line, int seg)
     {
         if (line == null || !lines.Contains(line) || seg < 0 || seg >= line.st.Count - 1) return;
         int n = line.st.Count;
-        if (n > 3 && seg > 0 && seg < n - 2 && lines.Count >= 6)
+        if (!IsLoop(line.st) && n > 3 && seg > 0 && seg < n - 2 && lines.Count >= 6)
         {
             Toast("线路已满 6 条，无法拆分该段；可拆除整线");
             return;
@@ -117,9 +118,18 @@ public partial class DemoBootstrap
         int a = line.st[seg], b = line.st[seg + 1];
         float d = Vector2.Distance(Pos(a), Pos(b));
         int refund = Mathf.RoundToInt((30f + d * 0.75f) * 0.6f);
+        BeginUndo("拆除线路段");
         string msg;
 
-        if (n <= 2)
+        if (IsLoop(line.st))
+        {
+            var opened = new List<int>();
+            for (int i = 0; i < n - 1; i++) opened.Add(line.st[(seg + 1 + i) % (n - 1)]);
+            line.st = opened;
+            coins += refund;
+            msg = "已拆除一段，环线变为普通线路";
+        }
+        else if (n <= 2)
         {
             lines.Remove(line);
             coins += refund;
@@ -154,16 +164,17 @@ public partial class DemoBootstrap
         }
 
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); RefreshHUD();
-        Toast(msg);
+        EndUndo(); Toast(msg);
     }
 
     void DoDemolishLine(Line line)
     {
         if (line == null || !lines.Contains(line)) return;
+        BeginUndo("拆除整条线路");
         float refund = 120f * (UniqueCount(line.st) - 1) * 0.6f;
         coins += refund; lines.Remove(line);
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); RefreshHUD();
-        Toast("已拆除 " + line.name);
+        EndUndo(); Toast("已拆除 " + line.name);
     }
 
     void OpenLineInfo(Line line, int seg)
@@ -171,7 +182,8 @@ public partial class DemoBootstrap
         if (line == null || !lines.Contains(line)) return;
         CloseLineBubble();
         float h = 1180f;
-        var p = OpenPopup(line.name + " · 运营详情", h, 960);
+        var p = OpenPopup("", h, 960);
+        BuildLineNameEditor(p.transform, line, h);
         Img(Rect("LineColor", p.transform, 36, h - 124, 888, 8), line.color, spriteRound).raycastTarget = false;
 
         int unique = UniqueCount(line.st);
@@ -180,8 +192,8 @@ public partial class DemoBootstrap
 
         StatBox(p.transform, "每日收入", Mathf.RoundToInt(LineDaily(line)) + "", 34, h - 300, 430, 150, Gold);
         StatBox(p.transform, "今日实收", line.todayRevenue + "", 496, h - 300, 430, 150, Matcha);
-        StatBox(p.transform, "客 流", Mathf.RoundToInt(80f * Mathf.Max(0, unique - 1)) + "", 34, h - 470, 430, 150, Indigo);
-        StatBox(p.transform, "运 力", (70 + 6 * line.up[1]) + "%", 496, h - 470, 430, 150, Sakura);
+        StatBox(p.transform, "客 流", Mathf.RoundToInt(LinePassengerFlow(line)) + "", 34, h - 470, 430, 150, Indigo);
+        StatBox(p.transform, "运 力", Mathf.RoundToInt(LineCapacity(line)) + " 人/日", 496, h - 470, 430, 150, Sakura);
 
         Txt(p.transform, "近 7 日实收", 24, Ink, 36, 675, 420, 34, TextAnchor.MiddleLeft);
         if (line.recent.Count == 0)
@@ -221,10 +233,62 @@ public partial class DemoBootstrap
         Txt(p.transform, "沿线 " + UniquePathText(line.st), 19, InkSoft, 36, 296, 860, 48, TextAnchor.UpperLeft);
 
         Btn(p.transform, "LineDetail", "线路详情 / 升级", 26, 34, 34, 430, 82, Indigo, () => {
-            ClosePanel(); OpenLineScreen(line.id);
+            ClosePanel(); OpenLineScreen(line.id, () => OpenLineInfo(line, seg));
         });
         var close = Btn(p.transform, "InfoClose", "关 闭", 26, 496, 34, 430, 82, new Color(0.92f,0.89f,0.83f), ClosePanel);
         TInk(close, Ink);
+    }
+
+    void BuildLineNameEditor(Transform parent, Line line, float h)
+    {
+        var nameButton = Btn(parent, "RenameLine", "", 44, 28, h - 82, 430, 68,
+            new Color(0.94f, 0.91f, 0.85f, 0.45f), () => { });
+        var label = nameButton.GetComponentInChildren<Text>();
+        label.text = line.name + "  ✎";
+        label.color = Ink;
+        label.alignment = TextAnchor.MiddleLeft;
+        label.resizeTextForBestFit = true;
+        label.resizeTextMinSize = 26;
+        label.resizeTextMaxSize = 44;
+        Txt(parent, "运营详情", 25, InkSoft, 480, h - 77, 200, 50, TextAnchor.MiddleLeft);
+
+        var editor = Rect("RenameEditor", parent, 28, h - 88, 740, 76);
+        Rounded(editor, new Color(0.99f, 0.98f, 0.95f, 1f));
+        var inputBox = Rect("NameInput", editor.transform, 0, 0, 470, 76);
+        Rounded(inputBox, new Color(1, 1, 1, 1));
+        var inputText = Txt(inputBox.transform, "", 36, Ink, 14, 4, 442, 68, TextAnchor.MiddleLeft);
+        inputText.supportRichText = false;
+        inputText.horizontalOverflow = HorizontalWrapMode.Overflow;
+        var input = inputBox.AddComponent<InputField>();
+        input.targetGraphic = inputBox.GetComponent<Image>();
+        input.textComponent = inputText;
+        input.lineType = InputField.LineType.SingleLine;
+        input.characterLimit = 12;
+        input.text = line.name;
+        var save = Btn(editor.transform, "Save", "确定", 26, 482, 0, 120, 76, Matcha, () => {
+            string value = input.text.Trim();
+            if (string.IsNullOrWhiteSpace(value)) { Toast("线路名称不能为空"); return; }
+            if (line.name != value) { BeginUndo("修改线路名称"); line.name = value; EndUndo(); }
+            label.text = line.name + "  ✎";
+            editor.SetActive(false);
+            nameButton.gameObject.SetActive(true);
+            Toast("线路名称已修改");
+        });
+        TInk(save, Color.white);
+        var cancel = Btn(editor.transform, "Cancel", "取消", 26, 612, 0, 120, 76,
+            new Color(0.92f, 0.89f, 0.83f), () => {
+                editor.SetActive(false);
+                nameButton.gameObject.SetActive(true);
+            });
+        TInk(cancel, Ink);
+        editor.SetActive(false);
+        nameButton.onClick.RemoveAllListeners();
+        nameButton.onClick.AddListener(() => {
+            input.text = line.name;
+            nameButton.gameObject.SetActive(false);
+            editor.SetActive(true);
+            input.ActivateInputField();
+        });
     }
 
     float PathLength(List<int> path)

@@ -68,7 +68,7 @@ public partial class DemoBootstrap
         dayClock += dt;
         if (dayClock >= 60f)
         {
-            dayClock -= 60f; day++;
+            dayClock -= 60f; day++; RollTrafficEvents();
             foreach (var line in lines)
             {
                 line.recent.Add(line.todayRevenue);
@@ -83,13 +83,153 @@ public partial class DemoBootstrap
         if (!timeTxt) return;
         int mins = 8 * 60 + Mathf.FloorToInt(dayClock / 60f * 1440f);
         int hh = (mins / 60) % 24, mm = mins % 60;
-        timeTxt.text = "第 " + day + " 天  " + hh.ToString("00") + ":" + mm.ToString("00");
+        timeTxt.text = hh.ToString("00") + ":" + mm.ToString("00");
+        if (dayTxt) dayTxt.text = "第 " + day + " 日";
         if (speedTxt) speedTxt.text = timeSpeed + "×";
     }
     void CycleSpeed()
     {
-        timeSpeed = timeSpeed >= 3 ? 1 : timeSpeed + 1;
+        BeginUndo("切换倍速"); timeSpeed = timeSpeed >= 3 ? 1 : timeSpeed + 1; EndUndo();
         UpdateTimeText();
+    }
+
+    // ---------- 客流与关键剧情 ----------
+    float trafficRefresh;
+    GameObject stationTrafficPanel;
+    Text stationTrafficLabel;
+    int stationTrafficIndex = -1;
+    sealed class StoryEvent
+    {
+        public string title, text;
+        // 预留立绘资源地址；当前只播放文字与 Unity 原生动效。
+        public string portraitResource;
+    }
+    readonly Queue<StoryEvent> storyQueue = new Queue<StoryEvent>();
+    readonly HashSet<string> storySeen = new HashSet<string>();
+    GameObject storyCard;
+
+    void TickStationTraffic(float dt)
+    {
+        trafficRefresh += dt;
+        if (trafficRefresh < 2f) return;
+        trafficRefresh = 0f; RecalcIncome();
+        if (stationTrafficPanel && activePanel == stationTrafficPanel && stationTrafficLabel && stationTrafficIndex >= 0)
+            stationTrafficLabel.text = StationTrafficDescription(stationTrafficIndex);
+        else { stationTrafficPanel = null; stationTrafficLabel = null; stationTrafficIndex = -1; }
+    }
+    int StationLineCount(int index)
+    {
+        int count = 0; foreach (var line in lines) if (line.st.Contains(index)) count++; return count;
+    }
+    string StationTrafficDescription(int index)
+    {
+        var station = stations[index]; int lineCount = StationLineCount(index);
+        string state = station.closed ? "已关停 · 列车通过不停站" : lineCount == 0 ? "已开站 · 尚未接入线路" : "运营中 · " + lineCount + " 条线路";
+        string lineNames = "";
+        foreach (var line in lines) if (line.st.Contains(index)) lineNames += (lineNames.Length == 0 ? "" : "、") + line.name;
+        float demand = StationRequestedFlow(index), served = StationPassengerFlow(index), cap = StationCapacity(index);
+        string pressure = demand > cap ? "站点拥挤，升级可提高站内容量" : "站点容量充足";
+        return state + (lineNames.Length > 0 ? "\n途经线路：" + lineNames : "") + "\n当前客流 " + Mathf.RoundToInt(served) + " / 日  ·  需求 " + Mathf.RoundToInt(demand) + " / 日\n" +
+            "站内容量 " + Mathf.RoundToInt(cap) + " / 日 · " + pressure + "\n" +
+            "流量事件：" + TrafficEventNames[station.trafficEvent] + "（需求 " +
+            (TrafficEventFactors[station.trafficEvent] >= 1 ? "+" : "") + Mathf.RoundToInt((TrafficEventFactors[station.trafficEvent]-1)*100) + "%）\n" +
+            "线路覆盖、换乘、速度与班次决定可达客流；车站和线路容量限制实际服务量。";
+    }
+    void ShowStationActions(int index)
+    {
+        if (index < 0 || index >= stations.Count || pageRoot || sceneryViewer) return;
+        Vector3 world = mapRect.TransformPoint(Pos(index)); Vector2 anchor = root.InverseTransformPoint(world);
+        var p = OpenBubble(stations[index].name, 220, 520, anchor);
+        Txt(p.transform, stations[index].closed ? "已关停" : StationLineCount(index) == 0 ? "尚未接入线路" : "运营中 · " + Mathf.RoundToInt(StationPassengerFlow(index)) + " 人/日", 22, InkSoft, 28, 86, 455, 36, TextAnchor.MiddleLeft);
+        var detail = Btn(p.transform, "StationInfo", "站点详情", 24, 28, 18, 464, 62, Indigo, () => OpenStationInfo(index));
+        TInk(detail, Color.white);
+    }
+    void OpenStationInfo(int index)
+    {
+        if (index < 0 || index >= stations.Count || pageRoot || sceneryViewer) return;
+        var station = stations[index];
+        var p = OpenPopup(station.name + " · Lv." + station.level, 940, 960);
+        stationTrafficPanel = p; stationTrafficIndex = index;
+        stationTrafficLabel = Txt(p.transform, StationTrafficDescription(index), 28, InkSoft, 38, 300, 884, 490, TextAnchor.UpperLeft);
+        int cost = Mathf.RoundToInt(100f * Mathf.Pow(1.65f, station.level - 1));
+        var upgrade = Btn(p.transform, "UpgradeStation", station.level >= 10 ? "已满级" : "升级  ¥" + cost, 27, 38, 155, 420, 92, Matcha, () => {
+            if (station.level >= 10) { Toast("车站已满级"); return; }
+            if (coins < cost) { Toast("金币不足"); return; }
+            BeginUndo("升级车站"); coins -= cost; station.level++; RecalcIncome(); EndUndo(); RefreshHUD(); OpenStationInfo(index); Toast("车站升级成功");
+        }); TInk(upgrade, Color.white);
+        var toggle = Btn(p.transform, "ToggleStation", station.closed ? "开站" : "关停", 27, 500, 155, 420, 92, station.closed ? Indigo : Vermilion, () => {
+            BeginUndo(station.closed ? "开站" : "关停车站"); station.closed = !station.closed; RefreshStationDots(); RecalcIncome(); if (!station.closed) CheckSceneryOnLine(null); EndUndo(); RefreshHUD(); OpenStationInfo(index);
+            Toast(station.name + (station.closed ? " 已关停" : " 已开站"));
+        }); TInk(toggle, Color.white);
+        var close = Btn(p.transform, "StationClose", "关闭", 26, 38, 36, 882, 80, new Color(0.92f,0.89f,0.83f), () => { ClosePanel(true); ShowStationActions(index); });
+        TInk(close, Ink);
+    }
+    void QueueStory(string key, string title, string content)
+    {
+        if (!storySeen.Add(key)) return;
+        storyQueue.Enqueue(new StoryEvent { title = title, text = content });
+    }
+    void TickStory()
+    {
+        if (storyCard || storyQueue.Count == 0 || pageRoot || activePanel || sceneryViewer || lineBubbleRoot || dragging) return;
+        var story = storyQueue.Dequeue();
+        storyCard = Rect("StoryCard", root, 40, 220, 1000, 360);
+        Rounded(storyCard, new Color(0.99f, 0.975f, 0.94f, 0.98f)); SoftShadow(storyCard);
+        var accent = Img(Rect("Accent", storyCard.transform, 0, 20, 8, 320), Gold, spriteRound); accent.raycastTarget = false;
+        Txt(storyCard.transform, "沿途故事", 22, Matcha, 34, 308, 400, 32, TextAnchor.MiddleLeft);
+        Txt(storyCard.transform, story.title, 36, Ink, 34, 254, 800, 50, TextAnchor.MiddleLeft);
+        Txt(storyCard.transform, story.text, 27, Ink, 34, 100, 932, 140, TextAnchor.UpperLeft);
+        var close = Btn(storyCard.transform, "Continue", "继续运营", 25, 740, 22, 226, 68, Matcha, () => { if (storyCard) Destroy(storyCard); storyCard = null; });
+        TInk(close, Color.white);
+        if (undoButton) undoButton.transform.SetAsLastSibling();
+        var cg = storyCard.AddComponent<CanvasGroup>(); cg.alpha = 0;
+        StartCoroutine(AnimateStory(storyCard.GetComponent<RectTransform>(), cg));
+    }
+    System.Collections.IEnumerator AnimateStory(RectTransform rect, CanvasGroup group)
+    {
+        Vector2 end = rect.anchoredPosition, start = end + new Vector2(0, -35); float elapsed = 0;
+        while (rect && group && elapsed < 0.3f)
+        {
+            elapsed += Time.unscaledDeltaTime; float t = Mathf.Clamp01(elapsed / 0.3f); float ease = 1f - (1f-t)*(1f-t)*(1f-t);
+            rect.anchoredPosition = Vector2.Lerp(start, end, ease); group.alpha = ease; yield return null;
+        }
+        if (rect && group) { rect.anchoredPosition = end; group.alpha = 1; }
+    }
+
+    // 拖线造价跟随指针，实际已吸附部分与待吸附段的预估分开标示。
+    GameObject dragCostBadge;
+    Text dragCostHeading, dragCostNumber;
+    float dragCostDisplayed, dragCostPulse;
+    int dragCostLastCommitted;
+    void BuildDragCostBadge()
+    {
+        dragCostBadge = Rect("DragCostBadge", root, 0, 0, 250, 96);
+        Rounded(dragCostBadge, new Color(0.99f,0.98f,0.95f,0.96f));
+        dragCostBadge.GetComponent<Image>().raycastTarget = false; SoftShadow(dragCostBadge);
+        dragCostHeading = Txt(dragCostBadge.transform, "线路造价", 20, InkSoft, 12, 62, 226, 26, TextAnchor.MiddleCenter);
+        dragCostNumber = Txt(dragCostBadge.transform, "¥0", 38, Ink, 12, 12, 226, 49, TextAnchor.MiddleCenter);
+        dragCostBadge.SetActive(false);
+    }
+    void UpdateDragCostBadge(Vector2 point, Vector2 pointer, float dt)
+    {
+        if (!dragCostBadge || draft.Count == 0) return;
+        Vector2 current = Pos(draft[draft.Count - 1]);
+        float remaining = Vector2.Distance(current, point);
+        bool preview = !IsLoop(draft) && remaining > 24f;
+        int value = draftCost + (preview ? Mathf.RoundToInt(30f + remaining * 0.75f) : 0);
+        if (draftCost != dragCostLastCommitted) { dragCostLastCommitted = draftCost; dragCostPulse = 0.22f; }
+        dragCostDisplayed = Mathf.Lerp(dragCostDisplayed, value, 1f - Mathf.Exp(-18f * dt));
+        if (Mathf.Abs(dragCostDisplayed-value) < 0.5f) dragCostDisplayed = value;
+        dragCostHeading.text = preview ? "预计造价 · 含拖拽段" : "已选造价";
+        dragCostNumber.text = "¥" + Mathf.RoundToInt(dragCostDisplayed);
+        dragCostNumber.color = value > coins ? Vermilion : Ink;
+        dragCostPulse = Mathf.Max(0, dragCostPulse-dt);
+        float pop = 1f + 0.12f * Mathf.Sin((dragCostPulse / 0.22f) * Mathf.PI);
+        dragCostNumber.rectTransform.localScale = Vector3.one * pop;
+        Vector2 at = (Vector2)root.InverseTransformPoint(mapRect.TransformPoint(pointer)) - root.rect.min;
+        float x = Mathf.Clamp(at.x - 125f, 12f, W - 262f);
+        float y = at.y + 72f; if (y + 96f > H - 205f) y = at.y - 150f;
+        dragCostBadge.GetComponent<RectTransform>().anchoredPosition = new Vector2(x, Mathf.Clamp(y, 180f, H - 301f));
     }
 
     // ---------- income floaters ----------
@@ -123,11 +263,11 @@ public partial class DemoBootstrap
     {
         if (stationOpen == null || stationOpen.Length != stations.Count) stationOpen = new bool[stations.Count];
         for (int i = 0; i < stationOpen.Length; i++) stationOpen[i] = false;
-        foreach (var l in lines) foreach (var i in l.st) if (i >= 0 && i < stationOpen.Length) stationOpen[i] = true;
+        foreach (var l in lines) foreach (var i in l.st) if (i >= 0 && i < stationOpen.Length) stationOpen[i] = !stations[i].closed;
         foreach (var kv in stationImgs)
         {
             if (stations[kv.Key].portal) continue;
-            kv.Value.color = stationOpen[kv.Key] ? Gold : new Color(0.985f, 0.965f, 0.925f, 0.98f);
+            kv.Value.color = stationOpen[kv.Key] ? Gold : Color.white;
         }
     }
     bool IsOpen(int i) { return stationOpen != null && i >= 0 && i < stationOpen.Length && stationOpen[i]; }
@@ -163,6 +303,8 @@ public partial class DemoBootstrap
         CloseLineBubble();
         draft.Clear(); draft.Add(idx); draftCost = 0;
         dragFrom = idx; dragging = true; hoverStation = -1;
+        dragCostDisplayed = 0; dragCostLastCommitted = 0; dragCostPulse = 0;
+        if (dragCostBadge) { dragCostBadge.SetActive(true); UpdateDragCostBadge(Pos(idx), Pos(idx), 1f); }
         RedrawDraft();
         if (previewImg) previewImg.gameObject.SetActive(true);
         if (dragTip) dragTip.gameObject.SetActive(true);
@@ -173,6 +315,7 @@ public partial class DemoBootstrap
     {
         if (!dragging) return;
         dragging = false; hoverStation = -1;
+        if (dragCostBadge) dragCostBadge.SetActive(false);
         if (previewImg) previewImg.gameObject.SetActive(false);
         if (dragTip) dragTip.gameObject.SetActive(false);
         UpdateRings();
@@ -182,6 +325,7 @@ public partial class DemoBootstrap
     void CancelDraft()
     {
         draft.Clear(); draftCost = 0;
+        if (dragCostBadge) dragCostBadge.SetActive(false);
         ClearDraftSegs(); ResetBuildVisuals();
     }
 }

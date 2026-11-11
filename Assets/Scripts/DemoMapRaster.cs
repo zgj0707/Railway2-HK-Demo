@@ -16,6 +16,36 @@ public partial class DemoBootstrap
         raw.raycastTarget = false;
     }
 
+    // 广东地图为手绘风格示意，不绘制行政边界。
+    GameObject BuildGuangdongMap(Transform parent)
+    {
+        var go = Rect("GuangdongArt", parent, 0, 0, W, H);
+        var raw = go.AddComponent<RawImage>(); raw.raycastTarget = false;
+        raw.texture = Resources.Load<Texture2D>("MapArt/guangdong_illustrated");
+        var rt = go.GetComponent<RectTransform>();
+        Label(rt, "广 东", 34, 0.48f, 0.84f, new Color(0.40f,0.38f,0.32f,0.70f), 200);
+        var hint = Txt(go.transform, "放大地图查看县级站点", 19, new Color(0.28f,0.34f,0.31f,0.75f), 600, 230, 430, 32, TextAnchor.MiddleRight);
+        hint.raycastTarget = false;
+        return go;
+    }
+
+    // 澳门示意轮廓参考 OpenStreetMap 并经过简化，见 docs/map-data。
+    GameObject BuildMacauMap(Transform parent)
+    {
+        var go = Rect("MacauArt", parent, 0, 0, W, H);
+        var raw = go.AddComponent<RawImage>(); raw.raycastTarget = false;
+        raw.texture = Resources.Load<Texture2D>("MapArt/macau_osm");
+        var rt = go.GetComponent<RectTransform>();
+        var labelColor = new Color(0.40f,0.38f,0.32f,0.70f);
+        Label(rt, "澳门半岛", 25, MacauX(113.542f), MacauY(22.224f), labelColor, 180);
+        Label(rt, "氹仔", 24, MacauX(113.550f), MacauY(22.171f), labelColor, 150);
+        Label(rt, "路氹", 24, MacauX(113.566f), MacauY(22.136f), labelColor, 150);
+        Label(rt, "路环", 24, MacauX(113.564f), MacauY(22.105f), labelColor, 150);
+        var credit = Txt(go.transform, "© OpenStreetMap contributors", 18, new Color(0.22f,0.30f,0.31f,0.70f), 570, 188, 490, 28, TextAnchor.MiddleRight);
+        credit.raycastTarget = false;
+        return go;
+    }
+
     Texture2D MakeMapTexture2(int w, int h)
     {
         Vector2[][] polys = new Vector2[][] {
@@ -25,11 +55,14 @@ public partial class DemoBootstrap
             new []{ new Vector2(0.04f,0.20f), new Vector2(0.10f,0.17f), new Vector2(0.17f,0.16f), new Vector2(0.24f,0.14f), new Vector2(0.31f,0.155f), new Vector2(0.37f,0.19f), new Vector2(0.40f,0.245f), new Vector2(0.38f,0.30f), new Vector2(0.34f,0.36f), new Vector2(0.28f,0.40f), new Vector2(0.21f,0.415f), new Vector2(0.14f,0.40f), new Vector2(0.08f,0.36f), new Vector2(0.04f,0.30f), new Vector2(0.03f,0.25f) },
             new []{ new Vector2(0.58f,0.115f), new Vector2(0.63f,0.11f), new Vector2(0.66f,0.145f), new Vector2(0.63f,0.175f), new Vector2(0.58f,0.165f), new Vector2(0.56f,0.14f) },
             new []{ new Vector2(0.36f,0.19f), new Vector2(0.395f,0.185f), new Vector2(0.41f,0.215f), new Vector2(0.385f,0.235f), new Vector2(0.355f,0.225f) },
-            new []{ new Vector2(0.455f,0.235f), new Vector2(0.48f,0.23f), new Vector2(0.49f,0.255f), new Vector2(0.47f,0.27f), new Vector2(0.445f,0.26f) }
+            new []{ new Vector2(0.455f,0.235f), new Vector2(0.48f,0.23f), new Vector2(0.49f,0.255f), new Vector2(0.47f,0.27f), new Vector2(0.445f,0.26f) },
+            new []{ new Vector2(0.75f,0.60f), new Vector2(0.79f,0.57f), new Vector2(0.88f,0.565f), new Vector2(0.975f,0.58f), new Vector2(0.98f,0.67f), new Vector2(0.93f,0.735f), new Vector2(0.84f,0.73f), new Vector2(0.76f,0.68f) },
+            new []{ new Vector2(0.36f,0.52f), new Vector2(0.37f,0.575f), new Vector2(0.41f,0.59f), new Vector2(0.44f,0.575f), new Vector2(0.44f,0.535f), new Vector2(0.41f,0.515f) }
         };
         Color[] landCols = {
             new Color(0.85f,0.87f,0.72f), new Color(0.87f,0.86f,0.74f), new Color(0.84f,0.86f,0.70f),
-            new Color(0.85f,0.87f,0.73f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f)
+            new Color(0.85f,0.87f,0.73f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f),
+            new Color(0.84f,0.86f,0.70f), new Color(0.85f,0.87f,0.72f)
         };
 
         bool[] land = new bool[w * h];
@@ -101,7 +134,7 @@ public partial class DemoBootstrap
         // 每个车站周围的城区块
         for (int s = 0; s < stations.Count; s++)
         {
-            if (stations[s].portal) continue;
+            if (stations[s].portal || stations[s].region != "香港") continue;
             int cx = (int)(stations[s].x * w), cy = (int)((BAND_T + stations[s].y * BAND_H) * h);
             int r = Mathf.Max(12, (int)(0.038f * w));
             for (int k = 0; k < 90; k++)
@@ -202,7 +235,7 @@ public partial class DemoBootstrap
                 float u = cx + Mathf.Cos(a) * rx * t * wob;
                 float v = cy + Mathf.Sin(a) * ry * t * wob;
                 float fx = u * w, fy = (BAND_T + v * BAND_H) * h;
-                if (has) DrawMapLine(px, land, w, h, prevX, prevY, fx, fy, new Color(0.34f, 0.40f, 0.30f, 0.42f));
+                if (has) DrawMapLine(px, land, w, h, prevX, prevY, fx, fy, new Color(0.47f, 0.53f, 0.41f, 0.045f));
                 prevX = fx; prevY = fy; has = true;
             }
         }
