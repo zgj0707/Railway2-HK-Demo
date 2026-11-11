@@ -107,7 +107,6 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     void Add(string n, float x, float y) { stations.Add(new Station(n, x, y)); }
 
-
     void BuildUI()
     {
         EnsureCamera();
@@ -203,7 +202,7 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         var map = Rect("Map", root, 0, 0, W, H);
         mapRect = map.GetComponent<RectTransform>();
-        BuildCodeMap(map.transform);
+        BuildRasterMap(map.transform);
         lineLayer = Rect("Lines", mapRect, 0, 0, W, H).GetComponent<RectTransform>();
         previewLayer = Rect("Preview", mapRect, 0, 0, W, H).GetComponent<RectTransform>();
         var pv = Rect("PreviewLine", previewLayer, 0, 0, 1, 12);
@@ -233,132 +232,6 @@ public partial class DemoBootstrap : MonoBehaviour
         var bri = bot.AddComponent<RawImage>(); bri.texture = fade; bri.color = new Color(0.985f,0.97f,0.93f,0.85f); bri.raycastTarget = false;
         bri.uvRect = new Rect(0, 1, 1, -1);
     }
-
-    void BuildCodeMap(Transform parent)
-    {
-        var sea = Rect("Sea", parent, 0, 0, W, H);
-        var bg = sea.AddComponent<MapBackdropGraphic>(); bg.raycastTarget = false;
-
-        var wavesGo = Rect("Waves", parent, 0, 0, W, H);
-        var waves = wavesGo.AddComponent<MapStrokeGraphic>(); waves.raycastTarget = false;
-        for (int i = 0; i < 18; i++)
-        {
-            float yy = 230f + i * 92f;
-            var pts = new List<Vector2>();
-            for (int x = -40; x <= W + 40; x += 34)
-                pts.Add(new Vector2(x, yy + Mathf.Sin(x * 0.017f + i * 1.9f) * 5f));
-            waves.Add(pts, false, 1.1f, new Color(1f, 1f, 1f, 0.10f));
-        }
-
-        var polys = MapPolys();
-        var cols = new Color[] {
-            new Color(0.85f,0.87f,0.72f), new Color(0.87f,0.86f,0.74f), new Color(0.84f,0.86f,0.70f),
-            new Color(0.85f,0.87f,0.73f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f), new Color(0.86f,0.87f,0.74f)
-        };
-        var shadowPolys = new Vector2[polys.Length][];
-        for (int i = 0; i < polys.Length; i++)
-        {
-            shadowPolys[i] = new Vector2[polys[i].Length];
-            for (int j = 0; j < polys[i].Length; j++) shadowPolys[i][j] = polys[i][j] + new Vector2(-3f, -9f);
-        }
-        var shadowCols = new Color[polys.Length];
-        for (int i = 0; i < shadowCols.Length; i++) shadowCols[i] = new Color(0.13f,0.18f,0.14f,0.13f);
-        var shadowGo = Rect("LandShadow", parent, 0, 0, W, H);
-        var shadow = shadowGo.AddComponent<MapPolygonGraphic>(); shadow.raycastTarget = false; shadow.SetData(shadowPolys, shadowCols);
-
-        var landGo = Rect("Land", parent, 0, 0, W, H);
-        var land = landGo.AddComponent<MapPolygonGraphic>(); land.raycastTarget = false; land.SetData(polys, cols);
-
-        var grainGo = Rect("LandGrain", parent, 0, 0, W, H);
-        var grain = grainGo.AddComponent<MapStrokeGraphic>(); grain.raycastTarget = false;
-        var grnd = new System.Random(13);
-        for (int i = 0; i < 520; i++)
-        {
-            float gx = grnd.Next(0, (int)W), gy = MAP_Y + grnd.Next(0, (int)MAP_H);
-            var gp = new Vector2(gx, gy);
-            if (!InsideLand(gp, polys)) continue;
-            float gl = grnd.Next(3, 10);
-            grain.Add(new List<Vector2> { gp, new Vector2(gx + gl, gy + (grnd.Next(0,3)-1)) }, false, 1f, new Color(0.40f,0.46f,0.34f,0.055f));
-        }
-
-        var coastGo = Rect("Coast", parent, 0, 0, W, H);
-        var coast = coastGo.AddComponent<MapStrokeGraphic>(); coast.raycastTarget = false;
-        for (int i = 0; i < polys.Length; i++)
-        {
-            var pts = new List<Vector2>(polys[i]);
-            coast.Add(pts, true, 3.0f, new Color(0.55f,0.63f,0.55f,0.55f));
-            coast.Add(pts, true, 1.6f, new Color(0.30f,0.38f,0.32f,0.72f));
-        }
-
-        var contourGo = Rect("Contours", parent, 0, 0, W, H);
-        var contours = contourGo.AddComponent<MapStrokeGraphic>(); contours.raycastTarget = false;
-        var hills = new[] {
-            new Vector4(0.530f,0.258f,0.085f,0.050f),
-            new Vector4(0.565f,0.248f,0.055f,0.035f),
-            new Vector4(0.760f,0.600f,0.080f,0.050f),
-            new Vector4(0.560f,0.790f,0.120f,0.070f),
-            new Vector4(0.620f,0.800f,0.075f,0.050f),
-            new Vector4(0.240f,0.292f,0.075f,0.045f),
-            new Vector4(0.860f,0.680f,0.070f,0.040f)
-        };
-        for (int k = 0; k < 3; k++)
-        {
-            float t = 0.42f + k * 0.20f;
-            float alpha = 0.30f - k * 0.05f;
-            for (int h = 0; h < hills.Length; h++)
-            {
-                var hill = hills[h];
-                var pts = new List<Vector2>();
-                for (int i = 0; i < 64; i++)
-                {
-                    float a = i / 64f * Mathf.PI * 2f;
-                    float wob = 1f + 0.045f * Mathf.Sin(a * 3f + k * 1.7f + h) + 0.02f * Mathf.Sin(a * 7f + h * 2f);
-                    float px = hill.x * W + Mathf.Cos(a) * hill.z * W * t * wob;
-                    float py = MAP_Y + (hill.y + Mathf.Sin(a) * hill.w * t * wob) * MAP_H;
-                    pts.Add(new Vector2(px, py));
-                }
-                AddClippedContour(contours, pts, polys, 1.15f, new Color(0.30f,0.36f,0.27f, alpha));
-            }
-        }
-    }
-
-    void AddClippedContour(MapStrokeGraphic g, List<Vector2> pts, Vector2[][] land, float width, Color color)
-    {
-        bool allInside = true;
-        for (int i = 0; i < pts.Count; i++) if (!InsideLand(pts[i], land)) { allInside = false; break; }
-        if (allInside) { g.Add(pts, true, width, color); return; }
-        var seg = new List<Vector2>();
-        for (int i = 0; i < pts.Count; i++)
-        {
-            if (InsideLand(pts[i], land)) seg.Add(pts[i]);
-            else
-            {
-                if (seg.Count >= 2) g.Add(new List<Vector2>(seg), false, width, color);
-                seg.Clear();
-            }
-        }
-        if (seg.Count >= 2) g.Add(seg, false, width, color);
-    }
-
-    bool InsideLand(Vector2 p, Vector2[][] land)
-    {
-        for (int i = 0; i < land.Length; i++) if (PtInPoly(p.x, p.y, land[i])) return true;
-        return false;
-    }
-
-    Vector2[][] MapPolys()
-    {
-        return new Vector2[][] {
-            new []{ P(0.50f,0.225f), P(0.56f,0.215f), P(0.63f,0.22f), P(0.70f,0.215f), P(0.77f,0.235f), P(0.83f,0.23f), P(0.90f,0.24f), P(0.945f,0.27f), P(0.94f,0.30f), P(0.90f,0.33f), P(0.84f,0.335f), P(0.78f,0.35f), P(0.71f,0.34f), P(0.65f,0.35f), P(0.59f,0.335f), P(0.54f,0.32f), P(0.50f,0.29f) },
-            new []{ P(0.52f,0.395f), P(0.60f,0.385f), P(0.68f,0.39f), P(0.74f,0.40f), P(0.80f,0.42f), P(0.845f,0.46f), P(0.86f,0.52f), P(0.83f,0.56f), P(0.77f,0.595f), P(0.70f,0.60f), P(0.64f,0.575f), P(0.58f,0.555f), P(0.53f,0.52f), P(0.50f,0.47f) },
-            new []{ P(0.18f,0.56f), P(0.24f,0.60f), P(0.30f,0.585f), P(0.36f,0.61f), P(0.43f,0.59f), P(0.50f,0.605f), P(0.57f,0.59f), P(0.64f,0.615f), P(0.71f,0.63f), P(0.78f,0.66f), P(0.84f,0.69f), P(0.90f,0.72f), P(0.96f,0.77f), P(1.0f,0.82f), P(1.0f,1.0f), P(0.30f,1.0f), P(0.24f,0.93f), P(0.20f,0.85f), P(0.17f,0.76f), P(0.16f,0.68f) },
-            new []{ P(0.04f,0.20f), P(0.10f,0.17f), P(0.17f,0.16f), P(0.24f,0.14f), P(0.31f,0.155f), P(0.37f,0.19f), P(0.40f,0.245f), P(0.38f,0.30f), P(0.34f,0.36f), P(0.28f,0.40f), P(0.21f,0.415f), P(0.14f,0.40f), P(0.08f,0.36f), P(0.04f,0.30f), P(0.03f,0.25f) },
-            new []{ P(0.58f,0.115f), P(0.63f,0.11f), P(0.66f,0.145f), P(0.63f,0.175f), P(0.58f,0.165f), P(0.56f,0.14f) },
-            new []{ P(0.36f,0.19f), P(0.395f,0.185f), P(0.41f,0.215f), P(0.385f,0.235f), P(0.355f,0.225f) },
-            new []{ P(0.455f,0.235f), P(0.48f,0.23f), P(0.49f,0.255f), P(0.47f,0.27f), P(0.445f,0.26f) }
-        };
-    }
-    Vector2 P(float u, float v) { return new Vector2(u * W, MAP_Y + v * MAP_H); }
 
     void BuildStationViews()
     {
@@ -723,11 +596,11 @@ public partial class DemoBootstrap : MonoBehaviour
             var lv = new LineVisual();
             for (int i = 0; i < line.st.Count - 1; i++)
             {
-                AddSeg(line.st[i], line.st[i+1], new Color(0.19f,0.18f,0.14f,0.82f), 10, lineLayer);
-                AddSeg(line.st[i], line.st[i+1], line.color, 6, lineLayer);
+                var casing = AddSeg(line.st[i], line.st[i+1], new Color(0.19f,0.18f,0.14f,0.82f), 10, lineLayer);
+                var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 6, lineLayer);
                 var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer);
                 var lt = hit.AddComponent<LineTapPress>(); lt.boot = this;
-                lv.segs.Add(hit);
+                lv.segs.Add(casing); lv.segs.Add(segBody); lv.segs.Add(hit);
             }
             var t = Rect("Train" + line.id, trainLayer, 0, 0, 34, 34);
             t.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
@@ -959,6 +832,7 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     void UpdateBuildBar()
     {
+        if (!buildInfo) return;
         string path = "新建线路";
         if (draft.Count > 0) path = stations[draft[0]].name;
         for (int i = 1; i < draft.Count; i++) path += " → " + stations[draft[i]].name;
@@ -966,7 +840,6 @@ public partial class DemoBootstrap : MonoBehaviour
             buildInfo.text = path + "  ·  ¥" + draftCost + "  ·  预计 +" + IncomeOfStations(draft.Count) + "/分";
         else buildInfo.text = draft.Count == 0 ? "建线模式：按住起点车站，拖向下一个站" : "继续拖动连接下一站 · 松手可暂停";
     }
-
 
     // ---------- panels ----------
     void TInk(Button b, Color c) { var t = b.GetComponentInChildren<Text>(); if (t) t.color = c; }
