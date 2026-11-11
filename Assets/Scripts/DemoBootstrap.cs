@@ -431,58 +431,87 @@ public partial class DemoBootstrap : MonoBehaviour
         LayoutStationLabels();
     }
 
-    // 优先将站名紧贴圆圈的正下方或正上方，拥挤时再偏移并画细引导线。
-    void LayoutStationLabels()
+    // 站名摆放：优先贴近圆点，挤不下就往外挪并用引导线连回去。
+    // 只要圆点露出来就给名字，实在没位置才收掉站名。
+    readonly List<Rect> labelRects = new List<Rect>();
+
+    bool PlaceStationLabel(int i, List<Rect> occupied)
     {
-        var occupied = new List<Rect>();
-        for (int i = 0; i < stations.Count; i++)
+        if (!stationLabels.TryGetValue(i, out var label) || !label) return false;
+        Vector2 center = Pos(i);
+        float subtitleWidth = stationDestinations.TryGetValue(i, out var subtitle) ? subtitle.preferredWidth + 12f : 0f;
+        float width = Mathf.Clamp(Mathf.Max(label.preferredWidth + 12f, subtitleWidth), 52f, 180f);
+        const float height = 30f;
+        float destHeight = stationDestinations.ContainsKey(i) ? 21f : 0f;
+        // 16 个候选位：前 8 个贴着圆点，后 8 个更远，用引导线连回
+        Vector2[] offsets = {
+            new Vector2(-width/2, -48-destHeight), new Vector2(-width/2, 22),
+            new Vector2(27, -height/2), new Vector2(-width-27, -height/2),
+            new Vector2(42, 24), new Vector2(-width-42, 24),
+            new Vector2(42, -52-destHeight), new Vector2(-width-42, -52-destHeight),
+            new Vector2(-width/2, -84-destHeight), new Vector2(-width/2, 58),
+            new Vector2(74, -height/2), new Vector2(-width-74, -height/2),
+            new Vector2(96, 58), new Vector2(-width-96, 58),
+            new Vector2(96, -92-destHeight), new Vector2(-width-96, -92-destHeight)
+        };
+        float best = float.PositiveInfinity; int chosen = 0;
+        for (int k = 0; k < offsets.Length; k++)
         {
-            if (!StationInRegion(i, currentRegion) || !stationLabels.TryGetValue(i, out var label)) continue;
-            Vector2 center = Pos(i);
-            float subtitleWidth = stationDestinations.TryGetValue(i, out var subtitle) ? subtitle.preferredWidth + 12f : 0f;
-            float width = Mathf.Clamp(Mathf.Max(label.preferredWidth + 12f, subtitleWidth), 52f, 180f);
-            const float height = 30f;
-            float destHeight = stationDestinations.ContainsKey(i) ? 21f : 0f;
-            Vector2[] offsets = {
-                new Vector2(-width/2, -48-destHeight), new Vector2(-width/2, 22),
-                new Vector2(27, -height/2), new Vector2(-width-27, -height/2),
-                new Vector2(42, 24), new Vector2(-width-42, 24),
-                new Vector2(42, -52-destHeight), new Vector2(-width-42, -52-destHeight)
-            };
-            float best = float.PositiveInfinity; int chosen = 0;
-            for (int k = 0; k < offsets.Length; k++)
+            var rect = new Rect(center.x + offsets[k].x, center.y + offsets[k].y, width, height + destHeight);
+            float penalty = k * 2f;
+            if (rect.xMin < 4 || rect.xMax > W-4 || rect.yMin < 180 || rect.yMax > H-190) penalty += 10000;
+            for (int q = 0; q < occupied.Count; q++) if (rect.Overlaps(occupied[q])) penalty += 1000;
+            for (int j = 0; j < stations.Count; j++)
             {
-                var rect = new Rect(center.x + offsets[k].x, center.y + offsets[k].y, width, height + destHeight);
-                float penalty = k * 0.01f;
-                if (rect.xMin < 4 || rect.xMax > W-4 || rect.yMin < 180 || rect.yMax > H-190) penalty += 10000;
-                foreach (var other in occupied) if (rect.Overlaps(other)) penalty += 1000;
-                for (int j = 0; j < stations.Count; j++)
-                {
-                    if (i == j || !StationInRegion(j, currentRegion)) continue;
-                    Vector2 point = Pos(j);
-                    if (rect.Overlaps(new Rect(point.x-20, point.y-20, 40, 40))) penalty += 1000;
-                }
-                if (penalty < best) { best = penalty; chosen = k; }
+                if (i == j || !StationInRegion(j, currentRegion) || !IsStationShown(j)) continue;
+                Vector2 point = Pos(j);
+                if (rect.Overlaps(new Rect(point.x-20, point.y-20, 40, 40))) penalty += 1000;
             }
-            Vector2 offset = offsets[chosen];
-            var rt = label.rectTransform; rt.anchoredPosition = new Vector2(28 + offset.x, 28 + offset.y + destHeight);
-            rt.sizeDelta = new Vector2(width, height);
-            if (stationDestinations.TryGetValue(i, out var destination))
-            {
-                destination.rectTransform.anchoredPosition = new Vector2(28 + offset.x, 28 + offset.y);
-                destination.rectTransform.sizeDelta = new Vector2(width, destHeight);
-            }
-            occupied.Add(new Rect(center.x + offset.x, center.y + offset.y, width, height + destHeight));
-            var line = stationLeaders[i]; bool displaced = chosen >= 2;
-            line.gameObject.SetActive(displaced);
+            if (penalty < best) { best = penalty; chosen = k; }
+        }
+        bool placed = best < 1000f;                 // 有重叠就放弃这个位置，别叠着写
+        label.gameObject.SetActive(placed);
+        stationLeaders.TryGetValue(i, out var lead);
+        if (lead) lead.gameObject.SetActive(false);
+        if (!placed) return false;
+
+        Vector2 offset = offsets[chosen];
+        var rt = label.rectTransform; rt.anchoredPosition = new Vector2(28 + offset.x, 28 + offset.y + destHeight);
+        rt.sizeDelta = new Vector2(width, height);
+        if (stationDestinations.TryGetValue(i, out var destination))
+        {
+            destination.rectTransform.anchoredPosition = new Vector2(28 + offset.x, 28 + offset.y);
+            destination.rectTransform.sizeDelta = new Vector2(width, destHeight);
+        }
+        occupied.Add(new Rect(center.x + offset.x, center.y + offset.y, width, height + destHeight));
+
+        bool displaced = chosen >= 2;
+        if (lead)
+        {
+            lead.gameObject.SetActive(displaced);
             if (displaced)
             {
                 Vector2 edge = new Vector2(Mathf.Clamp(0, offset.x, offset.x+width), Mathf.Clamp(0, offset.y, offset.y+height+destHeight));
                 Vector2 start = edge.normalized * 18f, delta = edge - start;
-                var lr = line.rectTransform; lr.pivot = new Vector2(0, 0.5f); lr.anchoredPosition = new Vector2(28,28) + start;
+                var lr = lead.rectTransform; lr.pivot = new Vector2(0, 0.5f); lr.anchoredPosition = new Vector2(28,28) + start;
                 lr.sizeDelta = new Vector2(delta.magnitude, 2f); lr.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(delta.y,delta.x)*Mathf.Rad2Deg);
             }
         }
+        return true;
+    }
+
+    void LayoutStationLabels()
+    {
+        bool haveVisibility = stationVisible.Length == stations.Count;
+        labelRects.Clear();
+        for (int pass = 0; pass < 4; pass++)
+            for (int i = 0; i < stations.Count; i++)
+            {
+                if (!StationInRegion(i, currentRegion)) continue;
+                if (haveVisibility && !stationVisible[i]) continue;   // 圆点没露出来就不用排站名
+                if (MarkerRank(i) != pass - 1) continue;              // 重要的先占近位
+                PlaceStationLabel(i, labelRects);
+            }
     }
 
     float regionalMarkerScale = -1f;
@@ -510,7 +539,6 @@ public partial class DemoBootstrap : MonoBehaviour
     Vector2 regionalMarkerPos = new Vector2(float.NaN, float.NaN);
     readonly List<int> markerOrder = new List<int>();
     readonly List<Vector2> takenDots = new List<Vector2>();
-    readonly List<Rect> takenLabels = new List<Rect>();
 
     // 站点分级：-1 拖线中 / 0 主干（门户·已开线）/ 1 普通 / 2 县区
     int MarkerRank(int i)
@@ -548,7 +576,6 @@ public partial class DemoBootstrap : MonoBehaviour
 
         int hiddenCount = 0;
         takenDots.Clear();
-        takenLabels.Clear();
         for (int k = 0; k < markerOrder.Count; k++)
         {
             int i = markerOrder[k];
@@ -569,22 +596,10 @@ public partial class DemoBootstrap : MonoBehaviour
             stationVisible[i] = show;
             if (!show) continue;
 
-            // 站名分档：主干始终参与，普通 1.5x 起，县区 2.5x 起；再按矩形避让
-            if (stationLabels.TryGetValue(i, out var label) && label)
-            {
-                bool allowLabel = rank <= 0 || (rank == 1 ? scale >= 1.5f : scale >= 2.5f);
-                bool showLabel = allowLabel;
-                if (showLabel)
-                {
-                    var lrt = label.rectTransform;
-                    var rect = new Rect(sp.x - 28f + lrt.anchoredPosition.x, sp.y - 28f + lrt.anchoredPosition.y,
-                        lrt.sizeDelta.x, lrt.sizeDelta.y);
-                    for (int q = 0; q < takenLabels.Count; q++) if (rect.Overlaps(takenLabels[q])) { showLabel = false; break; }
-                    if (showLabel) takenLabels.Add(rect);
-                }
-                if (label.gameObject.activeSelf != showLabel) label.gameObject.SetActive(showLabel);
-            }
         }
+
+        // 站名统一在这一步排：圆点露出来就给名字，挤不下就外移并用引导线连回
+        LayoutStationLabels();
 
         // 状态驱动：只要有站点被疏密挤掉就提示，全部显示出来就自动收起
         if (zoomNotice)
