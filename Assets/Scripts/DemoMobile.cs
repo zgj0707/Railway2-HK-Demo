@@ -226,10 +226,21 @@ public partial class DemoBootstrap
         dragCostPulse = Mathf.Max(0, dragCostPulse-dt);
         float pop = 1f + 0.12f * Mathf.Sin((dragCostPulse / 0.22f) * Mathf.PI);
         dragCostNumber.rectTransform.localScale = Vector3.one * pop;
+        // 方向优先取「已确定的最后一段」，只有刚起步时跟鼠标；避免气泡随鼠标乱晃
+        Vector2 dir;
+        if (draft.Count >= 2) dir = Pos(draft[draft.Count - 1]) - Pos(draft[draft.Count - 2]);
+        else dir = point - current;
+        if (dir.sqrMagnitude < 4f) dir = new Vector2(0f, 1f);
+        dir.Normalize();
         Vector2 at = (Vector2)root.InverseTransformPoint(mapRect.TransformPoint(pointer)) - root.rect.min;
-        float x = Mathf.Clamp(at.x - 125f, 12f, W - 262f);
-        float y = at.y + 72f; if (y + 96f > H - 205f) y = at.y - 150f;
-        dragCostBadge.GetComponent<RectTransform>().anchoredPosition = new Vector2(x, Mathf.Clamp(y, 180f, H - 301f));
+        float gap = 132f + Mathf.Abs(dir.x) * 52f;  // 水平方向再多留一段，避免气泡压住拖拽点
+        Vector2 anchor = at - dir * gap;            // 放在拖拽前进方向的反方向
+        float x = Mathf.Clamp(anchor.x - 125f, 12f, W - 262f);
+        float y = Mathf.Clamp(anchor.y - 48f, 180f, H - 301f);
+        var badgeRt = dragCostBadge.GetComponent<RectTransform>();
+        var target = new Vector2(x, y);
+        if (dt >= 0.5f) badgeRt.anchoredPosition = target;   // 刚出现时直接落位
+        else badgeRt.anchoredPosition = Vector2.Lerp(badgeRt.anchoredPosition, target, 1f - Mathf.Exp(-14f * dt));
     }
 
     // ---------- income floaters ----------
@@ -278,6 +289,19 @@ public partial class DemoBootstrap
     {
         if (dragging) return;
         pressIdx = idx; pressTimer = 0f; pressing = true; pressStart = Input.mousePosition;
+        HidePressRing();
+    }
+    void HidePressRing()
+    {
+        foreach (var kv in pressRings)
+        {
+            var ring = kv.Value;
+            if (!ring) continue;
+            if (ring.gameObject.activeSelf) ring.gameObject.SetActive(false);
+            var rt = ring.rectTransform;
+            rt.anchoredPosition = new Vector2(-14f, -14f);
+            rt.localScale = Vector3.one;
+        }
     }
     void TickPress(float dt)
     {
@@ -285,15 +309,33 @@ public partial class DemoBootstrap
         if (!Input.GetMouseButton(0))
         {
             pressing = false; pressIdx = -1;
+            HidePressRing();
             return;
         }
         if (Vector2.Distance((Vector2)Input.mousePosition, pressStart) > 26f && pressTimer < 0.42f)
         {
-            pressing = false; pressIdx = -1; return;
+            pressing = false; pressIdx = -1;
+            HidePressRing();
+            return;
         }
         pressTimer += dt;
+        if (pressRings.TryGetValue(pressIdx, out var pressRing) && pressRing)
+        {
+            if (!pressRing.gameObject.activeSelf) pressRing.gameObject.SetActive(true);
+            float p = Mathf.Clamp01(pressTimer / 0.42f);
+            pressRing.fillAmount = p;
+            pressRing.color = new Color(0.95f, 0.42f, 0.26f, Mathf.Lerp(0.62f, 0.98f, p));
+            // 蓄力震颤：越接近长按完成，抖动越明显
+            float t = Time.unscaledTime;
+            float amp = Mathf.Lerp(0.5f, 2.8f, p * p);
+            var rt = pressRing.rectTransform;
+            rt.anchoredPosition = new Vector2(-14f + Mathf.Sin(t * 47f) * amp, -14f + Mathf.Cos(t * 61f) * amp);
+            float sc = 1f + 0.035f * p * Mathf.Sin(t * 32f);
+            rt.localScale = new Vector3(sc, sc, 1f);
+        }
         if (pressTimer >= 0.42f)
         {
+            HidePressRing();
             int idx = pressIdx; pressing = false; pressIdx = -1;
             StartDraw(idx);
         }
@@ -301,6 +343,15 @@ public partial class DemoBootstrap
     void StartDraw(int idx)
     {
         if (dragging || idx < 0 || idx >= stations.Count) return;
+        // 线路已满时，从「不属于任何线路」的车站起手只能新开线 —— 在长按开始就拦住，别等拖完才说
+        bool onLine = false;
+        foreach (var line in lines) if (line.st.Contains(idx)) { onLine = true; break; }
+        if (!onLine && lines.Count >= 6)
+        {
+            HidePressRing();
+            Toast("线路已达上限（6 条）：先拆掉一条旧线，或从已有线路的车站起手延长");
+            return;
+        }
         CloseLineBubble();
         draft.Clear(); draft.Add(idx); draftCost = 0;
         dragFrom = idx; dragging = true; hoverStation = -1;

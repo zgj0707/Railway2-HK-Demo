@@ -55,6 +55,7 @@ public partial class DemoBootstrap : MonoBehaviour
     readonly Dictionary<int, Text> stationLabels = new Dictionary<int, Text>();
     readonly Dictionary<int, Text> stationDestinations = new Dictionary<int, Text>();
     readonly Dictionary<int, Image> stationLeaders = new Dictionary<int, Image>();
+    readonly Dictionary<int, Image> pressRings = new Dictionary<int, Image>();
     Dictionary<int, LineVisual> lineVisuals = new Dictionary<int, LineVisual>();
     List<string> techDone = new List<string>();
     Text coinTxt, incomeTxt, diamondTxt, progTxt, rpTxt, dayTxt;
@@ -293,11 +294,13 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void BuildZoomNotice()
     {
-        zoomNotice = Rect("ZoomNotice", root, 190, 1588, 700, 58);
-        Rounded(zoomNotice, new Color(0.22f, 0.20f, 0.18f, 0.78f));
-        zoomNotice.GetComponent<Image>().raycastTarget = false;
-        zoomNoticeTxt = Txt(zoomNotice.transform, "当前缩放倍率不能显示全部站点", 24,
-            new Color(1, 0.98f, 0.93f), 10, 4, 680, 50, TextAnchor.MiddleCenter);
+        // 顶部轻提示：不占画面中央，只做状态说明
+        zoomNotice = Rect("ZoomNotice", root, 300, 1558, 480, 54);
+        var nbg = Img(zoomNotice, new Color(0.99f, 0.975f, 0.94f, 0.95f), spriteRound);
+        nbg.type = Image.Type.Sliced;
+        nbg.raycastTarget = false;
+        SoftShadow(zoomNotice);
+        zoomNoticeTxt = Txt(zoomNotice.transform, "已隐藏 0 个站点 · 双指放大", 22, Ink, 8, 4, 464, 46, TextAnchor.MiddleCenter);
         zoomNoticeTxt.raycastTarget = false;
         zoomNotice.SetActive(false);
     }
@@ -311,7 +314,7 @@ public partial class DemoBootstrap : MonoBehaviour
         mapZoom.map = mapRect; mapZoom.viewport = root;
         mapZoom.canZoom = () => !dragging && pageRoot == null && activePanel == null && sceneryViewer == null;
         mapZoom.maxZoom = () => currentRegion == "广东" ? 12f : 2.5f;
-        mapZoom.onPanStart = () => { pressing = false; pressIdx = -1; };
+        mapZoom.onPanStart = () => { pressing = false; pressIdx = -1; HidePressRing(); };
         hkMapArt = Rect("HongKongArt", map.transform, 0, 0, W, H);
         BuildRasterMap(hkMapArt.transform);
         guangdongMapArt = BuildGuangdongMap(map.transform);
@@ -404,6 +407,17 @@ public partial class DemoBootstrap : MonoBehaviour
             var ringGo = Rect("Ring", go.transform, -14, -14, 84, 84);
             var ring = Img(ringGo, new Color(1,1,1,0), spriteRing); ring.raycastTarget = false;
             stationRings.Add(ring);
+            // 长按 0.42s 的进度环：只显示正在长按的站点
+            var pressGo = Rect("PressRing", go.transform, -14, -14, 84, 84);
+            var press = Img(pressGo, new Color(0.95f, 0.42f, 0.26f, 0.95f), spriteRing);
+            press.type = Image.Type.Filled;
+            press.fillMethod = Image.FillMethod.Radial360;
+            press.fillOrigin = (int)Image.Origin360.Top;
+            press.fillClockwise = true;
+            press.fillAmount = 0f;
+            press.raycastTarget = false;
+            pressGo.SetActive(false);
+            pressRings[i] = press;
             // 圆点按级别分级：门户最大、县区最小，缩小时画面才有层次
             float dotSize = s.portal ? 24f : s.county ? 13f : 20f;
             float ringSize = dotSize + 12f;
@@ -606,7 +620,7 @@ public partial class DemoBootstrap : MonoBehaviour
         {
             if (hiddenCount > 0)
             {
-                if (zoomNoticeTxt) zoomNoticeTxt.text = "当前缩放倍率不能显示全部站点 · 已隐藏 " + hiddenCount + " 个";
+                if (zoomNoticeTxt) zoomNoticeTxt.text = "已隐藏 " + hiddenCount + " 个站点 · 双指放大";
                 if (!zoomNotice.activeSelf) zoomNotice.SetActive(true);
             }
             else if (zoomNotice.activeSelf) zoomNotice.SetActive(false);
@@ -721,7 +735,16 @@ public partial class DemoBootstrap : MonoBehaviour
     public void OnStationUp(int idx)
     {
         if (pressing && pressIdx == idx && pressTimer < 0.42f && !dragging)
-        { pressing = false; pressIdx = -1; ShowStationActions(idx); }
+        {
+            pressing = false; pressIdx = -1;
+            HidePressRing();
+            ShowStationActions(idx);
+        }
+        else if (pressing)
+        {
+            pressing = false; pressIdx = -1;
+            HidePressRing();
+        }
     }
     bool TryConnect(int a, int b)
     {
@@ -753,7 +776,8 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void CommitNewLine(List<int> snapshot, int cost)
     {
-        if (lines.Count >= 6) { Toast("线路已满 6 条"); return; }
+        // TODO(待办): 科技树补「线路扩建」节点提高线路上限（IA 设计见 docs/design/ui-ia-mindmap.md:260）
+        if (lines.Count >= 6) { Toast("线路已达上限（6 条）：先拆掉一条旧线，或从已有线路的车站起手延长"); return; }
         BeginUndo("开通线路");
         ClosePanel(true);
         var line = new Line { id = nextLineId, name = nextLineId + " 号线", color = LineColors[(nextLineId-1) % LineColors.Length] };
@@ -883,7 +907,7 @@ public partial class DemoBootstrap : MonoBehaviour
             if (path != null) opts.Add(new ConnectOpt { isNew = false, line = l, path = path });
         }
         if (lines.Count < 6) opts.Add(new ConnectOpt { isNew = true });
-        if (opts.Count == 0) { Toast("线路已满 6 条"); CancelDraft(); return; }
+        if (opts.Count == 0) { Toast("线路已达上限（6 条）：先拆掉一条旧线，或从已有线路的车站起手延长"); CancelDraft(); return; }
         selected = Mathf.Clamp(selected, 0, opts.Count - 1);
         var sel = opts[selected];
         string title = sel.isNew ? ("开通 " + nextLineId + " 号线") : ("延长 " + sel.line.name);
@@ -924,7 +948,7 @@ public partial class DemoBootstrap : MonoBehaviour
         foreach (var g in draftSegs) if (g) Destroy(g);
         draftSegs.Clear();
     }
-    void AddDraftSeg(int a, int b)
+    void AddDraftSeg(int a, int b, bool animate = false)
     {
         var p1 = Pos(a); var p2 = Pos(b); var d = p2 - p1;
         var go = Rect("DSeg", lineLayer, p1.x, p1.y, d.magnitude, 16f * overlayZoom);
@@ -933,11 +957,12 @@ public partial class DemoBootstrap : MonoBehaviour
         drt.localRotation = Quaternion.Euler(0,0, Mathf.Atan2(d.y,d.x)*Mathf.Rad2Deg);
         zoomRects.Add(new ZoomRect(drt, 16f));
         draftSegs.Add(go);
+        if (animate) go.AddComponent<DraftSegGrow>();
     }
     void RedrawDraft()
     {
         ClearDraftSegs();
-        for (int i = 0; i < draft.Count-1; i++) AddDraftSeg(draft[i], draft[i+1]);
+        for (int i = 0; i < draft.Count-1; i++) AddDraftSeg(draft[i], draft[i+1], i == draft.Count - 2);
     }
 
     // ---------- line visuals ----------

@@ -41,7 +41,7 @@ public partial class DemoBootstrap
         if (!texture) return;
         var background = Rect("PageBackground", page.transform, 0, 0, W, H);
         var art = background.AddComponent<RawImage>(); art.texture = texture;
-        art.color = new Color(1, 1, 1, 0.14f); art.raycastTarget = false;
+        art.color = new Color(1, 1, 1, 0.26f); art.raycastTarget = false;
         background.transform.SetAsFirstSibling();
         var fit = background.AddComponent<FleetBackgroundFit>(); fit.page = page.GetComponent<RectTransform>(); fit.image = art;
         var header = page.transform.Find("PTop").GetComponent<Image>();

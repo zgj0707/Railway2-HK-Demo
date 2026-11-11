@@ -80,3 +80,27 @@ public class FleetBackgroundFit : MonoBehaviour
         }
     }
 }
+
+/// <summary>拖拽开线时，新接入的线段从起点生长到终点。</summary>
+public class DraftSegGrow : MonoBehaviour
+{
+    public float duration = 0.16f;
+    RectTransform rect;
+    float elapsed;
+
+    void Awake()
+    {
+        rect = (RectTransform)transform;
+        rect.localScale = new Vector3(0f, 1f, 1f);
+    }
+
+    void Update()
+    {
+        if (!rect) { Destroy(this); return; }
+        elapsed += Time.unscaledDeltaTime;
+        float k = Mathf.Clamp01(elapsed / Mathf.Max(0.01f, duration));
+        float e = 1f - Mathf.Pow(1f - k, 3f);
+        rect.localScale = new Vector3(e, 1f, 1f);
+        if (k >= 1f) Destroy(this);
+    }
+}
