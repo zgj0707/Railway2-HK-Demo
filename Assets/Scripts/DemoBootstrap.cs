@@ -63,6 +63,7 @@ public partial class DemoBootstrap : MonoBehaviour
     const float MacauIncomeRequired = 600f, GuangdongIncomeRequired = 1200f;
     RectTransform progFill;
     GameObject activePanel, scrim, toastGo, panelShadow, zoomNotice;
+    Text zoomNoticeTxt;
     Action panelClosed;
     int panelOpenedFrame = -1;
     Text toastTxt; float toastTimer;
@@ -295,8 +296,9 @@ public partial class DemoBootstrap : MonoBehaviour
         zoomNotice = Rect("ZoomNotice", root, 190, 1588, 700, 58);
         Rounded(zoomNotice, new Color(0.22f, 0.20f, 0.18f, 0.78f));
         zoomNotice.GetComponent<Image>().raycastTarget = false;
-        Txt(zoomNotice.transform, "当前缩放倍率不足以显示所有行政区", 24,
-            new Color(1, 0.98f, 0.93f), 10, 4, 680, 50, TextAnchor.MiddleCenter).raycastTarget = false;
+        zoomNoticeTxt = Txt(zoomNotice.transform, "当前缩放倍率不能显示全部站点", 24,
+            new Color(1, 0.98f, 0.93f), 10, 4, 680, 50, TextAnchor.MiddleCenter);
+        zoomNoticeTxt.raycastTarget = false;
         zoomNotice.SetActive(false);
     }
 
@@ -402,9 +404,12 @@ public partial class DemoBootstrap : MonoBehaviour
             var ringGo = Rect("Ring", go.transform, -14, -14, 84, 84);
             var ring = Img(ringGo, new Color(1,1,1,0), spriteRing); ring.raycastTarget = false;
             stationRings.Add(ring);
-            var outline = Rect("DotRing", go.transform, 12, 12, 32, 32);
+            // 圆点按级别分级：门户最大、县区最小，缩小时画面才有层次
+            float dotSize = s.portal ? 24f : s.county ? 13f : 20f;
+            float ringSize = dotSize + 12f;
+            var outline = Rect("DotRing", go.transform, (56f - ringSize) * 0.5f, (56f - ringSize) * 0.5f, ringSize, ringSize);
             Img(outline, new Color(0.20f,0.19f,0.16f,0.85f), spriteRing).raycastTarget = false;
-            var dotGo = Rect("DotFill", go.transform, 18, 18, 20, 20);
+            var dotGo = Rect("DotFill", go.transform, (56f - dotSize) * 0.5f, (56f - dotSize) * 0.5f, dotSize, dotSize);
             var img = Img(dotGo, s.portal ? Vermilion : new Color(0.985f,0.965f,0.925f,0.98f), spriteCircle);
             img.raycastTarget = false;
             var sp = go.AddComponent<StationPress>(); sp.index = i; sp.boot = this;
@@ -507,13 +512,22 @@ public partial class DemoBootstrap : MonoBehaviour
     readonly List<Vector2> takenDots = new List<Vector2>();
     readonly List<Rect> takenLabels = new List<Rect>();
 
+    // 站点分级：-1 拖线中 / 0 主干（门户·已开线）/ 1 普通 / 2 县区
+    int MarkerRank(int i)
+    {
+        if (i == dragFrom || i == hoverStation) return -1;
+        if (IsOpen(i) || stations[i].portal) return 0;
+        return stations[i].county ? 2 : 1;
+    }
+
     void UpdateRegionalMarkers(bool force)
     {
         if (!mapRect) return;
         float scale = mapRect.localScale.x;
         Vector2 pan = mapRect.anchoredPosition;
+        bool zoomChanged = Mathf.Abs(scale - regionalMarkerScale) >= 0.005f;
         // 缩放和解算平移都要触发重算：拖动地图后站点/线路的疏密会变
-        if (!force && Mathf.Abs(scale - regionalMarkerScale) < 0.005f && (pan - regionalMarkerPos).sqrMagnitude < 1f) return;
+        if (!force && !zoomChanged && (pan - regionalMarkerPos).sqrMagnitude < 1f) return;
         regionalMarkerScale = scale;
         regionalMarkerPos = pan;
         ApplyZoomToOverlays(scale);
@@ -522,55 +536,66 @@ public partial class DemoBootstrap : MonoBehaviour
         // 站点标记按 1/zoom 反向补偿，放大地图不会把图标放大到盖住屏幕
         foreach (var kv in stationImgs) kv.Value.transform.parent.localScale = Vector3.one / scale;
 
-        // 屏幕空间碰撞过滤（1 代做法）：不按缩放倍率一刀切，
-        // 靠得太近的站点自动让位；小站间距更小，稀疏区域任何 zoom 下都还看得见点。
+        // 屏幕空间碰撞过滤（1 代做法）：靠得太近的站点自动让位。
+        // 三级排序：拖线中(-1) > 主干(0：门户/已开线) > 普通(1) > 县区(2)
         if (stationVisible.Length != stations.Count) stationVisible = new bool[stations.Count];
         for (int i = 0; i < stationVisible.Length; i++) stationVisible[i] = false;
 
         markerOrder.Clear();
-        // 优先级：拖线中的站 > 已开线 > 门户/普通 > 县区
         for (int pass = 0; pass < 4; pass++)
             for (int i = 0; i < stations.Count; i++)
-            {
-                if (!StationInRegion(i, currentRegion)) continue;
-                bool held = i == dragFrom || i == hoverStation;
-                int pri = held ? 0 : IsOpen(i) ? 1 : stations[i].county ? 3 : 2;
-                if (pri == pass) markerOrder.Add(i);
-            }
+                if (StationInRegion(i, currentRegion) && MarkerRank(i) == pass - 1) markerOrder.Add(i);
 
+        int hiddenCount = 0;
         takenDots.Clear();
         takenLabels.Clear();
         for (int k = 0; k < markerOrder.Count; k++)
         {
             int i = markerOrder[k];
-            var s = stations[i];
+            int rank = MarkerRank(i);
             Vector2 sp = pan + Pos(i) * scale;                 // 相对 Stage 左下角的屏幕坐标
             bool inView = sp.x >= -48f && sp.x <= W + 48f && sp.y >= -48f && sp.y <= H + 48f;
-            float gap = (IsOpen(i) || s.portal) ? 26f : s.county ? 17f : 22f;
+            // 间距与圆点尺寸匹配：主干 44、普通 34、县区 26（屏幕像素），避免两点相切成一片
+            float gap = rank <= 0 ? 44f : rank == 2 ? 26f : 34f;
             bool show = inView;
             if (show)
                 for (int q = 0; q < takenDots.Count; q++)
                     if (Mathf.Abs(sp.x - takenDots[q].x) < gap && Mathf.Abs(sp.y - takenDots[q].y) < gap) { show = false; break; }
             if (show) takenDots.Add(sp);
+            if (!show && inView) hiddenCount++;
 
             var marker = stationImgs[i].transform.parent;
             if (marker.gameObject.activeSelf != show) marker.gameObject.SetActive(show);
             stationVisible[i] = show;
             if (!show) continue;
 
-            // 站名二级过滤：圆点留住，牌子挤不下就单独收起
+            // 站名分档：主干始终参与，普通 1.5x 起，县区 2.5x 起；再按矩形避让
             if (stationLabels.TryGetValue(i, out var label) && label)
             {
-                var lrt = label.rectTransform;
-                var rect = new Rect(sp.x - 28f + lrt.anchoredPosition.x, sp.y - 28f + lrt.anchoredPosition.y,
-                    lrt.sizeDelta.x, lrt.sizeDelta.y);
-                bool showLabel = true;
-                for (int q = 0; q < takenLabels.Count; q++) if (rect.Overlaps(takenLabels[q])) { showLabel = false; break; }
-                if (showLabel) takenLabels.Add(rect);
+                bool allowLabel = rank <= 0 || (rank == 1 ? scale >= 1.5f : scale >= 2.5f);
+                bool showLabel = allowLabel;
+                if (showLabel)
+                {
+                    var lrt = label.rectTransform;
+                    var rect = new Rect(sp.x - 28f + lrt.anchoredPosition.x, sp.y - 28f + lrt.anchoredPosition.y,
+                        lrt.sizeDelta.x, lrt.sizeDelta.y);
+                    for (int q = 0; q < takenLabels.Count; q++) if (rect.Overlaps(takenLabels[q])) { showLabel = false; break; }
+                    if (showLabel) takenLabels.Add(rect);
+                }
                 if (label.gameObject.activeSelf != showLabel) label.gameObject.SetActive(showLabel);
             }
         }
-        if (zoomNotice) zoomNotice.SetActive(false);
+
+        // 状态驱动：只要有站点被疏密挤掉就提示，全部显示出来就自动收起
+        if (zoomNotice)
+        {
+            if (hiddenCount > 0)
+            {
+                if (zoomNoticeTxt) zoomNoticeTxt.text = "当前缩放倍率不能显示全部站点 · 已隐藏 " + hiddenCount + " 个";
+                if (!zoomNotice.activeSelf) zoomNotice.SetActive(true);
+            }
+            else if (zoomNotice.activeSelf) zoomNotice.SetActive(false);
+        }
 
         // 线路段跟随端点：至少一端可见才画，避免线条连到看不见的点
         foreach (var lv in lineVisuals.Values)
@@ -1023,25 +1048,37 @@ public partial class DemoBootstrap : MonoBehaviour
         if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0 && toastGo) toastGo.SetActive(false); }
     }
 
+    // 只吸附当前真正显示出来的站点；吸附半径按级别给，小点不该有大门户的吸附范围
+    bool IsStationShown(int i)
+    {
+        if (i >= 0 && i < stationVisible.Length) return stationVisible[i];
+        return stationImgs.TryGetValue(i, out var img) && img.transform.parent.gameObject.activeInHierarchy;
+    }
+    float SnapRadius(int i, float radius)
+    {
+        if (stations[i].county) return radius * 0.82f;
+        if (stations[i].portal || IsOpen(i)) return radius * 1.1f;
+        return radius;
+    }
     int NearestStation(Vector2 p, float radius)
     {
-        int best = -1; float bd = radius;
+        int best = -1; float bd = float.MaxValue;
         for (int i = 0; i < stations.Count; i++)
         {
-            if (!StationInRegion(i, currentRegion) || !stationImgs[i].transform.parent.gameObject.activeInHierarchy || draft.Contains(i)) continue;
+            if (!StationInRegion(i, currentRegion) || !IsStationShown(i) || draft.Contains(i)) continue;
             float d = Vector2.Distance(p, Pos(i));
-            if (d < bd) { bd = d; best = i; }
+            if (d < SnapRadius(i, radius) && d < bd) { bd = d; best = i; }
         }
         return best;
     }
     int NearestStationAny(Vector2 p, float radius)
     {
-        int best = -1; float bd = radius;
+        int best = -1; float bd = float.MaxValue;
         for (int i = 0; i < stations.Count; i++)
         {
-            if (!StationInRegion(i, currentRegion) || !stationImgs[i].transform.parent.gameObject.activeInHierarchy) continue;
+            if (!StationInRegion(i, currentRegion) || !IsStationShown(i)) continue;
             float d = Vector2.Distance(p, Pos(i));
-            if (d < bd) { bd = d; best = i; }
+            if (d < SnapRadius(i, radius) && d < bd) { bd = d; best = i; }
         }
         return best;
     }
