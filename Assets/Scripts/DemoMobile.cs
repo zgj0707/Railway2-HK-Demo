@@ -269,6 +269,7 @@ public partial class DemoBootstrap
             if (stations[kv.Key].portal) continue;
             kv.Value.color = stationOpen[kv.Key] ? Gold : Color.white;
         }
+        UpdateRegionalMarkers(true);
     }
     bool IsOpen(int i) { return stationOpen != null && i >= 0 && i < stationOpen.Length && stationOpen[i]; }
 

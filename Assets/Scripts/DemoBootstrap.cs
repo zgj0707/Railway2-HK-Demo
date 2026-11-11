@@ -72,7 +72,11 @@ public partial class DemoBootstrap : MonoBehaviour
     List<Scenery> pendingCheckin = new List<Scenery>();
     GameObject sceneryBadge;
 
-    class LineVisual { public List<GameObject> segs = new List<GameObject>(); public GameObject train; public float t; public int lastSt = -1; public float credit; }
+    class LineVisual { public List<GameObject> segs = new List<GameObject>(); public List<Vector2Int> segEnds = new List<Vector2Int>(); public GameObject train; public float t; public int lastSt = -1; public float credit; }
+    // 地图放大时要按 1/zoom 反向补偿厚度的矩形（线路段、点击热区、草稿线）
+    class ZoomRect { public RectTransform rt; public float baseWidth; public ZoomRect(RectTransform rt, float baseWidth) { this.rt = rt; this.baseWidth = baseWidth; } }
+    readonly List<ZoomRect> zoomRects = new List<ZoomRect>();
+    float overlayZoom = 1f;
 
     // ---------- boot ----------
     void Start()
@@ -477,33 +481,114 @@ public partial class DemoBootstrap : MonoBehaviour
     }
 
     float regionalMarkerScale = -1f;
+    // 地图放大时，线路 / 火车 / 草稿线按 1/zoom 反向补偿，和站点一样保持屏幕尺寸恒定。
+    // 只改厚度与图标缩放，不改长度与位置——长度必须留在地图坐标系里。
+    void ApplyZoomToOverlays(float scale)
+    {
+        float k = 1f / Mathf.Max(0.01f, scale);
+        overlayZoom = k;
+        int live = 0;
+        for (int i = 0; i < zoomRects.Count; i++)
+        {
+            var zr = zoomRects[i];
+            if (!zr.rt) continue;
+            zr.rt.sizeDelta = new Vector2(zr.rt.sizeDelta.x, zr.baseWidth * k);
+            zoomRects[live++] = zr;
+        }
+        if (live < zoomRects.Count) zoomRects.RemoveRange(live, zoomRects.Count - live);
+        foreach (var lv in lineVisuals.Values) if (lv.train) lv.train.transform.localScale = Vector3.one * k;
+        if (previewImg) previewImg.rectTransform.sizeDelta = new Vector2(previewImg.rectTransform.sizeDelta.x, 16f * k);
+        if (dragTip) dragTip.rectTransform.localScale = Vector3.one * k;
+    }
+
+    bool[] stationVisible = new bool[0];
+    Vector2 regionalMarkerPos = new Vector2(float.NaN, float.NaN);
+    readonly List<int> markerOrder = new List<int>();
+    readonly List<Vector2> takenDots = new List<Vector2>();
+    readonly List<Rect> takenLabels = new List<Rect>();
+
     void UpdateRegionalMarkers(bool force)
     {
-        if ((currentRegion != "广东" && currentRegion != "澳门") || !mapRect || stationImgs.Count == 0) { regionalMarkerScale = -1; if (zoomNotice) zoomNotice.SetActive(false); return; }
+        if (!mapRect) return;
         float scale = mapRect.localScale.x;
-        if (!force && Mathf.Abs(scale - regionalMarkerScale) < 0.005f) return;
+        Vector2 pan = mapRect.anchoredPosition;
+        // 缩放和解算平移都要触发重算：拖动地图后站点/线路的疏密会变
+        if (!force && Mathf.Abs(scale - regionalMarkerScale) < 0.005f && (pan - regionalMarkerPos).sqrMagnitude < 1f) return;
         regionalMarkerScale = scale;
-        if (currentRegion == "澳门")
+        regionalMarkerPos = pan;
+        ApplyZoomToOverlays(scale);
+        if (stationImgs.Count == 0) { if (zoomNotice) zoomNotice.SetActive(false); return; }
+
+        // 站点标记按 1/zoom 反向补偿，放大地图不会把图标放大到盖住屏幕
+        foreach (var kv in stationImgs) kv.Value.transform.parent.localScale = Vector3.one / scale;
+
+        // 屏幕空间碰撞过滤（1 代做法）：不按缩放倍率一刀切，
+        // 靠得太近的站点自动让位；小站间距更小，稀疏区域任何 zoom 下都还看得见点。
+        if (stationVisible.Length != stations.Count) stationVisible = new bool[stations.Count];
+        for (int i = 0; i < stationVisible.Length; i++) stationVisible[i] = false;
+
+        markerOrder.Clear();
+        // 优先级：拖线中的站 > 已开线 > 门户/普通 > 县区
+        for (int pass = 0; pass < 4; pass++)
+            for (int i = 0; i < stations.Count; i++)
+            {
+                if (!StationInRegion(i, currentRegion)) continue;
+                bool held = i == dragFrom || i == hoverStation;
+                int pri = held ? 0 : IsOpen(i) ? 1 : stations[i].county ? 3 : 2;
+                if (pri == pass) markerOrder.Add(i);
+            }
+
+        takenDots.Clear();
+        takenLabels.Clear();
+        for (int k = 0; k < markerOrder.Count; k++)
         {
-            if (zoomNotice) zoomNotice.SetActive(false);
-            for (int i = 0; i < stations.Count; i++) if (StationInRegion(i, "澳门"))
-                stationImgs[i].transform.parent.localScale = Vector3.one / scale;
-            return;
+            int i = markerOrder[k];
+            var s = stations[i];
+            Vector2 sp = pan + Pos(i) * scale;                 // 相对 Stage 左下角的屏幕坐标
+            bool inView = sp.x >= -48f && sp.x <= W + 48f && sp.y >= -48f && sp.y <= H + 48f;
+            float gap = (IsOpen(i) || s.portal) ? 26f : s.county ? 17f : 22f;
+            bool show = inView;
+            if (show)
+                for (int q = 0; q < takenDots.Count; q++)
+                    if (Mathf.Abs(sp.x - takenDots[q].x) < gap && Mathf.Abs(sp.y - takenDots[q].y) < gap) { show = false; break; }
+            if (show) takenDots.Add(sp);
+
+            var marker = stationImgs[i].transform.parent;
+            if (marker.gameObject.activeSelf != show) marker.gameObject.SetActive(show);
+            stationVisible[i] = show;
+            if (!show) continue;
+
+            // 站名二级过滤：圆点留住，牌子挤不下就单独收起
+            if (stationLabels.TryGetValue(i, out var label) && label)
+            {
+                var lrt = label.rectTransform;
+                var rect = new Rect(sp.x - 28f + lrt.anchoredPosition.x, sp.y - 28f + lrt.anchoredPosition.y,
+                    lrt.sizeDelta.x, lrt.sizeDelta.y);
+                bool showLabel = true;
+                for (int q = 0; q < takenLabels.Count; q++) if (rect.Overlaps(takenLabels[q])) { showLabel = false; break; }
+                if (showLabel) takenLabels.Add(rect);
+                if (label.gameObject.activeSelf != showLabel) label.gameObject.SetActive(showLabel);
+            }
         }
-        var shown = new List<Vector2>();
-        bool hidden = false;
-        // 固定屏幕尺寸，放大地图时不会把站点图标放大至盖住全屏。
-        for (int pass = 0; pass < 3; pass++) for (int i = 0; i < stations.Count; i++)
+        if (zoomNotice) zoomNotice.SetActive(false);
+
+        // 线路段跟随端点：至少一端可见才画，避免线条连到看不见的点
+        foreach (var lv in lineVisuals.Values)
         {
-            var station = stations[i]; if (!StationInRegion(i, "广东")) continue;
-            int priority = station.portal ? 0 : station.county ? 2 : 1;
-            if (priority != pass) continue;
-            var marker = stationImgs[i].transform.parent; marker.localScale = Vector3.one / scale;
-            Vector2 p = Pos(i) * scale; bool visible = !station.county || scale >= 2f;
-            if (visible) foreach (var prior in shown) if (Vector2.Distance(p, prior) < 62f) { visible = false; break; }
-            marker.gameObject.SetActive(visible); if (visible) shown.Add(p); else hidden = true;
+            for (int seg = 0; seg < lv.segEnds.Count; seg++)
+            {
+                var e = lv.segEnds[seg];
+                bool show = (e.x >= 0 && e.x < stationVisible.Length && stationVisible[e.x])
+                         || (e.y >= 0 && e.y < stationVisible.Length && stationVisible[e.y]);
+                for (int j = 0; j < 3; j++)
+                {
+                    int idx = seg * 3 + j;
+                    if (idx >= lv.segs.Count) break;
+                    var g = lv.segs[idx];
+                    if (g && g.gameObject.activeSelf != show) g.SetActive(show);
+                }
+            }
         }
-        if (zoomNotice) zoomNotice.SetActive(hidden);
     }
 
     void BuildSceneryViews()
@@ -802,10 +887,11 @@ public partial class DemoBootstrap : MonoBehaviour
     void AddDraftSeg(int a, int b)
     {
         var p1 = Pos(a); var p2 = Pos(b); var d = p2 - p1;
-        var go = Rect("DSeg", lineLayer, p1.x, p1.y, d.magnitude, 16);
-        go.GetComponent<RectTransform>().pivot = new Vector2(0, 0.5f);
+        var go = Rect("DSeg", lineLayer, p1.x, p1.y, d.magnitude, 16f * overlayZoom);
+        var drt = go.GetComponent<RectTransform>(); drt.pivot = new Vector2(0, 0.5f);
         Img(go, new Color(0.95f,0.52f,0.30f,0.90f), spriteRound);
-        go.GetComponent<RectTransform>().localRotation = Quaternion.Euler(0,0, Mathf.Atan2(d.y,d.x)*Mathf.Rad2Deg);
+        drt.localRotation = Quaternion.Euler(0,0, Mathf.Atan2(d.y,d.x)*Mathf.Rad2Deg);
+        zoomRects.Add(new ZoomRect(drt, 16f));
         draftSegs.Add(go);
     }
     void RedrawDraft()
@@ -820,6 +906,7 @@ public partial class DemoBootstrap : MonoBehaviour
         var oldVisuals = new Dictionary<int, LineVisual>(lineVisuals);
         foreach (var v in lineVisuals.Values) { foreach (var g in v.segs) if (g) Destroy(g); if (v.train) Destroy(v.train); }
         lineVisuals.Clear();
+        zoomRects.Clear();
         foreach (var line in lines)
         {
             var lv = new LineVisual();
@@ -832,6 +919,7 @@ public partial class DemoBootstrap : MonoBehaviour
                 var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer);
                 var lt = hit.AddComponent<LineTapPress>(); lt.boot = this;
                 lv.segs.Add(casing); lv.segs.Add(segBody); lv.segs.Add(hit);
+                lv.segEnds.Add(new Vector2Int(line.st[i], line.st[i + 1]));
             }
             var t = Rect("Train" + line.id, trainLayer, 0, 0, 34, 34);
             t.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
@@ -841,6 +929,8 @@ public partial class DemoBootstrap : MonoBehaviour
             lv.train = t;
             lineVisuals[line.id] = lv;
         }
+        ApplyZoomToOverlays(mapRect ? mapRect.localScale.x : 1f);
+        UpdateRegionalMarkers(true);
     }
     GameObject AddSeg(int a, int b, Color c, float width, RectTransform layer)
     {
@@ -850,6 +940,7 @@ public partial class DemoBootstrap : MonoBehaviour
         var rt = go.GetComponent<RectTransform>(); rt.pivot = new Vector2(0, 0.5f);
         Img(go, c, spriteWhite);
         rt.localRotation = Quaternion.Euler(0,0, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+        zoomRects.Add(new ZoomRect(rt, width));
         return go;
     }
     bool StationInRegion(int i, string region) { return stations[i].region == region || (stations[i].portal && (stations[i].portalTo == region || stations[i].portalTo2 == region)); }
@@ -913,7 +1004,7 @@ public partial class DemoBootstrap : MonoBehaviour
             Vector2 end = backtracked ? Pos(dragFrom) : (hov >= 0 ? Pos(hov) : local);
             var p1 = Pos(dragFrom); var d = end - p1;
             previewImg.rectTransform.anchoredPosition = p1;
-            previewImg.rectTransform.sizeDelta = new Vector2(Mathf.Max(1, d.magnitude), 16);
+            previewImg.rectTransform.sizeDelta = new Vector2(Mathf.Max(1, d.magnitude), 16f * overlayZoom);
             previewImg.rectTransform.localRotation = Quaternion.Euler(0,0, Mathf.Atan2(d.y,d.x)*Mathf.Rad2Deg);
             if (dragTip) dragTip.rectTransform.anchoredPosition = end;
             hoverStation = hov;
@@ -1037,7 +1128,11 @@ public partial class DemoBootstrap : MonoBehaviour
             }
             if (lv.train)
             {
-                lv.train.SetActive(segmentRegion == currentRegion);
+                int trainA = segmentIndex >= 0 ? line.st[segmentIndex] : -1;
+                int trainB = segmentIndex >= 0 ? line.st[segmentIndex + 1] : -1;
+                bool segShown = (trainA >= 0 && trainA < stationVisible.Length && stationVisible[trainA])
+                             || (trainB >= 0 && trainB < stationVisible.Length && stationVisible[trainB]);
+                lv.train.SetActive(segmentRegion == currentRegion && segShown);
                 var trt = lv.train.GetComponent<RectTransform>(); trt.anchoredPosition = pos;
                 float dir = loop || lv.t <= 1f ? ang : ang + 180f;
                 trt.localRotation = Quaternion.Euler(0, 0, dir);
