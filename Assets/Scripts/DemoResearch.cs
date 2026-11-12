@@ -44,6 +44,11 @@ public partial class DemoBootstrap
     void InitHistoryTree()
     {
         if (historyNodes.Count > 0) return;
+        AddHistory("dispatch_basic", "铁路时刻表", 0, 3, 0, "约 1820 年代，铁路开始按时刻组织运行。解锁统一车辆调度。", "pressure");
+        AddHistory("dispatch_peak", "分时列车计划", 0, 8, 0, "19 世纪公共铁路发展推动分时安排列车。解锁早晚高峰与日夜分时调度。", "dispatch_basic", "public");
+        AddHistory("fare_policy", "客运票价制度", 1, 9, 0, "公共铁路客运建立票价制度。解锁线路票价调整。", "dispatch_basic", "public");
+        AddHistory("network_expand1", "铁路网络扩建", 0, 11, 0, "铁路由单线逐渐发展为网络。线路上限增加 2 条。", "public");
+        AddHistory("network_expand2", "铁路运营组织", 0, 14, 0, "铁路公司扩大网络并建立运营组织。线路上限再增加 2 条。", "network_expand1", "manufacture");
         AddHistory("pressure", "高压蒸汽", 3, 0, 3, "高压蒸汽使动力装置更紧凑，为可移动蒸汽机提供了条件。", Array.Empty<string>());
         AddHistory("rail", "早期铸铁轨", 1, 1, -2, "早期轨道承重有限，重型机车可能压坏铁轨；发展初期须为维修付出代价。", "pressure");
         AddHistory("piston", "活塞与传动", 3, 1, 2, "汽缸内的蒸汽推动活塞，经机械传动带动车轮。", "pressure");
@@ -116,6 +121,15 @@ public partial class DemoBootstrap
         foreach (var node in historyNodes) if (techDone.Contains(node.key)) sum += node.incomePercent;
         return sum / 100f;
     }
+    int HistoryCost(HistoryNode node)
+    {
+        switch(node.key) {
+            case "dispatch_basic": return 250; case "dispatch_peak": return 600; case "fare_policy": return 500;
+            case "network_expand1": return 1000; case "network_expand2": return 3000;
+        }
+        if(node.loco>=0) return 300 + node.loco * 340;
+        return Mathf.Clamp(80 + Mathf.Max(0, HistoryYear(node.key)-1800) * 5,80,1000);
+    }
     void HoldHistoryNode(string key)
     {
         historySelected = key;
@@ -123,11 +137,11 @@ public partial class DemoBootstrap
         historyInfoPanel.SetActive(true);
         if (historyTooltipFollow && historyNodeRects.TryGetValue(key, out var target)) historyTooltipFollow.target = target;
         historyHeading.text = node.name;
-        string effect = node.loco >= 0 ? "获得机车 ×1，并解锁购买" : "全线收入 " + (node.incomePercent >= 0 ? "+" : "") + node.incomePercent + "%（游戏效果）";
+        string effect = node.loco >= 0 ? "获得机车 ×1，并解锁购买" : node.incomePercent == 0 ? "解锁对应运营功能" : "全线收入 " + (node.incomePercent >= 0 ? "+" : "") + node.incomePercent + "%（游戏效果）";
         string missing = "";
         foreach (var parent in node.parents) if (!techDone.Contains(parent)) missing += (missing.Length == 0 ? "" : "、") + historyByKey[parent].name;
         string state = techDone.Contains(node.key) ? "已解锁" : missing.Length > 0 ? "尚需：" + missing : "点击解锁";
-        historyInfo.text = "年代：" + HistoryPeriod(node) + "\n" + node.description + "\n" + effect + " · " + state;
+        historyInfo.text = "年代：" + HistoryPeriod(node) + " · 研究费用 ¥" + HistoryCost(node) + "\n" + node.description + "\n" + effect + " · " + state;
     }
     void HideHistoryInfo() { if (historyInfoPanel) historyInfoPanel.SetActive(false); }
     void SetHistoryDragging(bool dragging)
@@ -139,11 +153,16 @@ public partial class DemoBootstrap
     {
         if (!historyByKey.TryGetValue(key, out var node) || techDone.Contains(key)) return;
         if (!HistoryAvailable(node)) { HoldHistoryNode(key); Invoke(nameof(HideHistoryInfo), 2f); return; }
+        int cost=HistoryCost(node);
+        if(coins<cost) { Toast("金币不足，研究需要 ¥" + cost + "，还差 ¥" + Mathf.CeilToInt(cost-coins)); return; }
         historyAnimated.Clear();
         foreach (var candidate in historyNodes) if (HistoryVisible(candidate)) historyAnimated.Add(candidate.key);
         BeginUndo("解锁科技");
-        techDone.Add(key);
-        if (node.loco >= 0) researchVehicles.Add(new ResearchVehicle { node = node.loco });
+        coins -= cost; techDone.Add(key);
+        if (node.loco >= 0) {
+            researchVehicles.Add(new ResearchVehicle { node = node.loco });
+            if(node.loco==0 || node.loco==4 || node.loco==8) { diamonds+=50; Toast("机车里程碑：钻石 +50"); }
+        }
         historyJustUnlocked = key;
         Haptic.Vibrate(20);
         RecalcIncome(); EndUndo(); RefreshHUD(); OpenTechScreen();
@@ -155,6 +174,9 @@ public partial class DemoBootstrap
         {
             case "pressure": case "rail": case "piston": case "valve": case "steamengine": case "minehaul": return 1804;
             case "rack": case "adhesion": case "damage": case "coupled": case "twocyl": case "rods": case "walking": case "cylinder": case "firetube": case "pressureloss": return 1815;
+            case "dispatch_basic": return 1825;
+            case "dispatch_peak": case "fare_policy": case "network_expand1": return 1830;
+            case "network_expand2": return 1850;
             case "public": case "blast": case "tubes": case "returnflue": case "locoworks": case "boilerburst": case "rebuild": case "rainhill": case "twinreturn": return 1829;
             case "speedrisk": case "guide": case "manufacture": case "leadingtruck": return 1835;
             case "linkmotion": return 1842;
