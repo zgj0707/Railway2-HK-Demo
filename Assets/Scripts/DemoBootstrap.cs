@@ -45,7 +45,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     // ---------- state ----------
     Font font;
-    Sprite spriteRound, spriteCircle, spriteWhite, spriteDiamond, spriteRing;
+    Sprite spriteRound, spriteCircle, spriteWhite, spriteDiamond, spriteRing, spriteStationRing;
     Canvas canvas; RectTransform root, mapRect, lineLayer, stationLayer, trainLayer, previewLayer;
     GraphicRaycaster raycaster;
     float coins = 2378f, diamonds = 20f, rp = 60f, progress = 0.08f;
@@ -94,6 +94,7 @@ public partial class DemoBootstrap : MonoBehaviour
         spriteCircle = MakeCircle(64);
         spriteDiamond = MakeDiamond(64);
         spriteRing = MakeRing(96, 6f);
+        spriteStationRing = MakeHandDrawnRing(96, 7f);
         BuildData();
         bool restored = RestoreGame();
         if (!restored) dailyStationBaseline = DailyConnectedCount();
@@ -475,15 +476,21 @@ public partial class DemoBootstrap : MonoBehaviour
             pressRings[i] = press;
             // 圆点按级别分级：门户最大、县区最小，缩小时画面才有层次
             float dotSize = s.portal ? 24f : s.county ? 13f : 20f;
-            float ringSize = dotSize + 12f;
+            float ringSize = dotSize + 8f;
             var outline = Rect("DotRing", go.transform, (56f - ringSize) * 0.5f, (56f - ringSize) * 0.5f, ringSize, ringSize);
-            Img(outline, new Color(0.20f,0.19f,0.16f,0.85f), spriteRing).raycastTarget = false;
+            Color ringColor = s.portal ? new Color(0.82f,0.28f,0.22f,0.92f) : new Color(0.24f,0.21f,0.18f,0.85f);
+            Img(outline, ringColor, spriteStationRing).raycastTarget = false;
             var dotGo = Rect("DotFill", go.transform, (56f - dotSize) * 0.5f, (56f - dotSize) * 0.5f, dotSize, dotSize);
-            var img = Img(dotGo, s.portal ? Vermilion : new Color(0.985f,0.965f,0.925f,0.98f), spriteCircle);
+            var img = Img(dotGo, s.portal ? Vermilion : new Color(0.985f,0.97f,0.94f,0.98f), spriteCircle);
             img.raycastTarget = false;
+            if (s.portal)
+            {
+                var innerDot = Rect("PortalCore", dotGo.transform, dotSize * 0.28f, dotSize * 0.28f, dotSize * 0.44f, dotSize * 0.44f);
+                Img(innerDot, Color.white, spriteCircle).raycastTarget = false;
+            }
             var sp = go.AddComponent<StationPress>(); sp.index = i; sp.boot = this;
-            var label = Txt(go.transform, StationDisplayName(i, currentRegion), s.portal ? 20 : 24, new Color(0.17f,0.15f,0.13f,0.95f), -94, -46, 220, 34, TextAnchor.MiddleCenter);
-            TextShadow(label, new Color(1,0.99f,0.96f,0.95f));
+            var label = Txt(go.transform, StationDisplayName(i, currentRegion), s.portal ? 20 : 24, new Color(0.16f,0.14f,0.11f,0.96f), -94, -46, 220, 34, TextAnchor.MiddleCenter);
+            TextShadow(label, new Color(0.99f,0.98f,0.94f,0.95f));
             if (s.county) { label.resizeTextForBestFit = true; label.resizeTextMinSize = 14; label.resizeTextMaxSize = 24; label.verticalOverflow = VerticalWrapMode.Truncate; }
             stationLabels[i] = label;
             var leader = Img(Rect("NameLeader", go.transform, 0, 0, 1, 2), new Color(0.15f, 0.14f, 0.13f, 0.32f), spriteWhite);
@@ -1159,18 +1166,25 @@ public partial class DemoBootstrap : MonoBehaviour
             for (int i = 0; i < line.st.Count - 1; i++)
             {
                 if (SegmentRegion(line.st[i], line.st[i+1]) != currentRegion) continue;
-                var casing = AddSeg(line.st[i], line.st[i+1], new Color(0.19f,0.18f,0.14f,0.82f), 10, lineLayer);
-                var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 6, lineLayer);
+                var casing = AddSeg(line.st[i], line.st[i+1], new Color(0.22f,0.20f,0.16f,0.85f), 10, lineLayer);
+                var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 6.5f, lineLayer);
+                var trackCore = AddSeg(line.st[i], line.st[i+1], new Color(1f,0.98f,0.92f,0.55f), 2.2f, lineLayer);
                 var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer);
                 var lt = hit.AddComponent<LineTapPress>(); lt.boot = this;
-                lv.segs.Add(casing); lv.segs.Add(segBody); lv.segs.Add(hit);
+                lv.segs.Add(casing); lv.segs.Add(segBody); lv.segs.Add(trackCore); lv.segs.Add(hit);
                 lv.segEnds.Add(new Vector2Int(line.st[i], line.st[i + 1]));
             }
-            var t = Rect("Train" + line.id, trainLayer, 0, 0, 34, 34);
+            var t = Rect("Train" + line.id, trainLayer, 0, 0, 42, 22);
             t.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
-            Img(t, new Color(0.20f,0.18f,0.14f,0.85f), spriteCircle).raycastTarget = false;
-            var body = Rect("Body", t.transform, 3, 3, 28, 28); Img(body, Gold, spriteCircle).raycastTarget = false;
-            var nose = Rect("Nose", t.transform, 23, 14, 7, 7); Img(nose, new Color(0.99f,0.95f,0.85f), spriteCircle).raycastTarget = false;
+            var shell = Img(t, new Color(0.20f,0.18f,0.14f,0.92f), spriteRound); shell.type = Image.Type.Sliced; shell.raycastTarget = false;
+            var body = Rect("Body", t.transform, 2, 2, 38, 18);
+            var bimg = Img(body, line.color, spriteRound); bimg.type = Image.Type.Sliced; bimg.raycastTarget = false;
+            var w1 = Rect("W1", body.transform, 6, 4, 8, 10);
+            var wi1 = Img(w1, new Color(0.98f,0.97f,0.92f,0.90f), spriteRound); wi1.type = Image.Type.Sliced; wi1.raycastTarget = false;
+            var w2 = Rect("W2", body.transform, 17, 4, 8, 10);
+            var wi2 = Img(w2, new Color(0.98f,0.97f,0.92f,0.90f), spriteRound); wi2.type = Image.Type.Sliced; wi2.raycastTarget = false;
+            var noseLight = Rect("NoseLight", body.transform, 29, 6, 6, 6);
+            Img(noseLight, new Color(1f,0.92f,0.45f,0.95f), spriteCircle).raycastTarget = false;
             lv.train = t;
             lineVisuals[line.id] = lv;
         }
@@ -1183,7 +1197,8 @@ public partial class DemoBootstrap : MonoBehaviour
         var d = p2 - p1;
         var go = Rect("Seg", layer, p1.x, p1.y, d.magnitude, width);
         var rt = go.GetComponent<RectTransform>(); rt.pivot = new Vector2(0, 0.5f);
-        Img(go, c, spriteWhite);
+        var im = Img(go, c, spriteRound);
+        im.type = Image.Type.Sliced;
         rt.localRotation = Quaternion.Euler(0,0, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
         zoomRects.Add(new ZoomRect(rt, width));
         return go;
@@ -1693,6 +1708,25 @@ public partial class DemoBootstrap : MonoBehaviour
         }
         t.SetPixels(px); t.Apply();
         return Sprite.Create(t, new Rect(0,0,s,s), new Vector2(0.5f,0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(0,0,0,0));
+    }
+    Sprite MakeHandDrawnRing(int s, float th)
+    {
+        var t = new Texture2D(s, s); var px = new Color[s * s];
+        Vector2 center = new Vector2(s / 2f - 0.5f, s / 2f - 0.5f);
+        float baseOuter = s / 2f - 1.2f;
+        for (int y = 0; y < s; y++) for (int x = 0; x < s; x++)
+        {
+            Vector2 delta = new Vector2(x, y) - center;
+            float d = delta.magnitude;
+            float angle = Mathf.Atan2(delta.y, delta.x);
+            float jitter = Mathf.Sin(angle * 3f) * 0.85f + Mathf.Cos(angle * 7f) * 0.45f;
+            float outer = baseOuter + jitter;
+            float inner = outer - th - Mathf.Sin(angle * 5f) * 0.35f;
+            float a = Mathf.Clamp01(outer - d + 0.65f) * Mathf.Clamp01(d - inner + 0.65f);
+            px[y * s + x] = new Color(1f, 1f, 1f, a);
+        }
+        t.SetPixels(px); t.Apply();
+        return Sprite.Create(t, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect, new Vector4(0, 0, 0, 0));
     }
     Sprite MakeDiamond(int s)
     {
