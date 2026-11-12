@@ -25,6 +25,7 @@ public partial class DemoBootstrap
     float historyScrollX = 0.5f, historyScrollY = 0.5f;
     Text historyInfo, historyHeading;
     GameObject historyInfoPanel, historyControls;
+    TechCoinWidget historyCoinWidget;
     readonly HashSet<string> historyAnimated = new HashSet<string>();
     readonly Dictionary<string, Vector2> historyPositions = new Dictionary<string, Vector2>();
     readonly Dictionary<string, RectTransform> historyNodeRects = new Dictionary<string, RectTransform>();
@@ -244,7 +245,11 @@ public partial class DemoBootstrap
         if (!historyByKey.TryGetValue(key, out var node) || techDone.Contains(key)) return;
         if (!HistoryAvailable(node)) { HoldHistoryNode(key); Invoke(nameof(HideHistoryInfo), 2f); return; }
         int cost=HistoryCost(node);
-        if(coins<cost) { Toast("金币不足，研究需要 ¥" + cost + "，还差 ¥" + Mathf.CeilToInt(cost-coins)); return; }
+        if(coins<cost) {
+            Toast("金币不足，研究需要 ¥" + cost + "，还差 ¥" + Mathf.CeilToInt(cost-coins));
+            if (historyCoinWidget) historyCoinWidget.Shake();
+            return;
+        }
         historyAnimated.Clear();
         foreach (var candidate in historyNodes) if (HistoryVisible(candidate)) historyAnimated.Add(candidate.key);
         BeginUndo("解锁科技");
@@ -337,9 +342,9 @@ public partial class DemoBootstrap
         pageRoot = page; historyPage = page;
         var view = Rect("HistoryViewport", page.transform, 0, 0, 0, 0);
         var viewRt = view.GetComponent<RectTransform>(); viewRt.anchorMin = Vector2.zero; viewRt.anchorMax = Vector2.one;
-        viewRt.offsetMin = Vector2.zero; viewRt.offsetMax = new Vector2(0, -160);
+        viewRt.offsetMin = Vector2.zero; viewRt.offsetMax = Vector2.zero;
         Img(view, new Color(0.99f, 0.985f, 0.97f));
-        var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = true;
+        var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = false;
         var scroll = view.AddComponent<ScrollRect>(); scroll.horizontal = true; scroll.vertical = true; scroll.scrollSensitivity = 0; scroll.movementType = ScrollRect.MovementType.Clamped; scroll.viewport = viewRt;
         const float cw = 8000, ch = 8000;
         var content = Rect("HistoryTree", view.transform, 0, 0, cw, ch);
@@ -434,10 +439,39 @@ public partial class DemoBootstrap
         backRt.anchorMin = backRt.anchorMax = Vector2.zero;
         homeRt.anchorMin = homeRt.anchorMax = Vector2.zero;
         titleRt.anchorMin = titleRt.anchorMax = Vector2.zero;
+
+        // 顶栏实时金币展示与不足震颤提示组件
+        var coinBadge = Rect("TechCoinBadge", historyControls.transform, 0, 0, 224, 94);
+        var coinBadgeRt = coinBadge.GetComponent<RectTransform>();
+        coinBadgeRt.anchorMin = coinBadgeRt.anchorMax = Vector2.zero;
+        var coinShakeTarget = Rect("ShakeTarget", coinBadge.transform, 0, 0, 224, 94);
+        var coinBgImg = Img(coinShakeTarget, new Color(1f, 0.99f, 0.97f, 0.95f), spriteRound);
+        coinBgImg.type = Image.Type.Sliced;
+        SoftShadow(coinShakeTarget);
+        var coinRing = Rect("CoinRing", coinShakeTarget.transform, 16, 19, 56, 56);
+        Img(coinRing, new Color(0.25f, 0.21f, 0.17f, 0.88f), spriteStationRing).raycastTarget = false;
+        var coinIcon = Rect("Icon", coinRing.transform, 4, 4, 48, 48);
+        Img(coinIcon, Gold, spriteCircle).raycastTarget = false;
+        var coinText = Txt(coinShakeTarget.transform, Mathf.FloorToInt(coins).ToString("N0"), 38, Ink, 82, 18, 126, 58, TextAnchor.MiddleLeft);
+        coinText.resizeTextForBestFit = true; coinText.resizeTextMinSize = 22; coinText.resizeTextMaxSize = 38;
+
+        var widget = coinBadge.AddComponent<TechCoinWidget>();
+        widget.shakeTarget = coinShakeTarget.GetComponent<RectTransform>();
+        widget.coinText = coinText;
+        widget.bgImage = coinBgImg;
+        widget.normalTextColor = Ink;
+        widget.normalBgColor = new Color(1f, 0.99f, 0.97f, 0.95f);
+        widget.alertColor = Vermilion;
+        widget.getCoins = () => coins;
+        historyCoinWidget = widget;
+
         var headerLayout = historyControls.AddComponent<PageHeaderLayout>();
         headerLayout.page = controlsRt; headerLayout.back = backRt; headerLayout.home = homeRt; headerLayout.title = titleRt;
-        var progress = Txt(historyControls.transform, "研究进度  " + techDone.Count + " / " + historyNodes.Count, 24, InkSoft, 0, 0, 330, 50, TextAnchor.MiddleRight);
-        var prt = progress.rectTransform; prt.anchorMin = prt.anchorMax = new Vector2(0,1); prt.pivot = new Vector2(0,1); prt.anchoredPosition = new Vector2(24,-140); progress.alignment = TextAnchor.MiddleLeft;
+        headerLayout.coinBadge = coinBadgeRt;
+        var progressBadge = Rect("ProgressBadge", historyControls.transform, 24, 125, 260, 44);
+        var pbg = Img(progressBadge, new Color(1f, 0.99f, 0.97f, 0.88f), spriteRound); pbg.type = Image.Type.Sliced;
+        var prt = progressBadge.GetComponent<RectTransform>(); prt.anchorMin = prt.anchorMax = new Vector2(0,1); prt.pivot = new Vector2(0,1); prt.anchoredPosition = new Vector2(24,-135);
+        var progress = Txt(progressBadge.transform, "研究进度  " + techDone.Count + " / " + historyNodes.Count, 22, InkSoft, 12, 6, 236, 32, TextAnchor.MiddleLeft);
         var legend = Rect("ResearchLegend", historyControls.transform, 0, 0, 1032, 104);
         var legendRt = legend.GetComponent<RectTransform>(); legendRt.anchorMin = legendRt.anchorMax = new Vector2(0.5f, 0); legendRt.pivot = new Vector2(0.5f, 0); legendRt.anchoredPosition = new Vector2(0, 20);
         Rounded(legend, new Color(1f, 0.99f, 0.96f, 0.94f));
