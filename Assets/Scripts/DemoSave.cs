@@ -22,10 +22,11 @@ public partial class DemoBootstrap
     bool RestoreGame()
     {
         if (!PlayerPrefs.HasKey(SaveKey)) return false;
+        if (stations == null || stations.Count == 0) BuildData();
         try {
             var data = JsonUtility.FromJson<SaveData>(PlayerPrefs.GetString(SaveKey));
             if (data == null || data.version != 1 || data.stations == null || data.lines == null || data.scenery == null || data.tech == null || data.vehicles == null || data.story == null || data.skins == null) throw new Exception("invalid save");
-            var byKey = new Dictionary<string,int>(); for (int i=0;i<stations.Count;i++) byKey.Add(StationSaveKey(stations[i]),i);
+            var byKey = new Dictionary<string,int>(); for (int i=0;i<stations.Count;i++) byKey[StationSaveKey(stations[i])] = i;
             var restoredLines = new List<Line>(); var ids = new HashSet<int>();
             foreach (var record in data.lines) {
                 if(record == null || record.stations == null || record.stations.Count < 2 || record.dispatch == null || record.dispatch.Length != 4 || !ids.Add(record.id)) continue;
@@ -39,8 +40,12 @@ public partial class DemoBootstrap
             }
             foreach(var record in data.stations) if(record == null || !byKey.ContainsKey(record.key)) continue;
             foreach(var record in data.vehicles) if(record == null || record.node < 0 || record.node >= LocoNames.Length || (record.lineId != 0 && !ids.Contains(record.lineId))) continue;
-            foreach(var record in data.stations) { var station=stations[byKey[record.key]]; station.level=record.level; station.trafficEvent=record.trafficEvent; station.built=record.built; station.closed=record.closed; station.riderBonus=record.riderBonus; station.facLevel=record.facLevel; }
-            var sceneryByKey = new Dictionary<string,Scenery>(); foreach(var item in sceneries) sceneryByKey[ScenerySaveKey(item)]=item;
+            foreach(var record in data.stations) {
+                if (record != null && byKey.TryGetValue(record.key, out int sIdx)) {
+                    var station=stations[sIdx]; station.level=record.level; station.trafficEvent=record.trafficEvent; station.built=record.built; station.closed=record.closed; station.riderBonus=record.riderBonus; station.facLevel=record.facLevel;
+                }
+            }
+            var sceneryByKey = new Dictionary<string,Scenery>(); foreach(var item in sceneries) sceneryByKey[ScenerySaveKey(item)] = item;
             foreach(var record in data.scenery) if(record != null && sceneryByKey.TryGetValue(record.key,out var item)) { item.found=record.found; item.unlocked=record.unlocked; }
             lines.Clear(); lines.AddRange(restoredLines);
             foreach (var l in restoredLines) foreach (int stIdx in l.st) if (stIdx >= 0 && stIdx < stations.Count) stations[stIdx].built = true;
@@ -49,13 +54,28 @@ public partial class DemoBootstrap
             storySeen.Clear(); foreach(var item in data.story) storySeen.Add(item); ownedLineSkins.Clear(); foreach(int item in data.skins) ownedLineSkins.Add(item);
             coins=data.coins; diamonds=data.diamonds; rp=data.rp; day=Mathf.Max(1,data.day); dayClock=data.clock; researchClock=data.researchClock; timeSpeed=data.speed;
             nextLineId=data.nextId; dailyStationBaseline=data.dailyBaseline; macauUnlocked=data.macau; guangdongUnlocked=data.guangdong; loanOutstanding=data.loan; musicEnabled=data.music;
-            savedRegion=data.region; return true;
+            savedRegion=data.region;
+            saveBlocked = false;
+            saveReady = true;
+            return true;
         } catch (Exception e) { saveBlocked=true; Debug.LogError("本地存档读取失败，已保留原档：" + e.Message); return false; }
     }
     string savedRegion;
     void SaveGame()
     {
         if(!saveReady || saveBlocked) return;
+        // 防毁灭安全阀：如果当前内存中的 lines 异常为空，而磁盘原本存有线路，绝不盲目覆写，而是紧急自愈拉回
+        if (lines.Count == 0 && PlayerPrefs.HasKey(SaveKey))
+        {
+            try {
+                var existing = JsonUtility.FromJson<SaveData>(PlayerPrefs.GetString(SaveKey));
+                if (existing != null && existing.lines != null && existing.lines.Count > 0)
+                {
+                    RestoreGame();
+                    return;
+                }
+            } catch {}
+        }
         try {
             var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion };
             foreach(var s in stations) data.stations.Add(new SavedStation { key=StationSaveKey(s), level=s.level, trafficEvent=s.trafficEvent, built=s.built, closed=s.closed, riderBonus=s.riderBonus, facLevel=s.facLevel });

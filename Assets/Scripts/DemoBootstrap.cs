@@ -34,7 +34,7 @@ public partial class DemoBootstrap : MonoBehaviour
         public Station(string n,float px,float py){name=n;x=px;y=py;level=1;}
     }
     [Serializable] public class Scenery { public string name; public float x,y; public bool natural; public bool found, unlocked; public string triggerStation; public string region = "香港"; }
-    public class Line {
+    [Serializable] public class Line {
         public int id; public string name; public Color color; public List<int> st = new List<int>();
         public int trains = 1;
         public int[] dispatch = { 1, 1, 1, 1 }; public float fare = 1.5f;
@@ -88,7 +88,17 @@ public partial class DemoBootstrap : MonoBehaviour
     void OnEnable()
     {
         if (mapRect) mapWheelZoom = mapRect.GetComponent<MapWheelZoom>();
-        // 关键防御：应对 Unity 编辑器热重载 (Domain Reload) 导致 lineVisuals 字典被重置的问题
+        // 关键防御：应对 Unity 热重载 (Domain Reload)
+        if (stations == null || stations.Count == 0)
+        {
+            BuildData();
+        }
+        if (lines == null || lines.Count == 0)
+        {
+            RestoreGame();
+        }
+        saveBlocked = false;
+        saveReady = true;
         if (canvas != null && lines != null && lines.Count > 0)
         {
             if (lineVisuals == null) lineVisuals = new Dictionary<int, LineVisual>();
@@ -124,6 +134,8 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void BuildData()
     {
+        stations.Clear();
+        sceneries.Clear();
         Add("中环", 0.575f, 0.285f); Add("金钟", 0.64f, 0.315f); Add("铜锣湾", 0.715f, 0.30f); Add("北角", 0.795f, 0.275f);
         Add("尖沙咀", 0.59f, 0.418f); Add("红磡", 0.725f, 0.455f); Add("旺角", 0.64f, 0.505f); Add("九龙塘", 0.755f, 0.552f);
         Add("沙田", 0.815f, 0.635f); Add("大埔墟", 0.825f, 0.735f); Add("荃湾", 0.45f, 0.61f); Add("屯门", 0.30f, 0.61f);
