@@ -10,8 +10,11 @@ public partial class DemoBootstrap
     class HistoryNode
     {
         public string key, name, description; public int column, depth, incomePercent, loco = -1;
+        public ResearchEffect effect = ResearchEffect.Revenue;
+        public int year;
         public string[] parents;
     }
+    enum ResearchEffect { Revenue, Demand, Capacity, Speed, Station, Vehicle, Track, Transfer, None }
     readonly List<ResearchVehicle> researchVehicles = new List<ResearchVehicle>();
     readonly List<HistoryNode> historyNodes = new List<HistoryNode>();
     readonly Dictionary<string, HistoryNode> historyByKey = new Dictionary<string, HistoryNode>();
@@ -44,6 +47,11 @@ public partial class DemoBootstrap
     void InitHistoryTree()
     {
         if (historyNodes.Count > 0) return;
+        AddHistory("dispatch_basic", "铁路时刻表", 0, 3, 0, "约 1820 年代，铁路开始按时刻组织运行。解锁统一车辆调度。", "pressure");
+        AddHistory("dispatch_peak", "分时列车计划", 0, 8, 0, "19 世纪公共铁路发展推动分时安排列车。解锁早晚高峰与日夜分时调度。", "dispatch_basic", "public");
+        AddHistory("fare_policy", "客运票价制度", 1, 9, 0, "公共铁路客运建立票价制度。解锁线路票价调整。", "dispatch_basic", "public");
+        AddHistory("network_expand1", "铁路网络扩建", 0, 11, 3, "铁路由单线逐渐发展为网络，更多出行选择提升旅客对铁路的需求。", "public");
+        AddHistory("network_expand2", "铁路运营组织", 0, 14, 4, "铁路公司扩大网络并协调各线接续，降低旅客换乘阻力。", "network_expand1", "manufacture");
         AddHistory("pressure", "高压蒸汽", 3, 0, 3, "高压蒸汽使动力装置更紧凑，为可移动蒸汽机提供了条件。", Array.Empty<string>());
         AddHistory("rail", "早期铸铁轨", 1, 1, -2, "早期轨道承重有限，重型机车可能压坏铁轨；发展初期须为维修付出代价。", "pressure");
         AddHistory("piston", "活塞与传动", 3, 1, 2, "汽缸内的蒸汽推动活塞，经机械传动带动车轮。", "pressure");
@@ -98,6 +106,9 @@ public partial class DemoBootstrap
         AddHistory("cylinderdrain", "汽缸排水与泄压", 4, 16, 2, "霍尔特 1878 年的汽缸排水与泄压阀将两类安全功能合并，以应对汽缸内的积水和超压。", "piston", "ramsvalve");
         AddHistory("safetyact", "铁路安全装置", 0, 18, 2, "1893 年美国铁路安全装置法推动空气制动器与自动车钩等安全设备的应用。", "autobrake", "manufacture");
 
+        ConfigureResearchEffects();
+        AddOperatingStudies();
+
     }
     bool HistoryVisible(HistoryNode node)
     {
@@ -110,11 +121,99 @@ public partial class DemoBootstrap
         foreach (string parent in node.parents) if (!techDone.Contains(parent)) return false;
         return true;
     }
-    float ResearchBonus()
+    readonly float[] researchEffects = new float[9];
+    void SetResearchEffect(ResearchEffect effect, params string[] keys)
     {
-        InitHistoryTree(); int sum = 0;
-        foreach (var node in historyNodes) if (techDone.Contains(node.key)) sum += node.incomePercent;
-        return sum / 100f;
+        foreach (string key in keys) historyByKey[key].effect = effect;
+    }
+    void ConfigureResearchEffects()
+    {
+        SetResearchEffect(ResearchEffect.Speed, "pressure", "piston", "twocyl", "rods", "blast", "tubes", "guide", "running", "steamengine", "cylinder", "firetube", "returnflue", "twinreturn", "linkmotion", "firebox");
+        SetResearchEffect(ResearchEffect.Capacity, "adhesion", "coupled", "rack", "braking", "straightbrake", "autobrake", "tripvalve", "leadingtruck");
+        SetResearchEffect(ResearchEffect.Vehicle, "valve", "feed", "injector", "giffard", "manufacture", "ramsvalve", "cylinderdrain", "pressureloss", "boilerburst", "walking");
+        SetResearchEffect(ResearchEffect.Track, "rail", "damage", "speedrisk", "rebuild", "safetyact", "brakefault");
+        SetResearchEffect(ResearchEffect.Demand, "public", "minehaul", "rainhill", "network_expand1");
+        SetResearchEffect(ResearchEffect.Transfer, "network_expand2");
+        SetResearchEffect(ResearchEffect.Station, "locoworks", "directair");
+        SetResearchEffect(ResearchEffect.None, "dispatch_basic", "dispatch_peak", "fare_policy");
+    }
+    void SyncResearchEffects()
+    {
+        Array.Clear(researchEffects, 0, researchEffects.Length);
+        foreach (string key in techDone)
+            if (historyByKey.TryGetValue(key, out var node) && node.loco < 0)
+                researchEffects[(int)node.effect] += node.incomePercent * 0.01f;
+    }
+    float ResearchAmount(ResearchEffect effect)
+    {
+        float value = researchEffects[(int)effect];
+        // 正向收益逐渐接近 50%，避免后期节点突然失效；负面影响单独限制在 25%。
+        return value >= 0f ? 0.5f * value / (0.5f + value) : Mathf.Max(-0.25f, value);
+    }
+    float ResearchFactor(ResearchEffect effect) { return 1f + ResearchAmount(effect); }
+    float ResearchCostFactor(ResearchEffect effect) { return 1f - ResearchAmount(effect); }
+    float ResearchBonus() { return ResearchAmount(ResearchEffect.Revenue); }
+    int HistoryCost(HistoryNode node)
+    {
+        switch(node.key) {
+            case "dispatch_basic": return 250; case "dispatch_peak": return 600; case "fare_policy": return 500;
+            case "network_expand1": return 1000; case "network_expand2": return 3000;
+        }
+        if (node.loco == 0) return 300;
+        float price = 100f * Mathf.Pow(1.35f, node.depth) * (node.loco >= 0 ? 1.8f : 1f);
+        return Mathf.Max(100, Mathf.RoundToInt(price / 10f) * 10);
+    }
+    string HistoryEffectText(HistoryNode node)
+    {
+        if (node.loco >= 0) return "赠送机车 ×1，解锁购买；配属后影响该线路运力、速度与维护费";
+        switch (node.key) {
+            case "dispatch_basic": return "解锁全天统一调度";
+            case "dispatch_peak": return "解锁四时段列车调度";
+            case "fare_policy": return "解锁线路票价调整";
+        }
+        string label;
+        switch (node.effect) {
+            case ResearchEffect.Demand: label = "潜在客流"; break;
+            case ResearchEffect.Capacity: label = "列车区段运力"; break;
+            case ResearchEffect.Speed: label = "列车速度"; break;
+            case ResearchEffect.Station: label = "站点吞吐上限"; break;
+            case ResearchEffect.Vehicle: label = "车辆维护费"; break;
+            case ResearchEffect.Track: label = "线路维护费"; break;
+            case ResearchEffect.Transfer: label = "换乘阻力"; break;
+            default: label = "票务收入"; break;
+        }
+        int value = node.incomePercent;
+        if (node.effect == ResearchEffect.Vehicle || node.effect == ResearchEffect.Track || node.effect == ResearchEffect.Transfer) value = -value;
+        return label + (value >= 0 ? " +" : " ") + value + "% 基础值（同类收益递减）";
+    }
+    Color HistoryEffectColor(HistoryNode node)
+    {
+        if (node.loco >= 0) return new Color(0.79f, 0.49f, 0.18f);
+        switch (node.effect) {
+            case ResearchEffect.Revenue: return new Color(0.84f, 0.63f, 0.25f);
+            case ResearchEffect.Demand: return new Color(0.82f, 0.41f, 0.35f);
+            case ResearchEffect.Capacity: return new Color(0.30f, 0.49f, 0.72f);
+            case ResearchEffect.Speed: return new Color(0.58f, 0.43f, 0.72f);
+            case ResearchEffect.Station: return new Color(0.28f, 0.64f, 0.64f);
+            case ResearchEffect.Vehicle: return new Color(0.39f, 0.62f, 0.37f);
+            case ResearchEffect.Track: return new Color(0.61f, 0.48f, 0.37f);
+            case ResearchEffect.Transfer: return new Color(0.78f, 0.43f, 0.61f);
+            default: return new Color(0.43f, 0.48f, 0.56f);
+        }
+    }
+    float EstimateResearchProfit(HistoryNode node)
+    {
+        if (node.loco >= 0 || node.effect == ResearchEffect.None || techDone.Contains(node.key)) return 0;
+        RebuildForecasts(); float before = 0;
+        foreach (var line in lines) before += ForecastFor(line).Profit;
+        techDone.Add(node.key);
+        try {
+            RebuildForecasts(); float after = 0;
+            foreach (var line in lines) after += ForecastFor(line).Profit;
+            return after - before;
+        } finally {
+            techDone.Remove(node.key); RebuildForecasts(); traffic = trafficSlots[DispatchSlot()];
+        }
     }
     void HoldHistoryNode(string key)
     {
@@ -122,12 +221,17 @@ public partial class DemoBootstrap
         if (!historyInfoPanel || !historyByKey.TryGetValue(key, out var node)) return;
         historyInfoPanel.SetActive(true);
         if (historyTooltipFollow && historyNodeRects.TryGetValue(key, out var target)) historyTooltipFollow.target = target;
-        historyHeading.text = node.name;
-        string effect = node.loco >= 0 ? "获得机车 ×1，并解锁购买" : "全线收入 " + (node.incomePercent >= 0 ? "+" : "") + node.incomePercent + "%（游戏效果）";
+        historyHeading.text = DisplayPlaceAliases(node.name);
+        string effect = HistoryEffectText(node);
         string missing = "";
         foreach (var parent in node.parents) if (!techDone.Contains(parent)) missing += (missing.Length == 0 ? "" : "、") + historyByKey[parent].name;
         string state = techDone.Contains(node.key) ? "已解锁" : missing.Length > 0 ? "尚需：" + missing : "点击解锁";
-        historyInfo.text = "年代：" + HistoryPeriod(node) + "\n" + node.description + "\n" + effect + " · " + state;
+        string estimate = "";
+        if (!techDone.Contains(key) && node.loco < 0 && node.effect != ResearchEffect.None) {
+            float delta = EstimateResearchProfit(node);
+            estimate = "\n当前线网预计日利润 " + (delta >= 0 ? "+" : "") + delta.ToString("0.0") + " 金币（按当前运营估算）";
+        }
+        historyInfo.text = DisplayPlaceAliases("年代：" + HistoryPeriod(node) + " · 研究费用 ¥" + HistoryCost(node) + "\n" + node.description + "\n" + effect + " · " + state + estimate);
     }
     void HideHistoryInfo() { if (historyInfoPanel) historyInfoPanel.SetActive(false); }
     void SetHistoryDragging(bool dragging)
@@ -139,22 +243,33 @@ public partial class DemoBootstrap
     {
         if (!historyByKey.TryGetValue(key, out var node) || techDone.Contains(key)) return;
         if (!HistoryAvailable(node)) { HoldHistoryNode(key); Invoke(nameof(HideHistoryInfo), 2f); return; }
+        int cost=HistoryCost(node);
+        if(coins<cost) { Toast("金币不足，研究需要 ¥" + cost + "，还差 ¥" + Mathf.CeilToInt(cost-coins)); return; }
         historyAnimated.Clear();
         foreach (var candidate in historyNodes) if (HistoryVisible(candidate)) historyAnimated.Add(candidate.key);
         BeginUndo("解锁科技");
-        techDone.Add(key);
-        if (node.loco >= 0) researchVehicles.Add(new ResearchVehicle { node = node.loco });
+        coins -= cost; techDone.Add(key);
+        if (node.loco >= 0) {
+            researchVehicles.Add(new ResearchVehicle { node = node.loco });
+            if(node.loco==0 || node.loco==4 || node.loco==8) { diamonds+=50; Toast("机车里程碑：钻石 +50"); }
+        }
         historyJustUnlocked = key;
         Haptic.Vibrate(20);
         RecalcIncome(); EndUndo(); RefreshHUD(); OpenTechScreen();
     }
     int HistoryYear(string key)
     {
-        if (historyByKey.TryGetValue(key, out var node) && node.loco >= 0) return int.Parse(LocoYears[node.loco]);
+        if (historyByKey.TryGetValue(key, out var node)) {
+            if (node.loco >= 0) return int.Parse(LocoYears[node.loco]);
+            if (node.year > 0) return node.year;
+        }
         switch (key)
         {
             case "pressure": case "rail": case "piston": case "valve": case "steamengine": case "minehaul": return 1804;
             case "rack": case "adhesion": case "damage": case "coupled": case "twocyl": case "rods": case "walking": case "cylinder": case "firetube": case "pressureloss": return 1815;
+            case "dispatch_basic": return 1825;
+            case "dispatch_peak": case "fare_policy": case "network_expand1": return 1830;
+            case "network_expand2": return 1850;
             case "public": case "blast": case "tubes": case "returnflue": case "locoworks": case "boilerburst": case "rebuild": case "rainhill": case "twinreturn": return 1829;
             case "speedrisk": case "guide": case "manufacture": case "leadingtruck": return 1835;
             case "linkmotion": return 1842;
@@ -218,9 +333,11 @@ public partial class DemoBootstrap
         ClosePage(); pageBack = null; CloseLineBubble();
         var page = Rect("HistoryFullScreen", canvas.transform, 0, 0, 0, 0);
         var pageRt = page.GetComponent<RectTransform>(); pageRt.anchorMin = Vector2.zero; pageRt.anchorMax = Vector2.one; pageRt.offsetMin = pageRt.offsetMax = Vector2.zero;
+        Img(page, new Color(0.99f, 0.985f, 0.97f)).raycastTarget = false;
         pageRoot = page; historyPage = page;
         var view = Rect("HistoryViewport", page.transform, 0, 0, 0, 0);
-        var viewRt = view.GetComponent<RectTransform>(); viewRt.anchorMin = Vector2.zero; viewRt.anchorMax = Vector2.one; viewRt.offsetMin = viewRt.offsetMax = Vector2.zero;
+        var viewRt = view.GetComponent<RectTransform>(); viewRt.anchorMin = Vector2.zero; viewRt.anchorMax = Vector2.one;
+        viewRt.offsetMin = Vector2.zero; viewRt.offsetMax = new Vector2(0, -160);
         Img(view, new Color(0.99f, 0.985f, 0.97f));
         var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = true;
         var scroll = view.AddComponent<ScrollRect>(); scroll.horizontal = true; scroll.vertical = true; scroll.scrollSensitivity = 0; scroll.movementType = ScrollRect.MovementType.Clamped; scroll.viewport = viewRt;
@@ -246,6 +363,7 @@ public partial class DemoBootstrap
         var edges = edgeGo.AddComponent<HistoryGraphEdges>(); edges.lineSprite = spriteWhite;
         var layout = content.AddComponent<HistoryGraphLayout>();
         layout.positions = historyPositions; layout.edges = edges;
+        layout.updatesPerSecond = qualityTier == 0 ? 15f : 60f;
         var graphRects = new Dictionary<string, RectTransform>();
         historyNodeRects.Clear();
         foreach (var node in historyNodes)
@@ -256,7 +374,10 @@ public partial class DemoBootstrap
             var card = Rect(node.key, content.transform, 4000 + point.x - 100, 4000 + point.y - 60, 200, 120);
             var cardRect = card.GetComponent<RectTransform>(); graphRects[node.key] = cardRect; historyNodeRects[node.key] = cardRect;
             layout.Add(node.key, cardRect, node.key == "pressure" ? -1 : HistoryEra(node.key), node.parents);
-            Rounded(card, done ? new Color(0.93f,0.85f,0.73f) : ready ? Color.white : new Color(0.88f,0.88f,0.87f));
+            Color categoryColor = HistoryEffectColor(node);
+            Rounded(card, done ? Color.Lerp(categoryColor, Color.white, 0.60f) : Color.white);
+            var marker = Rect("Category", card.transform, 8, 90, 17, 17);
+            Img(marker, categoryColor, spriteCircle).raycastTarget = false;
             var name = Txt(card.transform, node.name, 24, Ink, 6, node.loco >= 0 ? 83 : 62, 188, node.loco >= 0 ? 32 : 48, TextAnchor.MiddleCenter);
             name.resizeTextForBestFit = true; name.resizeTextMinSize = 17; name.resizeTextMaxSize = 24;
             if (node.loco >= 0)
@@ -270,19 +391,21 @@ public partial class DemoBootstrap
                     art.rectTransform.sizeDelta = new Vector2(iw, ih); art.rectTransform.anchoredPosition = new Vector2((200 - iw) / 2, 36 + (46 - ih) / 2);
                 }
             }
-            string label = node.loco >= 0 ? "机车" : node.incomePercent < 0 ? "发展代价" : "技术加成";
-            Txt(card.transform, label + (done ? " · 已解锁" : ready ? " · 可解锁" : " · 前置不足"), 17, InkSoft, 6, 20, 188, 30, TextAnchor.MiddleCenter);
+            string label = node.loco >= 0 ? "机车" : node.effect == ResearchEffect.None ? "运营解锁" : HistoryEffectText(node).Replace(" 基础值（同类收益递减）", "");
+            var labelText = Txt(card.transform, label + (done ? " · 已解锁" : ready ? " · 可解锁" : " · 前置不足"), 17, InkSoft, 6, 20, 188, 30, TextAnchor.MiddleCenter);
+            labelText.resizeTextForBestFit = true; labelText.resizeTextMinSize = 12; labelText.resizeTextMaxSize = 17;
             var touch = card.AddComponent<HistoryNodeTouch>(); string key = node.key;
             touch.onTap = () => TapHistoryNode(key); touch.onHold = () => HoldHistoryNode(key); touch.onRelease = HideHistoryInfo;
             bool newlyVisible = historyJustUnlocked != null && !historyAnimated.Contains(key);
-            if (newlyVisible || historyJustUnlocked == key)
+            if (qualityTier > 0 && (newlyVisible || historyJustUnlocked == key))
             {
                 var fx = card.AddComponent<HistoryNodeReveal>(); fx.startDelay = newlyVisible ? 0.18f : 0f;
                 var halo = Rect("UnlockHalo", card.transform, -30, -70, 260, 260);
                 var haloImage = Img(halo, new Color(0.87f, 0.65f, 0.32f, 0.85f), historyCircleOutline); haloImage.raycastTarget = false;
                 halo.transform.SetAsFirstSibling(); fx.halo = halo.GetComponent<RectTransform>();
                 fx.halo.pivot = new Vector2(0.5f, 0.5f); fx.halo.anchoredPosition = new Vector2(100, 60);
-                for (int i = 0; i < 16; i++)
+                int sparkCount = qualityTier == 1 ? 6 : 16;
+                for (int i = 0; i < sparkCount; i++)
                 {
                     var spark = Rect("Spark", card.transform, 96, 56, 9, 9);
                     Img(spark, i % 2 == 0 ? Indigo : Gold, spriteCircle).raycastTarget = false;
@@ -298,7 +421,7 @@ public partial class DemoBootstrap
                     edges.Add(parentRect, child, techDone.Contains(parent));
         }
         edges.Refresh();
-        if (historyJustUnlocked != null) { var shake = page.AddComponent<HistoryCameraShake>(); shake.target = rt; }
+        if (qualityTier >= 2 && historyJustUnlocked != null) { var shake = page.AddComponent<HistoryCameraShake>(); shake.target = rt; }
         historyJustUnlocked = null;
         historyControls = Rect("HistoryControls", page.transform, 0, 0, 0, 0);
         var controlsRt = historyControls.GetComponent<RectTransform>(); controlsRt.anchorMin = Vector2.zero; controlsRt.anchorMax = Vector2.one; controlsRt.offsetMin = controlsRt.offsetMax = Vector2.zero;
@@ -308,8 +431,24 @@ public partial class DemoBootstrap
         var homeRt = home.GetComponent<RectTransform>(); homeRt.anchorMin = homeRt.anchorMax = new Vector2(0,1); homeRt.pivot = new Vector2(0,1); homeRt.anchoredPosition = new Vector2(134,-28);
         var title = Txt(historyControls.transform, "科技树", 44, Ink, 0, 0, 320, 60, TextAnchor.MiddleLeft);
         var titleRt = title.rectTransform; titleRt.anchorMin = titleRt.anchorMax = new Vector2(0,1); titleRt.pivot = new Vector2(0,1); titleRt.anchoredPosition = new Vector2(254,-45);
+        backRt.anchorMin = backRt.anchorMax = Vector2.zero;
+        homeRt.anchorMin = homeRt.anchorMax = Vector2.zero;
+        titleRt.anchorMin = titleRt.anchorMax = Vector2.zero;
+        var headerLayout = historyControls.AddComponent<PageHeaderLayout>();
+        headerLayout.page = controlsRt; headerLayout.back = backRt; headerLayout.home = homeRt; headerLayout.title = titleRt;
         var progress = Txt(historyControls.transform, "研究进度  " + techDone.Count + " / " + historyNodes.Count, 24, InkSoft, 0, 0, 330, 50, TextAnchor.MiddleRight);
-        var prt = progress.rectTransform; prt.anchorMin = prt.anchorMax = new Vector2(1,1); prt.pivot = new Vector2(1,1); prt.anchoredPosition = new Vector2(-24,-50);
+        var prt = progress.rectTransform; prt.anchorMin = prt.anchorMax = new Vector2(0,1); prt.pivot = new Vector2(0,1); prt.anchoredPosition = new Vector2(24,-140); progress.alignment = TextAnchor.MiddleLeft;
+        var legend = Rect("ResearchLegend", historyControls.transform, 0, 0, 1032, 104);
+        var legendRt = legend.GetComponent<RectTransform>(); legendRt.anchorMin = legendRt.anchorMax = new Vector2(0.5f, 0); legendRt.pivot = new Vector2(0.5f, 0); legendRt.anchoredPosition = new Vector2(0, 20);
+        Rounded(legend, new Color(1f, 0.99f, 0.96f, 0.94f));
+        string[] legendNames = { "收入", "客流", "运力", "速度", "站点吞吐", "车辆维护", "线路维护", "换乘", "机车", "运营解锁" };
+        ResearchEffect[] legendKinds = { ResearchEffect.Revenue, ResearchEffect.Demand, ResearchEffect.Capacity, ResearchEffect.Speed, ResearchEffect.Station, ResearchEffect.Vehicle, ResearchEffect.Track, ResearchEffect.Transfer, ResearchEffect.None, ResearchEffect.None };
+        for (int i = 0; i < legendNames.Length; i++) {
+            float x = 16 + (i % 5) * 204, y = i < 5 ? 62 : 18;
+            var sample = new HistoryNode { effect = legendKinds[i], loco = i == 8 ? 0 : -1 };
+            var dot = Rect("LegendDot" + i, legend.transform, x, y + 6, 18, 18); Img(dot, HistoryEffectColor(sample), spriteCircle).raycastTarget = false;
+            Txt(legend.transform, legendNames[i], 22, InkSoft, x + 24, y, 174, 32, TextAnchor.MiddleLeft);
+        }
         var info = Rect("HistoryInfo", page.transform, 0, 0, 900, 310); Rounded(info, new Color(0.96f,0.93f,0.87f,0.98f)); SoftShadow(info);
         var irt = info.GetComponent<RectTransform>(); irt.anchorMin = irt.anchorMax = new Vector2(0.5f,0.5f); irt.pivot = new Vector2(0.5f,0); irt.anchoredPosition = Vector2.zero;
         historyTooltipFollow = info.AddComponent<HistoryTooltipFollow>(); historyTooltipFollow.page = pageRt;

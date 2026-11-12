@@ -84,6 +84,8 @@ public class HistoryTooltipFollow : MonoBehaviour
         }
 
         const float margin = 16f;
+        // 顶部为宿主胶囊与导航预留空间，气泡不要进入该区域。
+        if (bounds.height > 320f) bounds.yMax -= 160f;
         float availableWidth = Mathf.Max(1, bounds.width - 2 * margin);
         float availableHeight = Mathf.Max(1, bounds.height - 2 * margin);
         float factor = Mathf.Min(1f, availableWidth / tooltip.rect.width, availableHeight / tooltip.rect.height);

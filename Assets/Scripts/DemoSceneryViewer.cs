@@ -51,7 +51,7 @@ public partial class DemoBootstrap
             dot.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
             var dotImage = Img(dot, new Color(0.72f, 0.80f, 0.70f, 0.9f), spriteCircle);
             var dotLabel = Txt(dot.transform, sc.name, 22, new Color(0.22f, 0.30f, 0.22f, 0.95f), -60, -36, 180, 32, TextAnchor.MiddleCenter);
-            dotLabel.gameObject.AddComponent<Shadow>().effectColor = new Color(1, 1, 1, 0.85f);
+            TextShadow(dotLabel, new Color(1, 1, 1, 0.85f));
             var dotButton = dot.AddComponent<Button>(); dotButton.targetGraphic = dotImage;
             dotButton.onClick.AddListener(() => Toast(sc.name + (sc.unlocked ? " · 大图筹备中" : " · 连通" + sc.triggerStation + "站解锁")));
             return;
@@ -72,7 +72,7 @@ public partial class DemoBootstrap
         badge.SetActive(!sc.found);
         sceneryMarkerBadges[sc] = badge;
         var label = Txt(marker.transform, sc.name, 22, new Color(0.22f, 0.30f, 0.22f, 0.98f), -65, -32, 198, 32, TextAnchor.MiddleCenter);
-        label.gameObject.AddComponent<Shadow>().effectColor = new Color(1, 1, 1, 0.9f);
+        TextShadow(label, new Color(1, 1, 1, 0.9f));
         var button = marker.AddComponent<Button>(); button.targetGraphic = background;
         button.onClick.AddListener(() => OpenSceneryViewer(sc));
     }
@@ -135,13 +135,14 @@ public partial class DemoBootstrap
         var heading = Txt(controls.transform, sc.name, 44, Color.white, 254, 975, 800, 60, TextAnchor.MiddleLeft);
         heading.resizeTextForBestFit = true; heading.resizeTextMinSize = 26; heading.resizeTextMaxSize = 44;
         var clear = Btn(controls.transform, "Clear", "清屏", 30, 1690, 44, 180, 70, new Color(0.12f, 0.16f, 0.15f, 0.75f), () => controls.SetActive(false));
+        sceneryViewer.GetComponent<SceneryViewerLayout>().clear = clear.GetComponent<RectTransform>();
         TInk(clear, Color.white);
     }
 }
 
 public class SceneryViewerLayout : MonoBehaviour
 {
-    public RectTransform stage;
+    public RectTransform stage, clear;
     void LateUpdate()
     {
         if (!stage) return;
@@ -151,5 +152,6 @@ public class SceneryViewerLayout : MonoBehaviour
         float scale = Mathf.Min(width / 1920f, height / 1080f);
         stage.localScale = Vector3.one * scale;
         stage.localRotation = Quaternion.Euler(0, 0, portrait ? 90 : 0);
+        if (clear) clear.anchoredPosition = new Vector2(portrait ? 1370 : 1690, 44);
     }
 }

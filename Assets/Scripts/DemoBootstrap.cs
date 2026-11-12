@@ -28,7 +28,7 @@ public partial class DemoBootstrap : MonoBehaviour
     };
 
     [Serializable] public class Station {
-        public string name; public float x, y; public int level; public bool closed; public int trafficEvent;
+        public string name; public float x, y; public int level; public bool built, closed; public int trafficEvent;
         public bool portal, county; public string portalTo, portalTo2, city; public int administrativeCode; public string region = "香港"; public float otherX, otherY, thirdX, thirdY;
         public float riderBonus; public int facLevel;
         public Station(string n,float px,float py){name=n;x=px;y=py;level=1;}
@@ -36,7 +36,9 @@ public partial class DemoBootstrap : MonoBehaviour
     [Serializable] public class Scenery { public string name; public float x,y; public bool natural; public bool found, unlocked; public string triggerStation; public string region = "香港"; }
     public class Line {
         public int id; public string name; public Color color; public List<int> st = new List<int>();
-        public int[] up = new int[3]; public int trains = 1;
+        public int trains = 1;
+        public int[] dispatch = { 1, 1, 1, 1 }; public float fare = 1.5f;
+        public float todayGross, todayMaintenance, todayTrack;
         public List<int> recent = new List<int>(); // 最近几个结算日的实收
         public int todayRevenue;
     }
@@ -60,10 +62,11 @@ public partial class DemoBootstrap : MonoBehaviour
     List<string> techDone = new List<string>();
     Text coinTxt, incomeTxt, diamondTxt, progTxt, rpTxt, dayTxt;
     string currentRegion = "香港"; Text regionTitle; GameObject hkMapArt, macauMapArt, guangdongMapArt;
-    bool macauUnlocked = true, guangdongUnlocked = true; // 测试期默认开放首批区域
+    bool macauUnlocked, guangdongUnlocked;
     const float MacauIncomeRequired = 600f, GuangdongIncomeRequired = 1200f;
     RectTransform progFill;
     GameObject activePanel, scrim, toastGo, panelShadow, zoomNotice;
+    int stationFilter; Text stationFilterText;
     Text zoomNoticeTxt;
     Action panelClosed;
     int panelOpenedFrame = -1;
@@ -83,6 +86,7 @@ public partial class DemoBootstrap : MonoBehaviour
     // ---------- boot ----------
     void Start()
     {
+        qualityTier = Mathf.Clamp(PlayerPrefs.GetInt("visual_quality", 1), 0, 2);
         font = Resources.Load<Font>("Fonts/LXGWWenKai-Regular");
         if (font == null) { Debug.LogError("FONT MISSING"); font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); }
         spriteWhite = MakeWhite();
@@ -91,11 +95,17 @@ public partial class DemoBootstrap : MonoBehaviour
         spriteDiamond = MakeDiamond(64);
         spriteRing = MakeRing(96, 6f);
         BuildData();
+        bool restored = RestoreGame();
+        if (!restored) dailyStationBaseline = DailyConnectedCount();
         BuildUI();
+        ApplyVisualQuality();
         CheckSceneryOnLine(null);
         RecalcIncome();
         RefreshHUD();
         InitMobile();
+        if (!string.IsNullOrEmpty(savedRegion) && savedRegion != currentRegion && RegionUnlocked(savedRegion)) SwitchRegion(savedRegion);
+        saveReady = true;
+        if (saveBlocked) Toast("存档读取失败，原存档已保留");
         Debug.Log("HK DEMO READY");
     }
 
@@ -121,7 +131,7 @@ public partial class DemoBootstrap : MonoBehaviour
         Add("佛山", 0.23f, 0.66f, "广东"); Add("中山", 0.30f, 0.48f, "广东");
         Add("珠海", 0.23f, 0.34f, "广东");
         Add("浅水湾", 0.83f, 0.255f);
-        AddMacau("关闸", 113.549205f, 22.215939f); AddMacau("大三巴", 113.540845f, 22.197455f);
+        AddMacau("大三巴", 113.540845f, 22.197455f);
         AddMacau("外港", 113.557664f, 22.197471f); AddMacau("氹仔", 113.556615f, 22.153493f);
         AddMacau("路氹", 113.560200f, 22.142700f); AddMacau("路环", 113.552522f, 22.117962f);
         AddMacau("青洲", 113.537554f, 22.211585f); AddMacau("新口岸", 113.550720f, 22.188997f);
@@ -131,11 +141,22 @@ public partial class DemoBootstrap : MonoBehaviour
         AddMacau("石排湾", 113.561542f, 22.131421f); AddMacau("黑沙", 113.569345f, 22.118802f);
 
         ApplyGuangdongStations();
-        SetMacauGateway("关闸", 0.480f, 0.438f);
-        AddMacauGateway("青茂", 113.543056f, 22.213519f, 0.492f, 0.423f);
+        var zhuhai = stations.Find(s => s.region == "广东" && s.name == "珠海");
+        if (zhuhai != null)
+        {
+            zhuhai.name = "珠海（关闸）"; zhuhai.portal = true; zhuhai.portalTo = "澳门";
+            zhuhai.otherX = MacauX(113.549205f); zhuhai.otherY = MacauY(22.215939f);
+        }
         AddMacauGateway("珠澳工业区", 113.534457f, 22.212157f, 0.466f, 0.416f);
         AddMacauGateway("横琴口岸", 113.544850f, 22.140669f, 0.474f, 0.402f);
         luo.otherX = 0.585f; luo.otherY = 0.466f; luo.administrativeCode = 440303; luo.city = "深圳市";
+        // 深圳和西九龙是同一跨区节点，广东侧保留原深圳站坐标。
+        var shenzhen = stations.Find(s => s.region == "广东" && s.name == "深圳");
+        if (shenzhen != null)
+        {
+            shenzhen.name = "深圳（西九龙）"; shenzhen.portal = true; shenzhen.portalTo = "香港";
+            shenzhen.otherX = 0.548f; shenzhen.otherY = 0.440f;
+        }
 
         sceneries.Add(new Scenery{name="太平山", x=0.478f,y=0.238f,natural=true,triggerStation="中环"});
         sceneries.Add(new Scenery{name="维多利亚港", x=0.665f,y=0.375f,natural=true,triggerStation="尖沙咀"});
@@ -157,6 +178,7 @@ public partial class DemoBootstrap : MonoBehaviour
         var l1 = new Line { id = 1, name = "1 号线", color = LineColors[0] };
         l1.st.Add(0); l1.st.Add(1); l1.st.Add(2);
         lines.Add(l1);
+        foreach (int index in l1.st) stations[index].built = true;
     }
     void Add(string n, float x, float y, string region = "香港") { stations.Add(new Station(n, x, y) { region = region }); }
     // 澳门底图范围：经度 113.505–113.605，纬度 22.100–22.235。
@@ -189,8 +211,35 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         AddMacau(name, longitude, latitude); SetMacauGateway(name, x, y);
     }
+    // 玩家界面统一使用别称；内部地名仍作为既有存档和跨区域连接的稳定标识。
+    static readonly string[,] PlaceAliases = {
+        { "香 港", "香 江" }, { "澳 门", "濠 江" }, { "广 东", "南 粤" },
+        { "香港", "香江" }, { "澳门", "濠江" }, { "广东", "南粤" },
+        { "广州", "羊城" }, { "深圳", "鹏城" }, { "珠海", "百岛之市" },
+        { "汕头", "鮀城" }, { "佛山", "禅城" }, { "韶关", "韶州" },
+        { "河源", "槎城" }, { "梅州", "嘉应" }, { "惠州", "鹅城" },
+        { "汕尾", "善美之城" }, { "东莞", "莞邑" }, { "中山", "香山" },
+        { "江门", "五邑" }, { "阳江", "鼍城" }, { "湛江", "港城" },
+        { "茂名", "油城" }, { "肇庆", "端州" }, { "清远", "清城" },
+        { "潮州", "凤城" }, { "揭阳", "榕城" }, { "云浮", "石都" }
+    };
+    static string DisplayPlaceAliases(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        for (int i = 0; i < PlaceAliases.GetLength(0); i++) {
+            string original = PlaceAliases[i, 0], alias = PlaceAliases[i, 1];
+            text = text.Replace(original + "市", alias).Replace(original + "省", alias).Replace(original, alias);
+        }
+        return text;
+    }
+    string StationDisplayName(int index, string region)
+    {
+        var station = stations[index];
+        return DisplayPlaceAliases(station.name == "深圳（西九龙）" && region == "香港" ? "西九龙（深圳）" : station.name);
+    }
     string PortalSubtitle(Station station, string region)
     {
+        if (station.name == "深圳（西九龙）") return region == "香港" ? "深圳" : "香港";
         if (station.name == "港珠澳")
             return region == "澳门" ? "内地/港" : region == "香港" ? "内地/澳" : "港/澳";
         if (station.region == "澳门") return region == "澳门" ? "内地" : "澳门";
@@ -238,13 +287,14 @@ public partial class DemoBootstrap : MonoBehaviour
         BuildTopBar();
         BuildZoomNotice();
         BuildLeftRail();
+        BuildStationFilterButton();
         BuildRightRail();
         BuildBottomNav();
         BuildUndoButton();
         BuildDragCostBadge();
         CreateLineVisuals();
         RefreshAllLines();
-        InvokeRepeating(nameof(RPTick), 6f, 6f);
+
     }
 
     void EnsureCamera()
@@ -265,7 +315,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void BuildTopBar()
     {
-        var bar = Rect("Top", root, 0, 1640, W, 280); Img(bar, new Color(1,1,1,0));
+        var bar = Rect("Top", root, 0, 1610, W, 280); Img(bar, new Color(1,1,1,0));
 
         var c1 = Rect("Coin", bar.transform, 24, 46, 318, 92); Rounded(c1, new Color(1,0.99f,0.96f,0.95f)); SoftShadow(c1);
         var coinIcon = Rect("Icon", c1.transform, 12, 18, 56, 56); Img(coinIcon, Gold, spriteCircle);
@@ -277,25 +327,25 @@ public partial class DemoBootstrap : MonoBehaviour
         regionTitle = title;
         var regionEntry = cap.AddComponent<Button>(); regionEntry.targetGraphic = cap.GetComponent<Image>();
         regionEntry.onClick.AddListener(OpenRegionScreen);
-        title.gameObject.AddComponent<Shadow>().effectColor = new Color(1,0.99f,0.96f,0.8f);
+        TextShadow(title, new Color(1,0.99f,0.96f,0.8f));
         timeTxt = Txt(cap.transform, "08:00", 26, InkSoft, 0, 60, 400, 36, TextAnchor.MiddleCenter);
         dayTxt = Txt(cap.transform, "第 1 日", 23, InkSoft, 0, 20, 400, 32, TextAnchor.MiddleCenter);
 
         var c3 = Rect("Dia", bar.transform, 768, 46, 226, 92); Rounded(c3, new Color(1,0.99f,0.96f,0.95f)); SoftShadow(c3);
         var diaIcon = Rect("Icon", c3.transform, 12, 18, 52, 52); Img(diaIcon, Sakura, spriteDiamond);
         diamondTxt = Txt(c3.transform, "20", 42, Ink, 66, 19, 100, 54, TextAnchor.MiddleCenter);
-        Btn(c3.transform, "Add", "＋", 30, 168, 23, 52, 52, Matcha, () => { BeginUndo("领取钻石"); diamonds += 5; EndUndo(); Toast("钻石 +5"); RefreshHUD(); });
+        Btn(c3.transform, "DiamondInfo", "?", 30, 168, 23, 52, 52, Matcha, () => Toast("钻石可通过名胜打卡和机车里程碑获得"));
 
-        var gb = Btn(bar.transform, "Gear", "设", 26, 1004, 64, 60, 60, new Color(1,0.99f,0.96f,0.94f), () => Toast("设置（demo）"));
+        var gb = Btn(bar.transform, "Gear", "设", 26, 24, -24, 60, 60, new Color(1,0.99f,0.96f,0.94f), OpenAudioSettings);
         gb.GetComponentInChildren<Text>().color = Ink;
-        var hb = Btn(bar.transform, "Help", "?", 30, 1004, 132, 60, 60, new Color(1,0.99f,0.96f,0.94f), () => HelpPopup("长按车站并拖到下一站开线，松手确认；拖回已连接的站点会撤销后段。若起点已在某条线路上，默认延长该线，也可另开新线；起点有多条线路时逐条选择。点线路可拆该段、拆整线或看运营详情。景观打卡改为图鉴红点，进入图鉴点击领取。时间 60 秒为一天，每日收入即一天进账；右侧倍速可切换 1×/2×/3×，只放大收入；拖到本次起点可闭合环线。底栏进入线路 / 车库 / 公司 / 科技。"));
+        var hb = Btn(bar.transform, "Help", "?", 30, 94, -24, 60, 60, new Color(1,0.99f,0.96f,0.94f), () => HelpPopup("长按站点拖动铺线。\n从线路端点出发可延长，从中间站出发可新建；拖回起点可成环。\n交界站可衔接区域，点击线路查看运营。\n在图鉴打开名胜大图即可打卡。\n右侧可调倍速，1 倍速下 6 分钟为一天。"));
         hb.GetComponentInChildren<Text>().color = InkSoft;
     }
 
     void BuildZoomNotice()
     {
         // 顶部轻提示：不占画面中央，只做状态说明
-        zoomNotice = Rect("ZoomNotice", root, 300, 1558, 480, 54);
+        zoomNotice = Rect("ZoomNotice", root, 300, 1458, 480, 54);
         var nbg = Img(zoomNotice, new Color(0.99f, 0.975f, 0.94f, 0.95f), spriteRound);
         nbg.type = Image.Type.Sliced;
         nbg.raycastTarget = false;
@@ -353,6 +403,8 @@ public partial class DemoBootstrap : MonoBehaviour
     void SwitchRegion(string destination)
     {
         if (dragging || activePanel || sceneryViewer || !RegionUnlocked(destination)) return;
+        if (destination == currentRegion) { ClosePage(); return; }
+        FreezeRegionTraffic();
         ClosePage(); CloseLineBubble(); CancelDraft(); currentRegion = destination;
         hkMapArt.SetActive(currentRegion == "香港"); macauMapArt.SetActive(currentRegion == "澳门");
         guangdongMapArt.SetActive(currentRegion == "广东");
@@ -363,17 +415,19 @@ public partial class DemoBootstrap : MonoBehaviour
             marker.gameObject.SetActive(StationInRegion(i, currentRegion));
             marker.localScale = Vector3.one;
             marker.GetComponent<RectTransform>().anchoredPosition = Pos(i);
+            if (stationLabels.TryGetValue(i, out var nameLabel) && nameLabel) nameLabel.text = StationDisplayName(i, currentRegion);
             if (stations[i].portal)
             {
                 var texts = marker.GetComponentsInChildren<Text>(true);
-                if (texts.Length > 1) texts[1].text = PortalSubtitle(stations[i], currentRegion);
+                if (texts.Length > 1) texts[1].text = DisplayPlaceAliases(PortalSubtitle(stations[i], currentRegion));
             }
         }
         RefreshSceneryViews();
         LayoutStationLabels();
         UpdateRegionalMarkers(true);
-        regionTitle.text = currentRegion == "香港" ? "香 港" : currentRegion == "澳门" ? "澳 门" : "广 东";
+        regionTitle.text = DisplayPlaceAliases(currentRegion == "香港" ? "香 港" : currentRegion == "澳门" ? "澳 门" : "广 东");
         CreateLineVisuals(); RefreshStationDots();
+        RecalcIncome(); RefreshHUD();
         Toast("已切换至" + currentRegion);
     }
 
@@ -390,7 +444,7 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     void UpdateRegionUnlocks()
     {
-        if (!macauUnlocked && income >= MacauIncomeRequired)
+        if (!macauUnlocked && income >= MacauIncomeRequired && ConnectedOrdinaryStations("香港") >= 4)
         { macauUnlocked = true; Toast("澳门区域已解锁"); QueueStory("macau_open", "海的另一边", "澳门发来一封简短的邀请：客流已经准备好了，缺的只是一条可靠的线路。\n下一站，去海的另一边。"); }
         if (macauUnlocked && !guangdongUnlocked && income >= GuangdongIncomeRequired && ConnectedOrdinaryStations("澳门") >= 2)
         { guangdongUnlocked = true; Toast("广东区域已解锁"); QueueStory("guangdong_open", "向北的邀请", "澳门的站台刚刚热闹起来，广东的合作邀请便送到了桌上。\n这一次，你要把一座城市的故事，接到更远的地方。"); }
@@ -401,7 +455,8 @@ public partial class DemoBootstrap : MonoBehaviour
         for (int i = 0; i < stations.Count; i++)
         {
             var s = stations[i];
-            var go = Rect("S_" + s.name, stationLayer, MAP_X + s.x*MAP_W, MAP_Y + s.y*MAP_H, 56, 56);
+            Vector2 stationPosition = Pos(i);
+            var go = Rect("S_" + s.name, stationLayer, stationPosition.x, stationPosition.y, 56, 56);
             go.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
             var hit = Img(go, new Color(1,1,1,0)); hit.raycastTarget = true;
             var ringGo = Rect("Ring", go.transform, -14, -14, 84, 84);
@@ -427,8 +482,8 @@ public partial class DemoBootstrap : MonoBehaviour
             var img = Img(dotGo, s.portal ? Vermilion : new Color(0.985f,0.965f,0.925f,0.98f), spriteCircle);
             img.raycastTarget = false;
             var sp = go.AddComponent<StationPress>(); sp.index = i; sp.boot = this;
-            var label = Txt(go.transform, s.name, s.portal ? 20 : 24, new Color(0.17f,0.15f,0.13f,0.95f), -94, -46, 220, 34, TextAnchor.MiddleCenter);
-            label.gameObject.AddComponent<Shadow>().effectColor = new Color(1,0.99f,0.96f,0.95f);
+            var label = Txt(go.transform, StationDisplayName(i, currentRegion), s.portal ? 20 : 24, new Color(0.17f,0.15f,0.13f,0.95f), -94, -46, 220, 34, TextAnchor.MiddleCenter);
+            TextShadow(label, new Color(1,0.99f,0.96f,0.95f));
             if (s.county) { label.resizeTextForBestFit = true; label.resizeTextMinSize = 14; label.resizeTextMaxSize = 24; label.verticalOverflow = VerticalWrapMode.Truncate; }
             stationLabels[i] = label;
             var leader = Img(Rect("NameLeader", go.transform, 0, 0, 1, 2), new Color(0.15f, 0.14f, 0.13f, 0.32f), spriteWhite);
@@ -436,7 +491,7 @@ public partial class DemoBootstrap : MonoBehaviour
             if (s.portal)
             {
                 var pl = Txt(go.transform, PortalSubtitle(s, currentRegion), 18, new Color(0.38f,0.35f,0.31f,0.9f), -90, -76, 200, 26, TextAnchor.MiddleCenter);
-                pl.gameObject.AddComponent<Shadow>().effectColor = new Color(1,0.99f,0.96f,0.95f);
+                TextShadow(pl, new Color(1,0.99f,0.96f,0.95f));
                 stationDestinations[i] = pl;
             }
             stationImgs[i] = img;
@@ -446,19 +501,21 @@ public partial class DemoBootstrap : MonoBehaviour
     }
 
     // 站名摆放：优先贴近圆点，挤不下就往外挪并用引导线连回去。
-    // 只要圆点露出来就给名字，实在没位置才收掉站名。
+    // 只要圆点露出来就保留名字；拥挤时选择冲突最少的位置。
     readonly List<Rect> labelRects = new List<Rect>();
 
     bool PlaceStationLabel(int i, List<Rect> occupied)
     {
         if (!stationLabels.TryGetValue(i, out var label) || !label) return false;
-        Vector2 center = Pos(i);
+        float scale = mapRect ? mapRect.localScale.x : 1f;
+        Vector2 pan = mapRect ? mapRect.anchoredPosition : Vector2.zero;
+        Vector2 center = pan + Pos(i) * scale;
         float subtitleWidth = stationDestinations.TryGetValue(i, out var subtitle) ? subtitle.preferredWidth + 12f : 0f;
         float width = Mathf.Clamp(Mathf.Max(label.preferredWidth + 12f, subtitleWidth), 52f, 180f);
         const float height = 30f;
         float destHeight = stationDestinations.ContainsKey(i) ? 21f : 0f;
         // 16 个候选位：前 8 个贴着圆点，后 8 个更远，用引导线连回
-        Vector2[] offsets = {
+        var offsets = new List<Vector2> {
             new Vector2(-width/2, -48-destHeight), new Vector2(-width/2, 22),
             new Vector2(27, -height/2), new Vector2(-width-27, -height/2),
             new Vector2(42, 24), new Vector2(-width-42, 24),
@@ -468,26 +525,36 @@ public partial class DemoBootstrap : MonoBehaviour
             new Vector2(96, 58), new Vector2(-width-96, 58),
             new Vector2(96, -92-destHeight), new Vector2(-width-96, -92-destHeight)
         };
+        // 密集区域扩大搜索范围，优先找不重叠的位置。
+        for (int radius = 130; radius <= 310; radius += 90)
+            for (int direction = 0; direction < 8; direction++)
+            {
+                float angle = direction * Mathf.PI / 4f;
+                offsets.Add(new Vector2(Mathf.Cos(angle) * radius - width / 2f,
+                    Mathf.Sin(angle) * radius - (height + destHeight) / 2f));
+            }
+        // 屏幕边缘的圆点也尽量把名称放进画面。
+        offsets.Add(new Vector2(Mathf.Clamp(center.x - width / 2f, 4f, W - width - 4f) - center.x,
+            Mathf.Clamp(center.y + 22f, 4f, H - height - destHeight - 4f) - center.y));
         float best = float.PositiveInfinity; int chosen = 0;
-        for (int k = 0; k < offsets.Length; k++)
+        for (int k = 0; k < offsets.Count; k++)
         {
             var rect = new Rect(center.x + offsets[k].x, center.y + offsets[k].y, width, height + destHeight);
             float penalty = k * 2f;
-            if (rect.xMin < 4 || rect.xMax > W-4 || rect.yMin < 180 || rect.yMax > H-190) penalty += 10000;
+            if (rect.xMin < 4 || rect.xMax > W-4 || rect.yMin < 4 || rect.yMax > H-4) penalty += 10000;
             for (int q = 0; q < occupied.Count; q++) if (rect.Overlaps(occupied[q])) penalty += 1000;
             for (int j = 0; j < stations.Count; j++)
             {
                 if (i == j || !StationInRegion(j, currentRegion) || !IsStationShown(j)) continue;
-                Vector2 point = Pos(j);
+                Vector2 point = pan + Pos(j) * scale;
                 if (rect.Overlaps(new Rect(point.x-20, point.y-20, 40, 40))) penalty += 1000;
             }
             if (penalty < best) { best = penalty; chosen = k; }
+            if (penalty == k * 2f) break; // 最靠近的无冲突位置已找到。
         }
-        bool placed = best < 1000f;                 // 有重叠就放弃这个位置，别叠着写
-        label.gameObject.SetActive(placed);
+        label.gameObject.SetActive(true);
         stationLeaders.TryGetValue(i, out var lead);
         if (lead) lead.gameObject.SetActive(false);
-        if (!placed) return false;
 
         Vector2 offset = offsets[chosen];
         var rt = label.rectTransform; rt.anchoredPosition = new Vector2(28 + offset.x, 28 + offset.y + destHeight);
@@ -518,12 +585,12 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         bool haveVisibility = stationVisible.Length == stations.Count;
         labelRects.Clear();
-        for (int pass = 0; pass < 4; pass++)
+        for (int pass = 0; pass < 5; pass++)
             for (int i = 0; i < stations.Count; i++)
             {
                 if (!StationInRegion(i, currentRegion)) continue;
                 if (haveVisibility && !stationVisible[i]) continue;   // 圆点没露出来就不用排站名
-                if (MarkerRank(i) != pass - 1) continue;              // 重要的先占近位
+                if (MarkerRank(i) != pass - 2) continue;              // 重要的先占近位
                 PlaceStationLabel(i, labelRects);
             }
     }
@@ -554,12 +621,34 @@ public partial class DemoBootstrap : MonoBehaviour
     readonly List<int> markerOrder = new List<int>();
     readonly List<Vector2> takenDots = new List<Vector2>();
 
-    // 站点分级：-1 拖线中 / 0 主干（门户·已开线）/ 1 普通 / 2 县区
+    // 拖线站点优先，其次是深港交界站，再是其他交界站和已开站点。
     int MarkerRank(int i)
     {
-        if (i == dragFrom || i == hoverStation) return -1;
+        if (dragging && (i == dragFrom || i == hoverStation)) return -2;
+        if (currentRegion == "广东" && stations[i].name == "深圳（西九龙）") return -1;
         if (IsOpen(i) || stations[i].portal) return 0;
         return stations[i].county ? 2 : 1;
+    }
+
+    bool MatchesStationFilter(int i)
+    {
+        var station = stations[i];
+        // 港澳使用站区而非县级行政区；保留所有交界站与本地站点。
+        if (currentRegion != "广东" || station.portal || stationFilter == 0) return true;
+        int code = station.administrativeCode;
+        bool prefecture = code > 0 && code % 100 == 0;
+        bool countyCity = code > 0 && code % 100 >= 81;
+        return prefecture || (stationFilter == 2 && countyCity);
+    }
+
+    void CycleStationFilter()
+    {
+        if (dragging) { Toast("请先完成当前线路"); return; }
+        stationFilter = (stationFilter + 1) % 3;
+        string[] names = { "全部城市", "地级市以上", "除市辖区" };
+        if (stationFilterText) stationFilterText.text = names[stationFilter];
+        UpdateRegionalMarkers(true);
+        Toast("站点筛选：" + names[stationFilter]);
     }
 
     void UpdateRegionalMarkers(bool force)
@@ -579,15 +668,19 @@ public partial class DemoBootstrap : MonoBehaviour
         foreach (var kv in stationImgs) kv.Value.transform.parent.localScale = Vector3.one / scale;
 
         // 屏幕空间碰撞过滤（1 代做法）：靠得太近的站点自动让位。
-        // 三级排序：拖线中(-1) > 主干(0：门户/已开线) > 普通(1) > 县区(2)
+        // 拖线站点 > 深港交界站 > 其他交界站及已开站点 > 普通 > 县区
         if (stationVisible.Length != stations.Count) stationVisible = new bool[stations.Count];
         for (int i = 0; i < stationVisible.Length; i++) stationVisible[i] = false;
 
         markerOrder.Clear();
-        for (int pass = 0; pass < 4; pass++)
+        for (int pass = 0; pass < 5; pass++)
             for (int i = 0; i < stations.Count; i++)
-                if (StationInRegion(i, currentRegion) && MarkerRank(i) == pass - 1) markerOrder.Add(i);
+                if (StationInRegion(i, currentRegion) && MatchesStationFilter(i) && MarkerRank(i) == pass - 2) markerOrder.Add(i);
 
+        // 已被筛选排除的站点不能留下旧图标或接受吸附。
+        for (int i = 0; i < stations.Count; i++)
+            if (StationInRegion(i, currentRegion) && !MatchesStationFilter(i))
+                stationImgs[i].transform.parent.gameObject.SetActive(false);
         int hiddenCount = 0;
         takenDots.Clear();
         for (int k = 0; k < markerOrder.Count; k++)
@@ -670,32 +763,27 @@ public partial class DemoBootstrap : MonoBehaviour
             var btn = b.AddComponent<Button>(); btn.targetGraphic = b.GetComponent<Image>();
             btn.onClick.AddListener(() => {
                 if (k == 1) OpenSceneryScreen();
-                else if (k == 0) Toast("每日任务：连通 2 座城市（0/2）");
-                else Toast("排行榜：本机最佳 · 香港 8%");
+                else if (k == 0) OpenDailyTasks();
+                else OpenLeaderboard();
             });
         }
+    }
+
+    void BuildStationFilterButton()
+    {
+        var button = Rect("StationFilter", root, 10, 734, 86, 100);
+        Rounded(button, new Color(1, 0.99f, 0.96f, 0.88f)); SoftShadow(button);
+        Txt(button.transform, "筛选", 22, Ink, 0, 60, 86, 30, TextAnchor.MiddleCenter);
+        stationFilterText = Txt(button.transform, "全部城市", 17, InkSoft, 2, 8, 82, 50, TextAnchor.MiddleCenter);
+        stationFilterText.resizeTextForBestFit = true; stationFilterText.resizeTextMinSize = 14; stationFilterText.resizeTextMaxSize = 17;
+        var control = button.AddComponent<Button>(); control.targetGraphic = button.GetComponent<Image>();
+        control.onClick.AddListener(CycleStationFilter);
     }
 
     void BuildRightRail()
     {
         var speed = Btn(root, "Speed", "1×", 30, 980, 1168, 88, 104, new Color(1,0.99f,0.96f,0.90f), CycleSpeed);
         TInk(speed, Ink); SoftShadow(speed.gameObject); speedTxt = speed.GetComponentInChildren<Text>();
-        string[] labels = { "收入×2", "加速", "领金币" };
-        for (int i = 0; i < 3; i++)
-        {
-            int k = i;
-            var b = Rect("R" + i, root, 980, 1050 - i*118, 88, 104);
-            Rounded(b, new Color(1,0.99f,0.96f,0.90f)); SoftShadow(b);
-            Txt(b.transform, labels[i], 20, Ink, 0, 58, 88, 32, TextAnchor.MiddleCenter);
-            Txt(b.transform, "▶", 20, Indigo, 0, 18, 88, 30, TextAnchor.MiddleCenter);
-            var btn = b.AddComponent<Button>(); btn.targetGraphic = b.GetComponent<Image>();
-            btn.onClick.AddListener(() => {
-                if (k == 0) { BeginUndo("领取收入奖励"); coins += income; EndUndo(); Toast("广告奖励：收入 ×2（+¥" + Mathf.RoundToInt(income) + "）"); }
-                else if (k == 1) Toast("广告位：施工加速（demo 暂无施工计时）");
-                else { BeginUndo("领取金币奖励"); coins += 120; EndUndo(); Toast("广告奖励：金币 +120"); }
-                RefreshHUD();
-            });
-        }
     }
 
     void BuildBottomNav()
@@ -726,7 +814,7 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         if (k == 0) OpenLinesScreen();
         else if (k == 1) OpenGarageScreen();
-        else if (k == 2) OpenCompanyScreen();
+        else if (k == 2) Toast("尚未开放");
         else OpenTechScreen(0);
     }
 
@@ -746,15 +834,23 @@ public partial class DemoBootstrap : MonoBehaviour
             HidePressRing();
         }
     }
+    float nextPortalEndHint;
+    void ShowPortalEndHint()
+    {
+        if (Time.unscaledTime < nextPortalEndHint) return;
+        nextPortalEndHint = Time.unscaledTime + 1.5f;
+        Toast("交界站只能作为本区域线路的起点或终点");
+    }
     bool TryConnect(int a, int b)
     {
         if (a == b || !StationInRegion(a, currentRegion) || !StationInRegion(b, currentRegion)) return false;
+        // 到达交界站后本区域线路必须结束；从交界站开始画线仍然允许。
+        if (stations[a].portal && draft.Count >= 2) { ShowPortalEndHint(); return false; }
+        if (draft.Count >= 3 && b == draft[0] && stations[b].portal) { ShowPortalEndHint(); return false; }
         if (stations[a].portal && stations[b].portal) { Toast("请通过区域内普通站连接交界站"); return false; }
         bool closeLoop = draft.Count >= 3 && b == draft[0] && !IsLoop(draft);
         if (draft.Contains(b) && !closeLoop) { Toast("同一条线不能重复经过同一站"); return false; }
-        float d = Vector2.Distance(Pos(a), Pos(b));
-        int cost = Mathf.RoundToInt(30 + d * 0.75f);
-        draftCost += cost; draft.Add(b);
+        draft.Add(b); draftCost = DraftCostOf(draft);
         Haptic.Vibrate(12); PlayTone(true);
         return true;
     }
@@ -765,7 +861,7 @@ public partial class DemoBootstrap : MonoBehaviour
         int cost = draftCost;
         var snapshot = new List<int>(draft);
         int from = snapshot[0];
-        ShowConnectPopup(from, snapshot, cost, 0);
+        ShowConnectPopup(from, snapshot, cost, -1);
     }
 
     void ClearDraftState()
@@ -774,15 +870,33 @@ public partial class DemoBootstrap : MonoBehaviour
         ClearDraftSegs(); ResetBuildVisuals();
     }
 
+    int RegionStationCount(string region)
+    {
+        int count = 0;
+        for (int i = 0; i < stations.Count; i++) if (StationInRegion(i, region)) count++;
+        return count;
+    }
+    int RegionLineLimit(string region) { return RegionStationCount(region) / 2; }
+    int LineLimit() { return RegionLineLimit(currentRegion); }
+    bool PathTouchesRegion(List<int> path, string region)
+    {
+        for (int i = 0; i + 1 < path.Count; i++) if (SegmentRegion(path[i], path[i + 1]) == region) return true;
+        return false;
+    }
+    int RegionLineCount(string region)
+    {
+        int count = 0; foreach (var line in lines) if (PathTouchesRegion(line.st, region)) count++;
+        return count;
+    }
     void CommitNewLine(List<int> snapshot, int cost)
     {
-        // TODO(待办): 科技树补「线路扩建」节点提高线路上限（IA 设计见 docs/design/ui-ia-mindmap.md:260）
-        if (lines.Count >= 6) { Toast("线路已达上限（6 条）：先拆掉一条旧线，或从已有线路的车站起手延长"); return; }
+        if (RegionLineCount(currentRegion) >= LineLimit()) { Toast(currentRegion + "线路已达上限（" + LineLimit() + " 条）"); return; }
         BeginUndo("开通线路");
         ClosePanel(true);
         var line = new Line { id = nextLineId, name = nextLineId + " 号线", color = LineColors[(nextLineId-1) % LineColors.Length] };
         line.st = new List<int>(snapshot);
         lines.Add(line); coins -= cost;
+        BuildStationsOnPath(snapshot);
         ClearDraftState();
         CreateLineVisuals(); RefreshAllLines(); RefreshStationDots(); RecalcIncome(); RefreshHUD();
         nextLineId++;
@@ -794,10 +908,13 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void CommitExtend(Line line, List<int> newPath, List<int> draftStations, int cost)
     {
+        if (!PathTouchesRegion(line.st, currentRegion) && PathTouchesRegion(newPath, currentRegion) && RegionLineCount(currentRegion) >= LineLimit()) {
+            Toast(currentRegion + "线路已达上限，暂不能跨区延长"); return;
+        }
         BeginUndo("延长线路");
         ClosePanel(true);
         line.st = new List<int>(newPath);
-        coins -= cost;
+        coins -= cost; BuildStationsOnPath(draftStations);
         ClearDraftState();
         CreateLineVisuals(); RefreshAllLines(); RefreshStationDots(); RecalcIncome(); RefreshHUD();
         CheckSceneryOnLine(draftStations);
@@ -853,12 +970,34 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     float EstimateNetworkDelta(Line line, List<int> path, bool isNew)
     {
-        var candidate = isNew ? new Line { st = path, trains = 1 } : line;
-        var forecast = isNew ? CalculateTraffic(addition: candidate) : CalculateTraffic(candidate, path);
-        float next = 0, old = 0;
-        foreach (var pair in forecast.lineServed) next += TrafficRevenue(pair.Key, forecast);
-        if (traffic != null) foreach (var pair in traffic.lineServed) old += TrafficRevenue(pair.Key, traffic);
-        return next - old;
+        var candidate = isNew ? new Line { id = nextLineId, st = path, trains = 1 } : line;
+        var oldPath = candidate.st;
+        float oldClock = dayClock;
+        var totals = new Dictionary<Line, LineForecastData>();
+        foreach (var existing in lines) totals[existing] = new LineForecastData();
+        if (isNew) totals[candidate] = new LineForecastData();
+        float[] hours = {8f,13f,18f,1f}, weights = {4f/24f,6f/24f,4f/24f,10f/24f};
+        try
+        {
+            candidate.st = path;
+            for (int slot=0;slot<4;slot++)
+            {
+                dayClock = hours[slot] * GameDaySeconds / 24f;
+                var projected = CalculateTraffic(addition: isNew ? candidate : null);
+                foreach (var pair in totals)
+                {
+                    var item=pair.Key; var f=pair.Value;
+                    f.gross += TrafficRevenue(item,projected)*weights[slot];
+                    f.vehicle += VehicleMaintenance(item)*weights[slot];
+                    f.track += TrackMaintenance(item)*weights[slot];
+                }
+            }
+        }
+        finally { dayClock = oldClock; candidate.st = oldPath; }
+        float next=0f, old=0f;
+        foreach (var f in totals.Values) { float pre=f.gross-f.vehicle-f.track; next += pre - Mathf.Max(0f,pre)*0.1f; }
+        foreach (var existing in lines) old += ForecastFor(existing).Profit;
+        return next-old;
     }
 
     string UniquePathText(List<int> st)
@@ -867,7 +1006,7 @@ public partial class DemoBootstrap : MonoBehaviour
         foreach (var i in st)
         {
             if (!seen.Add(i)) continue;
-            s += (s.Length == 0 ? "" : " · ") + stations[i].name;
+            s += (s.Length == 0 ? "" : " · ") + StationDisplayName(i, currentRegion);
         }
         return s;
     }
@@ -883,14 +1022,45 @@ public partial class DemoBootstrap : MonoBehaviour
             int opposite = from == l.st[0] ? l.st[l.st.Count - 1] : from == l.st[l.st.Count - 1] ? l.st[0] : -1;
             for (int k = 1; k < snapshot.Count; k++)
                 if (l.st.Contains(snapshot[k]) && !(k == snapshot.Count - 1 && snapshot[k] == opposite)) { overlap = true; break; }
-            if (!overlap) res.Add(l);
+            if (!overlap)
+            {
+                var proposed = BuildExtendPath(l, from, snapshot);
+                if (proposed != null && PortalEndsAreValid(proposed)) res.Add(l);
+            }
         }
         return res;
+    }
+
+    // 同一交界站可连接两个区域的线路段，但不能连接同一区域的两段。
+    bool PortalEndsAreValid(List<int> path)
+    {
+        if (IsLoop(path) && stations[path[0]].portal) return false;
+        for (int i = 1; i < path.Count - 1; i++)
+        {
+            if (!stations[path[i]].portal) continue;
+            string before = SegmentRegion(path[i - 1], path[i]);
+            string after = SegmentRegion(path[i], path[i + 1]);
+            if (before == null || after == null || before == after) return false;
+        }
+        return true;
     }
 
     bool IsLoop(List<int> path) { return path.Count >= 4 && path[0] == path[path.Count - 1]; }
 
     class ConnectOpt { public bool isNew; public Line line; public List<int> path; }
+
+    int DefaultConnectOption(int from, List<ConnectOpt> opts)
+    {
+        // 交汇站可能同时是多条线路的端点和中间站，优先匹配端点。
+        for (int i = 0; i < opts.Count; i++)
+        {
+            var line = opts[i].line;
+            if (!opts[i].isNew && line != null && line.st.Count > 0 &&
+                (line.st[0] == from || line.st[line.st.Count - 1] == from)) return i;
+        }
+        for (int i = 0; i < opts.Count; i++) if (opts[i].isNew) return i;
+        return 0; // 已达线路上限时，只提供仍可用的延长选项。
+    }
 
     void ShowConnectPopup(int from, List<int> snapshot, int cost, int selected)
     {
@@ -904,35 +1074,45 @@ public partial class DemoBootstrap : MonoBehaviour
         foreach (var l in ValidExtendCandidates(from, snapshot))
         {
             var path = BuildExtendPath(l, from, snapshot);
-            if (path != null) opts.Add(new ConnectOpt { isNew = false, line = l, path = path });
+            if (path != null && (PathTouchesRegion(l.st, currentRegion) || RegionLineCount(currentRegion) < LineLimit()))
+                opts.Add(new ConnectOpt { isNew = false, line = l, path = path });
         }
-        if (lines.Count < 6) opts.Add(new ConnectOpt { isNew = true });
-        if (opts.Count == 0) { Toast("线路已达上限（6 条）：先拆掉一条旧线，或从已有线路的车站起手延长"); CancelDraft(); return; }
+        if (RegionLineCount(currentRegion) < LineLimit()) opts.Add(new ConnectOpt { isNew = true });
+        if (opts.Count == 0) { Toast(currentRegion + "线路已达上限（" + LineLimit() + " 条）"); CancelDraft(); return; }
+        if (selected < 0) selected = DefaultConnectOption(from, opts);
         selected = Mathf.Clamp(selected, 0, opts.Count - 1);
         var sel = opts[selected];
         string title = sel.isNew ? ("开通 " + nextLineId + " 号线") : ("延长 " + sel.line.name);
-        float h = 360f + opts.Count * 112f;
+        float h = 360f + Mathf.Min(opts.Count, 5) * 112f;
         var p = OpenBubble(title, h, 920, Pos(snapshot[snapshot.Count - 1]));
-        Txt(p.transform, "从 " + stations[from].name + " 起 · 新增 " + (UniqueCount(snapshot) - 1) + " 站 · 造价 ¥" + cost, 22, InkSoft, 30, h - 118, 820, 32, TextAnchor.MiddleLeft);
+        Txt(p.transform, "从 " + StationDisplayName(from, currentRegion) + " 起 · 新增 " + (UniqueCount(snapshot) - 1) + " 站 · 造价 ¥" + cost, 22, InkSoft, 30, h - 118, 820, 32, TextAnchor.MiddleLeft);
+        float viewHeight = Mathf.Min(opts.Count, 5) * 112f;
+        var view = Rect("OptionsViewport", p.transform, 24, 140, 872, viewHeight);
+        Img(view, new Color(1,1,1,0.01f)); var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = false;
+        var scroll = view.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 100f;
+        scroll.viewport = view.GetComponent<RectTransform>();
+        var content = Rect("Options", view.transform, 0, 0, 872, opts.Count * 112f);
+        var contentRt = content.GetComponent<RectTransform>(); contentRt.anchorMin = contentRt.anchorMax = new Vector2(0,1);
+        contentRt.pivot = new Vector2(0,1); contentRt.anchoredPosition = Vector2.zero; scroll.content = contentRt;
         for (int i = 0; i < opts.Count; i++)
         {
             var opt = opts[i]; int k = i;
-            var row = Rect("Opt"+i, p.transform, 24, h - 212 - i*112, 872, 100);
+            var row = Rect("Opt"+i, content.transform, 0, opts.Count * 112f - 106 - i*112, 872, 100);
             Rounded(row, i == selected ? new Color(0.985f,0.948f,0.862f,1f) : new Color(1,1,1,0.94f));
             SoftShadow(row);
             Color accent = opt.isNew ? Vermilion : opt.line.color;
             Img(Rect("Bar", row.transform, 0, 22, 7, 56), accent, spriteRound);
             string t1 = opt.isNew ? "开通新线路" : ("延长 " + opt.line.name);
-            int gain = Mathf.RoundToInt(EstimateNetworkDelta(opt.line, opt.isNew ? snapshot : opt.path, opt.isNew));
-            string t2 = opt.isNew
-                ? (nextLineId + " 号线 · " + UniqueCount(snapshot) + " 站 · 预计 " + (gain >= 0 ? "+" : "") + gain + "/天")
-                : (UniquePathText(opt.line.st) + "  +" + (snapshot.Count - 1) + " 站 · 预计 " + (gain >= 0 ? "+" : "") + gain + "/天");
+            string route = opt.isNew ? (nextLineId + " 号线 · " + UniqueCount(snapshot) + " 站") : (UniquePathText(opt.line.st) + "  +" + (snapshot.Count - 1) + " 站");
+            int gain = i == selected ? Mathf.RoundToInt(EstimateNetworkDelta(opt.line, opt.isNew ? snapshot : opt.path, opt.isNew)) : 0;
+            string t2 = route + (i == selected ? " · 预计 " + (gain >= 0 ? "+" : "") + gain + "/天" : " · 选择后查看预计收益");
             Txt(row.transform, t1, 30, Ink, 28, 56, 520, 40, TextAnchor.MiddleLeft);
             Txt(row.transform, t2, 20, InkSoft, 28, 20, 740, 30, TextAnchor.MiddleLeft);
             if (i == selected) Txt(row.transform, "✓", 34, Gold, 800, 30, 48, 44, TextAnchor.MiddleCenter);
             var btn = row.AddComponent<Button>(); btn.targetGraphic = row.GetComponent<Image>();
             btn.onClick.AddListener(() => ShowConnectPopup(from, snapshot, cost, k));
         }
+        if (opts.Count > 5) scroll.verticalNormalizedPosition = 1f - Mathf.Clamp01((float)selected / (opts.Count - 5));
         var ok = Btn(p.transform, "Ok", "确 认", 28, 24, 28, 422, 92, Vermilion, () => {
             if (sel.isNew) CommitNewLine(snapshot, cost);
             else CommitExtend(sel.line, sel.path, snapshot, cost);
@@ -1034,6 +1214,7 @@ public partial class DemoBootstrap : MonoBehaviour
     void Update()
     {
         float dt = Time.deltaTime;
+        TickAutosave();
         UpdateRegionalMarkers(false);
         TickPress(dt);
         TickClock(dt);
@@ -1041,7 +1222,7 @@ public partial class DemoBootstrap : MonoBehaviour
         TickStory();
         TickResearch(dt);
         TickFloaters(dt);
-        UpdateTrains(dt);
+        UpdateTrains(dt * timeSpeed / 6f);
         RefreshHUD();
         if (pulseTimer > 0)
         {
@@ -1066,7 +1247,8 @@ public partial class DemoBootstrap : MonoBehaviour
             int near = NearestStationAny(local, snapR);
             bool backtracked = HandleDraftRevisit(near);
             int hov = near >= 0 && !draft.Contains(near) && !IsLoop(draft) ? near : -1;
-            Vector2 end = backtracked ? Pos(dragFrom) : (hov >= 0 ? Pos(hov) : local);
+            bool stoppedAtPortal = stations[dragFrom].portal && draft.Count >= 2;
+            Vector2 end = backtracked || stoppedAtPortal ? Pos(dragFrom) : (hov >= 0 ? Pos(hov) : local);
             var p1 = Pos(dragFrom); var d = end - p1;
             previewImg.rectTransform.anchoredPosition = p1;
             previewImg.rectTransform.sizeDelta = new Vector2(Mathf.Max(1, d.magnitude), 16f * overlayZoom);
@@ -1122,9 +1304,27 @@ public partial class DemoBootstrap : MonoBehaviour
         }
         return best;
     }
+    int StationOpeningCost(int index)
+    {
+        var station = stations[index];
+        if (station.built) return 0;
+        bool cityHub = station.administrativeCode > 0 && station.administrativeCode % 100 == 0;
+        int hubCost = station.portal ? 70 : cityHub ? 50 : 0;
+        return Mathf.RoundToInt(40f + StationBaselineDemand(index) * 0.7f + hubCost);
+    }
+    int StationEstimatedDemand(int index)
+    {
+        return Mathf.RoundToInt(StationBaselineDemand(index) * PassengerScale);
+    }
+    void BuildStationsOnPath(List<int> path)
+    {
+        foreach (int index in path) stations[index].built = true;
+    }
     int DraftCostOf(List<int> path)
     {
         int c = 0;
+        var counted = new HashSet<int>();
+        foreach (int index in path) if (counted.Add(index)) c += StationOpeningCost(index);
         for (int i = 0; i < path.Count-1; i++)
             c += Mathf.RoundToInt(30 + Vector2.Distance(Pos(path[i]), Pos(path[i+1])) * 0.75f);
         return c;
@@ -1176,7 +1376,9 @@ public partial class DemoBootstrap : MonoBehaviour
         {
             if (!lineVisuals.ContainsKey(line.id)) continue;
             var lv = lineVisuals[line.id];
+            if (!PathTouchesRegion(line.st, currentRegion)) { if (lv.train && lv.train.activeSelf) lv.train.SetActive(false); continue; }
             if (line.st.Count < 2) continue;
+            if (RunningTrains(line) <= 0) { if (lv.train) lv.train.SetActive(false); continue; }
             float total = 0;
             for (int i = 0; i < line.st.Count - 1; i++)
             {
@@ -1184,7 +1386,7 @@ public partial class DemoBootstrap : MonoBehaviour
                 if (r != null) total += Vector2.Distance(PosInRegion(line.st[i], r), PosInRegion(line.st[i + 1], r));
             }
             if (total < 1f) continue;
-            lv.t += dt * (58f + 8f * line.up[0]) / total;
+            lv.t += dt * 58f * FleetTrait(line, 2) / total;
             bool loop = IsLoop(line.st);
             lv.t = Mathf.Repeat(lv.t, loop ? 1f : 2f);
             float phase = loop ? lv.t : (lv.t <= 1f ? lv.t : 2f - lv.t);
@@ -1209,25 +1411,24 @@ public partial class DemoBootstrap : MonoBehaviour
                 int trainB = segmentIndex >= 0 ? line.st[segmentIndex + 1] : -1;
                 bool segShown = (trainA >= 0 && trainA < stationVisible.Length && stationVisible[trainA])
                              || (trainB >= 0 && trainB < stationVisible.Length && stationVisible[trainB]);
-                lv.train.SetActive(segmentRegion == currentRegion && segShown);
+                lv.train.SetActive(segmentRegion == currentRegion && segShown && RunningTrains(line) > 0);
                 var trt = lv.train.GetComponent<RectTransform>(); trt.anchoredPosition = pos;
                 float dir = loop || lv.t <= 1f ? ang : ang + 180f;
                 trt.localRotation = Quaternion.Euler(0, 0, dir);
-
             }
-            lv.credit += LineDaily(line) / 60f * dt * timeSpeed;
+            // 飘字只反馈已连续入账的票款，不再重复改变余额。
+            if (traffic != null) lv.credit += TrafficRevenue(line, traffic) * dt / 60f;
             int near = -1; float best = 34f;
-            if (segmentIndex >= 0) for (int i = segmentIndex; i <= segmentIndex + 1; i++)
+            if (segmentIndex >= 0) for (int i=segmentIndex; i<=segmentIndex+1; i++)
             {
                 if (stations[line.st[i]].closed) continue;
-                float dd = Vector2.Distance(pos, PosInRegion(line.st[i], segmentRegion));
-                if (dd < best) { best = dd; near = i; }
+                float distance = Vector2.Distance(pos, PosInRegion(line.st[i], segmentRegion));
+                if (distance < best) { best = distance; near = i; }
             }
             if (near >= 0 && near != lv.lastSt)
             {
-                lv.lastSt = near; int amt = Mathf.RoundToInt(lv.credit);
-                if (amt > 0) { lv.credit -= amt; coins += amt; line.todayRevenue += amt;
-                    if (segmentRegion == currentRegion) SpawnFloater(amt, Pos(line.st[near]) + new Vector2(0, 34)); }
+                lv.lastSt = near; int amount = Mathf.FloorToInt(lv.credit);
+                if (amount > 0) { lv.credit -= amount; if (segmentRegion == currentRegion) SpawnFloater(amount, Pos(line.st[near]) + new Vector2(0, 34)); }
             }
         }
     }
@@ -1250,9 +1451,10 @@ public partial class DemoBootstrap : MonoBehaviour
     float TechMult() { return Mathf.Max(0.1f, 1f + ResearchBonus()); }
     void RecalcIncome()
     {
-        traffic = CalculateTraffic();
+        RebuildForecasts();
+        traffic = trafficSlots[DispatchSlot()];
         float total = 0;
-        foreach (var line in lines) total += TrafficRevenue(line, traffic);
+        foreach (var line in lines) total += ForecastFor(line).Profit;
         foreach (var station in stations) if (!station.closed) total += station.riderBonus * TechMult();
         income = total;
         UpdateRegionUnlocks();
@@ -1262,13 +1464,18 @@ public partial class DemoBootstrap : MonoBehaviour
     void RPTick() { rp += 1f; RefreshHUD(); }
 
     // ---------- HUD ----------
+    int lastHudCoins = int.MinValue, lastHudIncome = int.MinValue, lastHudDiamonds = int.MinValue, lastHudProgress = int.MinValue;
     void RefreshHUD()
     {
-        if (coinTxt) coinTxt.text = Mathf.FloorToInt(coins).ToString();
-        if (incomeTxt) incomeTxt.text = "每日收入 " + Mathf.RoundToInt(income);
-        if (diamondTxt) diamondTxt.text = Mathf.FloorToInt(diamonds).ToString();
-        if (progTxt) progTxt.text = Mathf.RoundToInt(progress*100) + "%";
-        if (progFill) progFill.sizeDelta = new Vector2(180f*progress, 8f);
+        int money = Mathf.FloorToInt(coins), profit = Mathf.RoundToInt(income), gems = Mathf.FloorToInt(diamonds), pct = Mathf.RoundToInt(progress * 100);
+        if (coinTxt && money != lastHudCoins) { coinTxt.text = money.ToString(); lastHudCoins = money; }
+        if (incomeTxt && profit != lastHudIncome) { incomeTxt.text = "预计日利润 " + profit; lastHudIncome = profit; }
+        if (diamondTxt && gems != lastHudDiamonds) { diamondTxt.text = gems.ToString(); lastHudDiamonds = gems; }
+        if (pct != lastHudProgress) {
+            if (progTxt) progTxt.text = pct + "%";
+            if (progFill) progFill.sizeDelta = new Vector2(180f * progress, 8f);
+            lastHudProgress = pct;
+        }
     }
     // ---------- panels ----------
     void TInk(Button b, Color c) { var t = b.GetComponentInChildren<Text>(); if (t) t.color = c; }
@@ -1375,7 +1582,9 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         if (toastGo) Destroy(toastGo);
         toastGo = Rect("Toast", root, 230, zoomNotice && zoomNotice.activeSelf ? 1508 : 1572, 620, 68);
+        var toastCanvas = toastGo.AddComponent<Canvas>(); toastCanvas.overrideSorting = true; toastCanvas.sortingOrder = 200;
         Rounded(toastGo, new Color(0.17f,0.15f,0.13f,0.88f)); SoftShadow(toastGo);
+        toastGo.GetComponent<Image>().raycastTarget = false;
         toastTxt = Txt(toastGo.transform, msg, 24, new Color(1,0.97f,0.9f), 16, 8, 588, 52, TextAnchor.MiddleCenter);
         toastTimer = 2.2f;
     }
@@ -1406,7 +1615,7 @@ public partial class DemoBootstrap : MonoBehaviour
     Text Txt(Transform p, string s, int size, Color c, float x, float y, float w, float h, TextAnchor a)
     {
         var go = Rect("T", p, x, y, w, h);
-        var t = go.AddComponent<Text>(); t.font = font; t.fontSize = size; t.color = c; t.text = s;
+        var t = go.AddComponent<Text>(); t.font = font; t.fontSize = size; t.color = c; t.text = DisplayPlaceAliases(s);
         t.alignment = a; t.horizontalOverflow = HorizontalWrapMode.Wrap; t.verticalOverflow = VerticalWrapMode.Overflow;
         t.raycastTarget = false;
         return t;
@@ -1424,16 +1633,21 @@ public partial class DemoBootstrap : MonoBehaviour
         var sh = go.AddComponent<Shadow>();
         sh.effectColor = new Color(0.16f,0.13f,0.10f,0.16f);
         sh.effectDistance = new Vector2(0, -5);
+        sh.enabled = qualityTier > 0;
+    }
+    void TextShadow(Text text, Color color)
+    {
+        var shadow = text.gameObject.AddComponent<Shadow>(); shadow.effectColor = color; shadow.enabled = qualityTier > 0;
     }
     void Label(RectTransform p, string s, int size, float x, float y, Color c, float w)
     {
         var t = Txt(p, s, size, c, MAP_X + x*MAP_W - w/2, MAP_Y + y*MAP_H, w, 40, TextAnchor.MiddleCenter);
-        t.gameObject.AddComponent<Shadow>().effectColor = new Color(1,1,1,0.7f);
+        TextShadow(t, new Color(1,1,1,0.7f));
     }
     void PortalLabel(RectTransform p, float x, float y, string s)
     {
         var t = Txt(p, s, 22, Vermilion, MAP_X + x*MAP_W - 110, MAP_Y + y*MAP_H, 220, 32, TextAnchor.MiddleCenter);
-        t.gameObject.AddComponent<Shadow>().effectColor = new Color(1,1,1,0.85f);
+        TextShadow(t, new Color(1,1,1,0.85f));
     }
 
     // ---------- sprites / texture ----------
@@ -1504,15 +1718,7 @@ public partial class DemoBootstrap : MonoBehaviour
         return t;
     }
 
-    bool PtInPoly(float x, float y, Vector2[] poly)
-    {
-        bool inside = false;
-        for (int i=0,j=poly.Length-1;i<poly.Length;j=i++)
-        {
-            if (((poly[i].y>y)!=(poly[j].y>y)) && (x < (poly[j].x-poly[i].x)*(y-poly[i].y)/(poly[j].y-poly[i].y)+poly[i].x)) inside = !inside;
-        }
-        return inside;
-    }
+
 }
 
 public class StationPress : MonoBehaviour, IPointerDownHandler, IPointerUpHandler

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>铁路大亨 2 · 香港</title>
+<title>铁路大亨 2 · 香江</title>
 <style>
   html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#F6EFE3;}
   #unity-canvas{position:fixed;left:0;top:0;width:100vw;height:100vh;display:block;background:#F6EFE3;outline:none;}
@@ -17,18 +17,14 @@
 </head>
 <body>
 <canvas id="unity-canvas" tabindex="-1"></canvas>
-<div id="loading"><h1>铁路大亨 2 · 香港</h1><div id="bar"><div id="fill"></div></div><div id="tip">正在铺设轨道…</div></div>
+<div id="loading"><h1>铁路大亨 2 · 香江</h1><div id="bar"><div id="fill"></div></div><div id="tip">正在铺设轨道…</div></div>
 <script src="Build/WebGL.loader.js"></script>
 <script>
   var canvas = document.querySelector("#unity-canvas");
-  function resize() {
-    var dpr = window.devicePixelRatio || 1;
-    var w = Math.floor(window.innerWidth), h = Math.floor(window.innerHeight);
-    canvas.style.width = w + "px"; canvas.style.height = h + "px";
-    canvas.width = Math.floor(w * dpr); canvas.height = Math.floor(h * dpr);
-  }
-  resize();
-  window.addEventListener("resize", resize);
+  // 与竖屏设计分辨率相近的像素预算，避免高 DPI 手机以数倍像素绘制整屏。
+  var pixelBudget = 1080 * 1920;
+  var viewportPixels = Math.max(1, window.innerWidth * window.innerHeight);
+  var renderDpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(pixelBudget / viewportPixels));
   createUnityInstance(canvas, {
     dataUrl: "Build/WebGL.data",
     frameworkUrl: "Build/WebGL.framework.js",
@@ -36,7 +32,7 @@
     companyName: "Railway2",
     productName: "Railway2 HK Demo",
     productVersion: "0.1",
-    devicePixelRatio: window.devicePixelRatio || 1
+    devicePixelRatio: renderDpr
   }, function (progress) {
     document.querySelector("#fill").style.width = Math.round(progress * 100) + "%";
   }).then(function (instance) {

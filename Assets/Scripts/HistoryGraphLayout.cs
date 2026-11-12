@@ -11,6 +11,10 @@ public class HistoryGraphLayout : MonoBehaviour
     [NonSerialized] public Dictionary<string, Vector2> positions;
     public HistoryGraphEdges edges;
     readonly Dictionary<string, float> angleTargets = new Dictionary<string, float>();
+    readonly Dictionary<Vector2Int, List<int>> nearby = new Dictionary<Vector2Int, List<int>>();
+    float nextAngleUpdate;
+    public float updatesPerSecond = 60f;
+    float accumulatedTime;
     public void Add(string key, RectTransform rect, int era, string[] parents)
     {
         var e = new Entry { key = key, rect = rect, era = era, parents = parents };
@@ -38,8 +42,23 @@ public class HistoryGraphLayout : MonoBehaviour
     void Update()
     {
         if (positions == null || entries.Count == 0) return;
-        float dt = Mathf.Min(Time.unscaledDeltaTime, 0.033f);
-        UpdateAngleTargets();
+        float dt;
+        if (updatesPerSecond >= 60f) {
+            // 每帧推进，避免 60 Hz 浮点时间略小于 1/60 时意外隔帧更新。
+            dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+        } else {
+            accumulatedTime += Time.unscaledDeltaTime;
+            if (accumulatedTime < 1f / Mathf.Max(1f, updatesPerSecond)) return;
+            dt = Mathf.Min(accumulatedTime, 0.1f); accumulatedTime = 0f;
+        }
+        if (Time.unscaledTime >= nextAngleUpdate) { UpdateAngleTargets(); nextAngleUpdate = Time.unscaledTime + 0.25f; }
+        foreach (var cell in nearby.Values) cell.Clear();
+        for (int i = 0; i < entries.Count; i++) {
+            Vector2 p = positions[entries[i].key];
+            var cell = new Vector2Int(Mathf.FloorToInt(p.x / 300f), Mathf.FloorToInt(p.y / 300f));
+            if (!nearby.TryGetValue(cell, out var bucket)) nearby[cell] = bucket = new List<int>();
+            bucket.Add(i);
+        }
         for (int i = 0; i < entries.Count; i++)
         {
             var e = entries[i]; Vector2 p = positions[e.key];
@@ -56,14 +75,16 @@ public class HistoryGraphLayout : MonoBehaviour
                 Vector2 tangent = new Vector2(-outward.y, outward.x);
                 force += tangent * Mathf.Clamp(error * targetRadius * 0.7f, -220f, 220f);
             }
-            for (int j = 0; j < entries.Count; j++)
-            {
-                if (i == j) continue;
-                Vector2 delta = p - positions[entries[j].key]; float distance = delta.magnitude;
-                if (distance < 300f)
-                {
-                    Vector2 direction = distance > 0.1f ? delta / distance : new Vector2(Mathf.Cos(i * 2.4f), Mathf.Sin(i * 2.4f));
-                    force += direction * (300f - distance) * 3f;
+            var cell = new Vector2Int(Mathf.FloorToInt(p.x / 300f), Mathf.FloorToInt(p.y / 300f));
+            for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++) {
+                if (!nearby.TryGetValue(new Vector2Int(cell.x + dx, cell.y + dy), out var bucket)) continue;
+                foreach (int j in bucket) {
+                    if (i == j) continue;
+                    Vector2 delta = p - positions[entries[j].key]; float distance = delta.magnitude;
+                    if (distance < 300f) {
+                        Vector2 direction = distance > 0.1f ? delta / distance : new Vector2(Mathf.Cos(i * 2.4f), Mathf.Sin(i * 2.4f));
+                        force += direction * (300f - distance) * 3f;
+                    }
                 }
             }
             foreach (var parent in e.parents)
