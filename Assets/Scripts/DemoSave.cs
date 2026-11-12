@@ -38,7 +38,9 @@ public partial class DemoBootstrap
             foreach(var record in data.stations) { var station=stations[byKey[record.key]]; station.level=record.level; station.trafficEvent=record.trafficEvent; station.built=record.built; station.closed=record.closed; station.riderBonus=record.riderBonus; station.facLevel=record.facLevel; }
             var sceneryByKey = new Dictionary<string,Scenery>(); foreach(var item in sceneries) sceneryByKey[ScenerySaveKey(item)]=item;
             foreach(var record in data.scenery) if(record != null && sceneryByKey.TryGetValue(record.key,out var item)) { item.found=record.found; item.unlocked=record.unlocked; }
-            lines.Clear(); lines.AddRange(restoredLines); techDone.Clear(); techDone.AddRange(data.tech);
+            lines.Clear(); lines.AddRange(restoredLines);
+            foreach (var l in restoredLines) foreach (int stIdx in l.st) if (stIdx >= 0 && stIdx < stations.Count) stations[stIdx].built = true;
+            techDone.Clear(); techDone.AddRange(data.tech);
             researchVehicles.Clear(); foreach(var item in data.vehicles) researchVehicles.Add(new ResearchVehicle { node=item.node, lineId=item.lineId });
             storySeen.Clear(); foreach(var item in data.story) storySeen.Add(item); ownedLineSkins.Clear(); foreach(int item in data.skins) ownedLineSkins.Add(item);
             coins=data.coins; diamonds=data.diamonds; rp=data.rp; day=Mathf.Max(1,data.day); dayClock=data.clock; researchClock=data.researchClock; timeSpeed=data.speed;

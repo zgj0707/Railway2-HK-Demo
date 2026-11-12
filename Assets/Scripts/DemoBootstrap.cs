@@ -318,12 +318,16 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         var bar = Rect("Top", root, 0, 1610, W, 280); Img(bar, new Color(1,1,1,0));
 
-        var c1 = Rect("Coin", bar.transform, 24, 46, 318, 92); Rounded(c1, new Color(1,0.99f,0.96f,0.95f)); SoftShadow(c1);
-        var coinIcon = Rect("Icon", c1.transform, 12, 18, 56, 56); Img(coinIcon, Gold, spriteCircle);
+        var c1 = Rect("Coin", bar.transform, 24, 46, 318, 92); Rounded(c1, new Color(0.99f,0.985f,0.955f,0.96f)); SoftShadow(c1);
+        var coinRing = Rect("CoinRing", c1.transform, 12, 18, 56, 56); Img(coinRing, new Color(0.25f,0.21f,0.17f,0.88f), spriteStationRing).raycastTarget = false;
+        var coinIcon = Rect("Icon", coinRing.transform, 4, 4, 48, 48); Img(coinIcon, Gold, spriteCircle);
         coinTxt = Txt(c1.transform, "2378", 46, Ink, 80, 38, 220, 54, TextAnchor.MiddleLeft);
         incomeTxt = Txt(c1.transform, "每日收入 240", 24, InkSoft, 82, 8, 226, 30, TextAnchor.MiddleLeft);
 
-        var cap = Rect("Cap", bar.transform, 354, 26, 400, 162); Rounded(cap, new Color(1,0.985f,0.95f,0.62f)); SoftShadow(cap);
+        var cap = Rect("Cap", bar.transform, 354, 26, 400, 162); Rounded(cap, new Color(0.99f,0.985f,0.955f,0.96f)); SoftShadow(cap);
+        var tape = Rect("CapTape", cap.transform, 130, 150, 140, 24);
+        var tapeIm = Img(tape, new Color(0.88f, 0.78f, 0.62f, 0.75f), spriteRound); tapeIm.type = Image.Type.Sliced; tapeIm.raycastTarget = false;
+        tape.transform.localRotation = Quaternion.Euler(0, 0, -1.5f);
         var title = Txt(cap.transform, "香 港", 48, Ink, 0, 106, 400, 52, TextAnchor.MiddleCenter);
         regionTitle = title;
         var regionEntry = cap.AddComponent<Button>(); regionEntry.targetGraphic = cap.GetComponent<Image>();
@@ -753,17 +757,23 @@ public partial class DemoBootstrap : MonoBehaviour
     void BuildLeftRail()
     {
         string[] names = { "任务", "图鉴", "排行" };
+        string[] icons = { "手帐", "名胜", "番位" };
+        Color[] accents = { new Color(0.85f,0.48f,0.28f,0.95f), new Color(0.38f,0.62f,0.45f,0.95f), new Color(0.32f,0.48f,0.68f,0.95f) };
         for (int i = 0; i < 3; i++)
         {
             int k = i;
-            var b = Rect("L" + i, root, 10, 1070 - i*112, 86, 100);
-            Rounded(b, new Color(1,0.99f,0.96f,0.88f)); SoftShadow(b);
-            Txt(b.transform, names[i], 24, Ink, 0, 54, 86, 34, TextAnchor.MiddleCenter);
-            Txt(b.transform, "◇", 24, LineColors[i], 0, 14, 86, 30, TextAnchor.MiddleCenter);
+            var b = Rect("L" + i, root, 0, 1070 - i*106, 92, 88);
+            Rounded(b, new Color(0.985f, 0.975f, 0.94f, 0.95f)); SoftShadow(b);
+            var ribbon = Rect("Ribbon", b.transform, 0, 0, 5, 88);
+            Img(ribbon, accents[i], spriteWhite).raycastTarget = false;
+            Txt(b.transform, names[i], 22, Ink, 6, 44, 82, 36, TextAnchor.MiddleCenter);
+            var tag = Rect("Tag", b.transform, 18, 10, 60, 26);
+            Rounded(tag, new Color(0.92f,0.90f,0.85f,0.60f));
+            Txt(tag.transform, icons[i], 15, InkSoft, 0, 0, 60, 26, TextAnchor.MiddleCenter);
             if (i == 1)
             {
-                Img(Rect("BadgeRing", b.transform, 62, 76, 24, 24), new Color(1,0.98f,0.94f,0.98f), spriteCircle).raycastTarget = false;
-                var dotGo = Rect("Badge", b.transform, 65, 79, 18, 18); Img(dotGo, Vermilion, spriteCircle).raycastTarget = false;
+                Img(Rect("BadgeRing", b.transform, 68, 64, 22, 22), new Color(1,0.98f,0.94f,0.98f), spriteCircle).raycastTarget = false;
+                var dotGo = Rect("Badge", b.transform, 70, 66, 18, 18); Img(dotGo, Vermilion, spriteCircle).raycastTarget = false;
                 sceneryBadge = dotGo;
                 dotGo.SetActive(false);
             }
@@ -778,19 +788,31 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void BuildStationFilterButton()
     {
-        var button = Rect("StationFilter", root, 10, 734, 86, 100);
-        Rounded(button, new Color(1, 0.99f, 0.96f, 0.88f)); SoftShadow(button);
-        Txt(button.transform, "筛选", 22, Ink, 0, 60, 86, 30, TextAnchor.MiddleCenter);
-        stationFilterText = Txt(button.transform, "全部城市", 17, InkSoft, 2, 8, 82, 50, TextAnchor.MiddleCenter);
-        stationFilterText.resizeTextForBestFit = true; stationFilterText.resizeTextMinSize = 14; stationFilterText.resizeTextMaxSize = 17;
+        var button = Rect("StationFilter", root, 0, 752, 92, 88);
+        Rounded(button, new Color(0.985f, 0.975f, 0.94f, 0.95f)); SoftShadow(button);
+        var ribbon = Rect("Ribbon", button.transform, 0, 0, 5, 88);
+        Img(ribbon, new Color(0.55f,0.48f,0.38f,0.95f), spriteWhite).raycastTarget = false;
+        Txt(button.transform, "筛选", 22, Ink, 6, 44, 82, 36, TextAnchor.MiddleCenter);
+        var tag = Rect("FilterTag", button.transform, 8, 10, 76, 26);
+        Rounded(tag, new Color(0.92f,0.90f,0.85f,0.60f));
+        stationFilterText = Txt(tag.transform, "全部", 15, InkSoft, 0, 0, 76, 26, TextAnchor.MiddleCenter);
+        stationFilterText.resizeTextForBestFit = true; stationFilterText.resizeTextMinSize = 13; stationFilterText.resizeTextMaxSize = 15;
         var control = button.AddComponent<Button>(); control.targetGraphic = button.GetComponent<Image>();
         control.onClick.AddListener(CycleStationFilter);
     }
 
     void BuildRightRail()
     {
-        var speed = Btn(root, "Speed", "1×", 30, 980, 1168, 88, 104, new Color(1,0.99f,0.96f,0.90f), CycleSpeed);
-        TInk(speed, Ink); SoftShadow(speed.gameObject); speedTxt = speed.GetComponentInChildren<Text>();
+        var go = Rect("SpeedBoard", root, 986, 1168, 86, 96);
+        var shell = Img(go, new Color(0.24f, 0.20f, 0.17f, 0.88f), spriteRound); shell.type = Image.Type.Sliced;
+        SoftShadow(go);
+        var inner = Rect("Inner", go.transform, 3, 3, 80, 90);
+        var innerIm = Img(inner, new Color(0.985f, 0.975f, 0.94f, 0.96f), spriteRound); innerIm.type = Image.Type.Sliced;
+        var topBar = Rect("TopBar", inner.transform, 0, 68, 80, 22);
+        Img(topBar, new Color(0.88f, 0.78f, 0.62f, 0.75f), spriteWhite).raycastTarget = false;
+        Txt(inner.transform, "运行", 15, InkSoft, 0, 68, 80, 22, TextAnchor.MiddleCenter);
+        speedTxt = Txt(inner.transform, "1×", 32, Ink, 0, 6, 80, 60, TextAnchor.MiddleCenter);
+        var btn = go.AddComponent<Button>(); btn.targetGraphic = shell; btn.onClick.AddListener(CycleSpeed);
     }
 
     void BuildBottomNav()
@@ -1166,9 +1188,9 @@ public partial class DemoBootstrap : MonoBehaviour
             for (int i = 0; i < line.st.Count - 1; i++)
             {
                 if (SegmentRegion(line.st[i], line.st[i+1]) != currentRegion) continue;
-                var casing = AddSeg(line.st[i], line.st[i+1], new Color(0.22f,0.20f,0.16f,0.85f), 10, lineLayer);
-                var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 6.5f, lineLayer);
-                var trackCore = AddSeg(line.st[i], line.st[i+1], new Color(1f,0.98f,0.92f,0.55f), 2.2f, lineLayer);
+                var casing = AddSeg(line.st[i], line.st[i+1], new Color(0.20f,0.18f,0.15f,0.92f), 12f, lineLayer);
+                var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 7.5f, lineLayer);
+                var trackCore = AddSeg(line.st[i], line.st[i+1], new Color(1f,0.98f,0.92f,0.65f), 2.2f, lineLayer);
                 var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer);
                 var lt = hit.AddComponent<LineTapPress>(); lt.boot = this;
                 lv.segs.Add(casing); lv.segs.Add(segBody); lv.segs.Add(trackCore); lv.segs.Add(hit);
@@ -1208,8 +1230,7 @@ public partial class DemoBootstrap : MonoBehaviour
         var d = p2 - p1;
         var go = Rect("Seg", layer, p1.x, p1.y, d.magnitude, width);
         var rt = go.GetComponent<RectTransform>(); rt.pivot = new Vector2(0, 0.5f);
-        var im = Img(go, c, spriteRound);
-        im.type = Image.Type.Sliced;
+        Img(go, c, spriteWhite);
         rt.localRotation = Quaternion.Euler(0,0, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
         zoomRects.Add(new ZoomRect(rt, width));
         return go;
