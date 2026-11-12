@@ -1174,17 +1174,28 @@ public partial class DemoBootstrap : MonoBehaviour
                 lv.segs.Add(casing); lv.segs.Add(segBody); lv.segs.Add(trackCore); lv.segs.Add(hit);
                 lv.segEnds.Add(new Vector2Int(line.st[i], line.st[i + 1]));
             }
-            var t = Rect("Train" + line.id, trainLayer, 0, 0, 42, 22);
+            // 日式微缩铁道模型（硬朗修长车厢，规避肉感胶囊）
+            var t = Rect("Train" + line.id, trainLayer, 0, 0, 34, 14);
             t.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
-            var shell = Img(t, new Color(0.20f,0.18f,0.14f,0.92f), spriteRound); shell.type = Image.Type.Sliced; shell.raycastTarget = false;
-            var body = Rect("Body", t.transform, 2, 2, 38, 18);
-            var bimg = Img(body, line.color, spriteRound); bimg.type = Image.Type.Sliced; bimg.raycastTarget = false;
-            var w1 = Rect("W1", body.transform, 6, 4, 8, 10);
-            var wi1 = Img(w1, new Color(0.98f,0.97f,0.92f,0.90f), spriteRound); wi1.type = Image.Type.Sliced; wi1.raycastTarget = false;
-            var w2 = Rect("W2", body.transform, 17, 4, 8, 10);
-            var wi2 = Img(w2, new Color(0.98f,0.97f,0.92f,0.90f), spriteRound); wi2.type = Image.Type.Sliced; wi2.raycastTarget = false;
-            var noseLight = Rect("NoseLight", body.transform, 29, 6, 6, 6);
-            Img(noseLight, new Color(1f,0.92f,0.45f,0.95f), spriteCircle).raycastTarget = false;
+            // 墨黑机械底盘与转向架轮轴
+            var chassis = Img(t, new Color(0.18f,0.16f,0.13f,0.95f), spriteWhite); chassis.raycastTarget = false;
+            // 线路涂装车身主体
+            var body = Rect("Body", t.transform, 1, 1, 32, 12);
+            var bimg = Img(body, line.color, spriteWhite); bimg.raycastTarget = false;
+            // 车顶中央浅色肋带
+            var roof = Rect("Roof", body.transform, 3, 2, 22, 8);
+            Img(roof, Color.Lerp(line.color, Color.white, 0.40f), spriteWhite).raycastTarget = false;
+            // 车顶受电弓 / 空调机罩
+            var ac = Rect("AC", roof.transform, 8, 1, 8, 6);
+            Img(ac, new Color(0.22f,0.20f,0.18f,0.85f), spriteWhite).raycastTarget = false;
+            // 车头宽屏驾驶舱反光风挡玻璃
+            var cab = Rect("Cab", body.transform, 27, 1, 3.5f, 10);
+            Img(cab, new Color(0.20f,0.40f,0.55f,0.95f), spriteWhite).raycastTarget = false;
+            // 车头左右双前照灯（明亮暖黄，彻底确立列车前脸）
+            var lightL = Rect("LightL", body.transform, 30.5f, 1.5f, 1.5f, 2.5f);
+            Img(lightL, new Color(1f,0.95f,0.45f,1f), spriteWhite).raycastTarget = false;
+            var lightR = Rect("LightR", body.transform, 30.5f, 8f, 1.5f, 2.5f);
+            Img(lightR, new Color(1f,0.95f,0.45f,1f), spriteWhite).raycastTarget = false;
             lv.train = t;
             lineVisuals[line.id] = lv;
         }
