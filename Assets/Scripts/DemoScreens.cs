@@ -92,8 +92,8 @@ public partial class DemoBootstrap
             Img(Rect("Accent", card.transform, 0, 30, 7, 160), active ? Gold : available ? Matcha : InkSoft, spriteRound).raycastTarget = false;
             Txt(card.transform, region, 42, Ink, 32, 142, 380, 55, TextAnchor.MiddleLeft);
             string condition = active ? "当前区域" : available ? "已开放" : region == "澳门"
-                ? "解锁条件：每日收入达到 ¥600"
-                : "解锁条件：开放澳门，连通澳门 2 座普通站，每日收入达到 ¥1200";
+                ? "解锁条件：预计日利润达到 ¥600"
+                : "解锁条件：开放澳门，连通澳门 2 座普通站，预计日利润达到 ¥1200";
             Txt(card.transform, condition, 24, InkSoft, 32, 48, 720, 72, TextAnchor.MiddleLeft);
             var button = Btn(card.transform, "Select", active ? "当前" : available ? "前往" : "未解锁", 26,
                 W - 56 - 225, 65, 190, 90, active ? Paper2 : available ? Matcha : new Color(0.78f,0.76f,0.71f), () => {
@@ -106,10 +106,11 @@ public partial class DemoBootstrap
     // ---------- 线路 ----------
     void OpenLinesScreen()
     {
-        var pg = OpenPage("线路", "长按地图车站，拖到下一站开线；松手确认。从已有线路的车站起手，默认延长该线，也可另开新线。最多 6 条线路。", "PageArt/line_watercolor");
-        StatBox(pg.transform, "每日收入", Mathf.RoundToInt(income) + "", 28, H-400, 320, 210, Gold);
+        var pg = OpenPage("线路", "长按地图车站，拖到下一站开线；松手确认。从已有线路的车站起手，端点默认延长，中间站默认新建。研究科技可提高线路上限。", "PageArt/line_watercolor");
+        StatBox(pg.transform, "预计日利润", Mathf.RoundToInt(income) + "", 28, H-400, 320, 210, Gold);
         StatBox(pg.transform, "已连通", ConnectedCount() + "/" + stations.Count, 380, H-400, 320, 210, Matcha);
         StatBox(pg.transform, "钻石", Mathf.FloorToInt(diamonds).ToString(), 732, H-400, 320, 210, Sakura);
+        Txt(pg.transform, "线路 " + lines.Count + " / " + LineLimit() + " · 当前时段日化旅次 " + Mathf.RoundToInt(traffic != null ? traffic.totalPassengers : 0f), 24, InkSoft, 28, H-465, 1000, 40, TextAnchor.MiddleLeft);
         float top = H-700;
         for (int i = 0; i < lines.Count && i < 6; i++)
         {
@@ -118,46 +119,36 @@ public partial class DemoBootstrap
             Rounded(card, new Color(1,1,1,0.95f)); SoftShadow(card);
             var dot = Rect("D", card.transform, 26, 64, 44, 44); Img(dot, line.color, spriteCircle);
             Txt(card.transform, line.name, 40, Ink, 92, 100, 340, 52, TextAnchor.MiddleLeft);
-            Txt(card.transform, UniqueCount(line.st) + " 站 · " + Mathf.RoundToInt(LineDaily(line)) + "/天", 26, InkSoft, 94, 48, 440, 36, TextAnchor.MiddleLeft);
+            Txt(card.transform, UniqueCount(line.st) + " 站 · 预计利润 " + Mathf.RoundToInt(LineDaily(line)) + "/天", 26, InkSoft, 94, 48, 440, 36, TextAnchor.MiddleLeft);
             var gb = Btn(card.transform, "Go", "查看", 32, W-56-236, 42, 196, 88, new Color(0.92f,0.89f,0.83f), () => OpenLineScreen(id, OpenLinesScreen));
             TInk(gb, Ink);
         }
     }
 
-    float LineDaily(Line line) { return DailyOf(line, line.st); }
+    float LineDaily(Line line) { return ForecastFor(line).Profit; }
 
     // ---------- 线路详情 ----------
     void OpenLineScreen(int id, Action back = null)
     {
         var line = lines.Find(l => l.id == id);
         if (line == null) { OpenLinesScreen(); return; }
-        var pg = OpenPage(line.name, "客流由可达站点、线路、换乘与运力共同决定；速度、编组和班次会影响出行与运输能力。", "PageArt/line_watercolor");
+        var pg = OpenPage(line.name, "客流由可达站点、线路、换乘与运力共同决定；车辆性能与时段调度会影响出行和运输能力。", "PageArt/line_watercolor");
         pageBack = back ?? OpenLinesScreen;
         StatBox(pg.transform, "客流", Mathf.RoundToInt(LinePassengerFlow(line)) + "", 28, H-440, 320, 200, Matcha);
-        StatBox(pg.transform, "运力", Mathf.RoundToInt(LineCapacity(line)) + " 人/日", 380, H-440, 320, 200, Indigo);
-        StatBox(pg.transform, "每日收入", Mathf.RoundToInt(LineDaily(line)) + "", 732, H-440, 320, 200, Gold);
-        string[] ups = { "车速", "编组", "班次" };
-        for (int k = 0; k < 3; k++)
-        {
-            int kk = k;
-            var row = Rect("UR"+k, pg.transform, 28, H-730 - k*150, W-56, 140);
-            Rounded(row, new Color(1,1,1,0.94f)); SoftShadow(row);
-            Txt(row.transform, ups[k], 32, Ink, 28, 84, 300, 44, TextAnchor.MiddleLeft);
-            Txt(row.transform, "Lv." + line.up[k], 30, Indigo, 28, 34, 300, 40, TextAnchor.MiddleLeft);
-            int lv = line.up[k];
-            int cost = Mathf.RoundToInt((136 + k*70) * Mathf.Pow(1.6f, lv));
-            Btn(row.transform, "Buy", "升级  ¥" + cost, 28, W-56-28-230, 26, 230, 88, Matcha, () => {
-                if (coins < cost) { Toast("金币不足"); return; }
-                BeginUndo("升级线路"); coins -= cost; line.up[kk]++; RecalcIncome(); EndUndo(); RefreshHUD();
-                ClosePage(); OpenLineScreen(id, back);
-            });
-        }
-        Txt(pg.transform, "沿线", 28, InkSoft, 28, H-1230, 160, 38, TextAnchor.MiddleLeft);
-        Txt(pg.transform, UniquePathText(line.st), 26, Ink, 28, H-1290, W-56, 60, TextAnchor.UpperLeft);
+        StatBox(pg.transform, "单向区段运力", Mathf.RoundToInt(LineCapacity(line)) + " 人次/日", 380, H-440, 320, 200, Indigo);
+        StatBox(pg.transform, "预计日利润", Mathf.RoundToInt(LineDaily(line)) + "", 732, H-440, 320, 200, Gold);
+        var fleet = Rect("FleetSummary", pg.transform, 28, H-710, W-56, 190); Rounded(fleet, new Color(1,1,1,0.94f)); SoftShadow(fleet);
+        Txt(fleet.transform, "配属 " + line.trains + " 列 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line,2)*100) + "%", 28, Ink, 24, 115, 950, 45, TextAnchor.MiddleLeft);
+        Txt(fleet.transform, "单区段运力相加；乘客上下车可复用座位，速度和机车成本取平均。", 21, InkSoft, 24, 70, 950, 35, TextAnchor.MiddleLeft);
+        var fleetButton=Btn(fleet.transform,"Fleet","机车配属",25,24,8,450,55,Indigo,()=>OpenLineFleet(line));TInk(fleetButton,Color.white);
+        var operations=Btn(fleet.transform,"Operations","票价与调度",25,495,8,450,55,Indigo,()=>OpenLineOperations(line));TInk(operations,Color.white);
+        Txt(pg.transform, "沿线", 28, InkSoft, 28, H-800, 160, 38, TextAnchor.MiddleLeft);
+        Txt(pg.transform, UniquePathText(line.st), 26, Ink, 28, H-870, W-56, 60, TextAnchor.UpperLeft);
+        var colors=Btn(pg.transform,"LineSkins","线路涂装 · 钻石",25,28,H-990,W-56,78,Paper2,()=>OpenLineSkins(line));TInk(colors,Ink);
         Btn(pg.transform, "Add", "机车商店", 30, 28, 56, 490, 124, Indigo, () => { fleetBack = () => OpenLineScreen(id, back); OpenLocoShop(); });
         Btn(pg.transform, "Del", "拆除线路", 30, 544, 56, 508, 124, Vermilion, () => {
             Confirm("拆除 " + line.name, "退还 ¥" + Mathf.RoundToInt(120f*(UniqueCount(line.st)-1)*0.6f), () => {
-                BeginUndo("拆除整条线路"); coins += 120f*(UniqueCount(line.st)-1)*0.6f; lines.Remove(line);
+                BeginUndo("拆除整条线路"); coins += 120f*(UniqueCount(line.st)-1)*0.6f; SettleRemovedLineTax(line); ReleaseLineFleet(line); lines.Remove(line);
                 CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); EndUndo(); RefreshHUD(); ClosePanel();
                 ClosePage(); OpenLinesScreen();
             });
@@ -187,7 +178,7 @@ public partial class DemoBootstrap
         tab = Mathf.Clamp(tab, 0, 2);
         string[] titles = { "调度", "车库", "商店" };
         string[] help = {
-            "管理线路并升级车速、编组和班次。车辆配置可在车库中调整。",
+            "管理线路机车配属与分时调度；车辆性能由配属机车决定。",
             "按动力、用途和地区筛选已拥有的机车，并将机车配置给线路。当前配置仅作展示。",
             "按动力、用途和地区筛选车型。机车须先在科技树解锁；研究完成赠送一辆。"
         };
@@ -245,27 +236,11 @@ public partial class DemoBootstrap
             Rounded(card, new Color(1, 1, 1, 0.97f)); SoftShadow(card);
             Img(Rect("Dot", card.transform, 28, 262, 38, 38), line.color, spriteCircle).raycastTarget = false;
             Txt(card.transform, line.name, 36, Ink, 84, 260, 700, 48, TextAnchor.MiddleLeft);
-            var lineStats = Txt(card.transform, UniqueCount(line.st) + " 站 · " + line.trains + "/8 列 · 每日收入 " + Mathf.RoundToInt(LineDaily(line)), 24, InkSoft, 28, 205, 940, 38, TextAnchor.MiddleLeft);
+            var lineStats = Txt(card.transform, UniqueCount(line.st) + " 站 · " + line.trains + " 列 · 预计日利润 " + Mathf.RoundToInt(LineDaily(line)), 24, InkSoft, 28, 205, 940, 38, TextAnchor.MiddleLeft);
             var assigned = researchVehicles.Find(v => v.lineId == line.id);
             Txt(card.transform, "配置：" + (assigned == null ? "默认机车" : LocoNames[assigned.node]), 24, InkSoft, 28, 156, 940, 34, TextAnchor.MiddleLeft);
-            string[] labels = { "车速", "编组", "班次" };
-            for (int k = 0; k < 3; k++)
-            {
-                int upgrade = k;
-                int cost = Mathf.RoundToInt((136 + k * 70) * Mathf.Pow(1.6f, line.up[k]));
-                var btn = Btn(card.transform, "Upgrade" + k, labels[k] + " Lv." + line.up[k] + "  ¥" + cost, 24,
-                    28 + k * 316, 38, 292, 88, Matcha, () => {
-                        int amount = Mathf.RoundToInt((136 + upgrade * 70) * Mathf.Pow(1.6f, line.up[upgrade]));
-                        if (coins < amount) { Toast("金币不足"); return; }
-                        BeginUndo("升级线路"); coins -= amount; line.up[upgrade]++; RecalcIncome(); EndUndo(); RefreshHUD();
-                        lineStats.text = UniqueCount(line.st) + " 站 · " + line.trains + "/8 列 · 每日收入 " + Mathf.RoundToInt(LineDaily(line));
-                        int next = Mathf.RoundToInt((136 + upgrade * 70) * Mathf.Pow(1.6f, line.up[upgrade]));
-                        var buttonText = card.transform.Find("Upgrade" + upgrade).GetComponentInChildren<Text>();
-                        buttonText.text = labels[upgrade] + " Lv." + line.up[upgrade] + "  ¥" + next;
-                        Toast(line.name + " · " + labels[upgrade] + "升级成功");
-                    });
-                btn.gameObject.AddComponent<FleetPressFeedback>();
-            }
+            var fleetButton = Btn(card.transform, "Fleet", "机车配属", 25, 28, 38, 450, 88, Indigo, () => OpenLineFleet(line)); TInk(fleetButton, Color.white);
+            var operations = Btn(card.transform, "Operations", "票价与调度", 25, 495, 38, 450, 88, Indigo, () => OpenLineOperations(line)); TInk(operations, Color.white);
             var entry = card.AddComponent<FleetCardEntrance>(); entry.delay = Mathf.Min(i, 5) * 0.035f;
         }
     }
@@ -346,7 +321,7 @@ public partial class DemoBootstrap
                 art.color = tab == 2 && !unlocked ? new Color(0.65f, 0.65f, 0.65f, 0.75f) : Color.white;
             }
             Txt(card.transform, LocoNames[index], 31, Ink, 304, 135, 430, 42, TextAnchor.MiddleLeft);
-            Txt(card.transform, LocoYears[index] + " · 蒸汽 · " + FleetUseFilters[FleetUses[index]], 21, InkSoft, 304, 96, 430, 30, TextAnchor.MiddleLeft);
+            Txt(card.transform, LocoYears[index] + " · 运力" + Mathf.RoundToInt(FleetCapacityTraits[index]*100) + "% · 维护" + Mathf.RoundToInt(FleetMaintenanceTraits[index]*100) + "% · 速度" + Mathf.RoundToInt(FleetSpeedTraits[index]*100) + "%", 19, InkSoft, 304, 96, 430, 30, TextAnchor.MiddleLeft);
             string state = tab == 1 ? (assigned == null ? "未配置" : "已配置至 " + assigned.name) : unlocked ? "已解锁" : "科技树未解锁";
             Txt(card.transform, state, 22, InkSoft, 304, 48, 400, 32, TextAnchor.MiddleLeft);
             var button = Btn(card.transform, "Action", tab == 1 ? "配置线路" : unlocked ? "购买 ¥" + LocoPrice(index) : "未解锁", 23,
@@ -360,24 +335,144 @@ public partial class DemoBootstrap
     }
     void ChooseResearchVehicleLine(ResearchVehicle item)
     {
-        float h = 230 + lines.Count * 78;
+        float h = 230 + (lines.Count + (item.lineId != 0 ? 1 : 0)) * 78;
         var bubble = OpenBubble("配置 " + LocoNames[item.node], h, 760, new Vector2(W / 2, H / 2));
+        if (item.lineId != 0)
+        {
+            var unassign = Btn(bubble.transform, "Unassign", "返回车库待命", 25, 30, h - 154 - lines.Count * 78, 700, 66, Paper2, () => {
+                BeginUndo("机车返回车库"); var previous = lines.Find(x => x.id == item.lineId);
+                item.lineId = 0; if (previous != null) SyncLineFleet(previous); RecalcIncome(); EndUndo();
+                ClosePanel(); OpenResearchInventory(); Toast("机车已返回车库，相关调度已调整");
+            }); TInk(unassign, Ink);
+        }
         if (lines.Count == 0) Txt(bubble.transform, "请先开通线路", 27, InkSoft, 24, 80, 710, 50, TextAnchor.MiddleCenter);
         for (int i = 0; i < lines.Count; i++)
         {
             var target = lines[i];
             var button = Btn(bubble.transform, "Line" + target.id, target.name, 25, 30, h - 154 - i * 78, 700, 66, new Color(0.92f, 0.89f, 0.83f), () => {
-                BeginUndo("配置机车"); foreach (var owned in researchVehicles) if (owned != item && owned.lineId == target.id) owned.lineId = 0;
-                item.lineId = target.id; EndUndo(); ClosePanel(); OpenResearchInventory(); Toast("已配置到 " + target.name);
+                if (item.lineId != target.id && target.trains >= 8) { Toast("该线路最多配属 8 列车"); return; }
+                BeginUndo("配置机车"); var previous = lines.Find(x => x.id == item.lineId);
+                item.lineId = target.id; if (previous != null) SyncLineFleet(previous); SyncLineFleet(target);
+                RecalcIncome(); EndUndo(); ClosePanel(); OpenResearchInventory(); Toast("已配置到 " + target.name);
             });
             TInk(button, Ink);
         }
     }
 
-    // ---------- 公司 ----------
+    static readonly string[] DispatchNames = { "早高峰 06–10", "日间 10–16", "晚高峰 16–20", "夜间 20–06" };
+    void SetLineDispatch(Line line, int slot, int amount)
+    {
+        if (!techDone.Contains("dispatch_basic")) { Toast("请先研究铁路时刻表"); return; }
+        amount = Mathf.Clamp(amount, 0, 8);
+        if (amount > line.trains) { OpenLineFleetSupply(line, slot, amount); return; }
+        BeginUndo("调整调度");
+        if (!techDone.Contains("dispatch_peak")) for (int i=0;i<4;i++) line.dispatch[i]=amount;
+        else line.dispatch[slot]=amount;
+        RecalcIncome(); EndUndo(); RefreshHUD(); OpenLineOperations(line);
+    }
+    void ChangeLineFare(Line line, float delta)
+    {
+        if (!techDone.Contains("fare_policy")) { Toast("请先研究客运票价制度"); return; }
+        BeginUndo("调整票价"); line.fare = Mathf.Clamp(Mathf.Round((line.fare + delta)*10f)/10f,0.5f,3f);
+        RecalcIncome(); EndUndo(); RefreshHUD(); OpenLineOperations(line);
+    }
+    void OpenLineOperations(Line line)
+    {
+        if (line == null || !lines.Contains(line)) { OpenLinesScreen(); return; }
+        var page = OpenPage("票价与调度", "票价影响需求；按时段投放车辆，闲置车辆仍有基础保养费。", "PageArt/line_watercolor");
+        pageBack = () => OpenLineScreen(line.id);
+        var forecast = ForecastFor(line);
+        Txt(page.transform, line.name + " · 配属 " + line.trains + " 列 · 当前开行 " + RunningTrains(line) + " 列", 28, Ink, 32, H-300, 1000, 45, TextAnchor.MiddleLeft);
+        Txt(page.transform, "预计日收入 ¥" + Mathf.RoundToInt(forecast.gross) + "    成本 ¥" + Mathf.RoundToInt(forecast.vehicle+forecast.track+forecast.tax) + "    利润 ¥" + Mathf.RoundToInt(forecast.Profit), 24, InkSoft, 32, H-360, 1000, 45, TextAnchor.MiddleLeft);
+        var fare = Rect("Fare",page.transform,28,H-535,W-56,145); Rounded(fare,new Color(1,1,1,0.94f));
+        Txt(fare.transform, "起步票价  ¥" + line.fare.ToString("0.0") + " / 人", 30, Ink, 26, 72, 570, 44, TextAnchor.MiddleLeft);
+        Txt(fare.transform, techDone.Contains("fare_policy") ? "票价另加里程费；票款每 10 元折合 1 游戏金币" : "研究「客运票价制度」解锁调价", 20, InkSoft, 26, 25, 650, 34, TextAnchor.MiddleLeft);
+        var fm=Btn(fare.transform,"FareMinus","−",35,720,30,110,80,Paper2,()=>ChangeLineFare(line,-0.1f));TInk(fm,Ink);
+        var fp=Btn(fare.transform,"FarePlus","+",35,850,30,110,80,Paper2,()=>ChangeLineFare(line,0.1f));TInk(fp,Ink);
+        bool basic=techDone.Contains("dispatch_basic"), peak=techDone.Contains("dispatch_peak");
+        Txt(page.transform, !basic ? "研究「铁路时刻表」解锁统一调度" : !peak ? "统一调度已解锁；研究「分时列车计划」可分别设置" : "分时调度 · 高峰与夜间可分别设置", 23, InkSoft, 32, H-590, 1000, 36, TextAnchor.MiddleLeft);
+        int rows=peak?4:1;
+        for(int i=0;i<rows;i++) {
+            int slot=i; var row=Rect("DispatchSlot"+i,page.transform,28,H-740-i*130,W-56,115); Rounded(row,new Color(1,1,1,0.94f));
+            Txt(row.transform,peak?DispatchNames[i]:"全天统一",26,Ink,24,68,400,36,TextAnchor.MiddleLeft);
+            Txt(row.transform,line.dispatch[i]+" 列",30,Indigo,510,44,130,40,TextAnchor.MiddleCenter);
+            int sampleSlot = peak ? i : DispatchSlot();
+            float oldClock = dayClock;
+            float[] sampleHours = {8f,13f,18f,1f};
+            try {
+                dayClock = sampleHours[sampleSlot] * GameDaySeconds / 24f;
+                var sample = trafficSlots[sampleSlot];
+                float requested = sample != null && sample.linePeakDemand.TryGetValue(line, out var d) ? d : 0f;
+                float gross = sample != null ? TrafficRevenue(line,sample) : 0f;
+                Txt(row.transform, "最高区段需求 " + Mathf.RoundToInt(requested) + " · 运力 " + Mathf.RoundToInt(LineCapacity(line)) + " · 收入 ¥" + Mathf.RoundToInt(gross) + " · 运维 ¥" + Mathf.RoundToInt(VehicleMaintenance(line)+TrackMaintenance(line)), 18, InkSoft, 24, 12, 670, 34, TextAnchor.MiddleLeft);
+            } finally { dayClock = oldClock; }
+            var minus=Btn(row.transform,"Minus","−",34,720,18,110,80,Paper2,()=>SetLineDispatch(line,slot,line.dispatch[slot]-1)); TInk(minus,Ink);
+            var plus=Btn(row.transform,"Plus","+",34,850,18,110,80,Paper2,()=>SetLineDispatch(line,slot,line.dispatch[slot]+1)); TInk(plus,Ink);
+        }
+        Txt(page.transform, "研究机车优先运行；速度和机车成本按全线配属车辆平均。\n各时段数据按全天折算；运维不含税，税在每日结算。", 22, InkSoft, 32, H-1320, 1000, 100, TextAnchor.UpperLeft);
+    }
+    void OpenLineFleet(Line line)
+    {
+        if (line == null || !lines.Contains(line)) { OpenLinesScreen(); return; }
+        var page=OpenPage("机车配属", "不同机车的运力相加；速度和维护成本按线路配属车辆平均计算。", "FleetArt/garage_watercolor");
+        pageBack=()=>OpenLineScreen(line.id);
+        Txt(page.transform, line.name + " · 已配属 " + line.trains + " 列", 32, Ink, 32, H-300, 1000, 44, TextAnchor.MiddleLeft);
+        Txt(page.transform, "当前单向区段运力 " + Mathf.RoundToInt(FleetCapacity(line)) + " 人次/日 · 中途上下车可复用座位", 24, InkSoft, 32, H-360, 1000, 45, TextAnchor.MiddleLeft);
+        Txt(page.transform, "平均速度 " + Mathf.RoundToInt(FleetTrait(line,2)*100) + "% · 平均维护 " + Mathf.RoundToInt(FleetTrait(line,0)*100) + "%", 24, InkSoft, 32, H-410, 1000, 45, TextAnchor.MiddleLeft);
+        Txt(page.transform,"配属车辆：线路基础车辆 ×1",27,Ink,32,H-500,1000,40,TextAnchor.MiddleLeft);
+        float y=H-555; foreach(var v in researchVehicles) if(v.lineId==line.id) { Txt(page.transform,LocoNames[v.node] + " · 运力 " + Mathf.RoundToInt(FleetCapacityTraits[v.node]*100) + "% · 成本 " + Mathf.RoundToInt(FleetMaintenanceTraits[v.node]*100) + "% · 速度 " + Mathf.RoundToInt(FleetSpeedTraits[v.node]*100) + "%",22,InkSoft,48,y,970,36,TextAnchor.MiddleLeft); y-=46; }
+        var add=Btn(page.transform,"AddVehicle","调入或购买机车",26,28,260,W-56,84,Indigo,()=>{if(line.trains>=8){Toast("该线路最多配属 8 列车");return;}OpenLineFleetSupply(line,-1,0);}); TInk(add,Color.white);
+        Txt(page.transform,"基础车辆运力较低；先研究机车，再从车库调入或购买。",22,InkSoft,32,195,1000,45,TextAnchor.MiddleLeft);
+    }
+
+    void OpenLineFleetSupply(Line line, int slot, int amount)
+    {
+        var page=OpenPage("配属机车", "可调入空闲车辆，或购买科技树已解锁的机车。", "PageArt/line_watercolor");
+        pageBack=()=> { if(slot<0) OpenLineFleet(line); else OpenLineOperations(line); };
+        var free=new List<ResearchVehicle>(); foreach(var v in researchVehicles) if(v.lineId==0) free.Add(v);
+        var models=new List<int>(); for(int i=0;i<LocoNames.Length;i++) if(techDone.Contains(LocoKey(i))) models.Add(i);
+        int count=free.Count+models.Count; var content=FleetScroll(page.transform,72,H-235,Mathf.Max(180,count*128+20)); float h=content.sizeDelta.y; int rowIndex=0;
+        if(count==0) Txt(content,"没有空闲或已解锁的机车，请先研究机车节点。",26,InkSoft,20,h-100,960,60,TextAnchor.MiddleCenter);
+        foreach(var v in free) { var item=v; int row=rowIndex++; var button=Btn(content,"Free"+row,"调入  "+LocoNames[item.node],25,12,h-120-row*128,940,100,Paper2,()=>{
+            BeginUndo("调入机车"); item.lineId=line.id; SyncLineFleet(line); if(slot>=0) { if(!techDone.Contains("dispatch_peak")) for(int k=0;k<4;k++)line.dispatch[k]=amount; else line.dispatch[slot]=amount; }
+            RecalcIncome();EndUndo();RefreshHUD();if(slot<0)OpenLineFleet(line);else OpenLineOperations(line);Toast("机车已调入"); });TInk(button,Ink); }
+        foreach(int n in models) { int model=n,row=rowIndex++; var button=Btn(content,"Buy"+row,"购买  "+LocoNames[model]+"  ¥"+LocoPrice(model),25,12,h-120-row*128,940,100,Paper2,()=>{
+            int cost=LocoPrice(model);if(coins<cost){Toast("金币不足，还差 ¥"+Mathf.CeilToInt(cost-coins));return;}
+            BeginUndo("购买并配属机车"); coins-=cost; researchVehicles.Add(new ResearchVehicle{node=model,lineId=line.id}); SyncLineFleet(line);
+            if(slot>=0) { if(!techDone.Contains("dispatch_peak")) for(int k=0;k<4;k++)line.dispatch[k]=amount; else line.dispatch[slot]=amount; }
+            RecalcIncome();EndUndo();RefreshHUD();if(slot<0)OpenLineFleet(line);else OpenLineOperations(line);Toast("机车已购买并配属"); });TInk(button,Ink); }
+    }
+
+    readonly HashSet<int> ownedLineSkins = new HashSet<int>();
+    bool loanOutstanding;
+    static readonly string[] LineSkinNames = { "海风蓝", "樱花粉", "金色晨光" };
+    static readonly Color[] LineSkinColors = { new Color(0.31f,0.58f,0.68f), new Color(0.84f,0.52f,0.58f), new Color(0.82f,0.63f,0.29f) };
+    static readonly int[] LineSkinPrices = { 60, 90, 120 };
+    void OpenLineSkins(Line line)
+    {
+        if(line==null||!lines.Contains(line))return;
+        var bubble=OpenBubble("线路涂装", 550, 760, new Vector2(W/2,H/2));
+        Txt(bubble.transform,"纯外观 · 解锁后可为任意线路使用",22,InkSoft,28,450,690,40,TextAnchor.MiddleLeft);
+        for(int i=0;i<LineSkinNames.Length;i++) {
+            int skin=i; bool owned=ownedLineSkins.Contains(skin);
+            var button=Btn(bubble.transform,"Skin"+i,LineSkinNames[i]+(owned?" · 使用":" · ◇"+LineSkinPrices[i]),25,28,340-i*100,700,80,LineSkinColors[i],()=>{
+                if(!ownedLineSkins.Contains(skin)&&diamonds<LineSkinPrices[skin]){Toast("钻石不足");return;}
+                BeginUndo("线路涂装"); if(ownedLineSkins.Add(skin))diamonds-=LineSkinPrices[skin];
+                line.color=LineSkinColors[skin]; CreateLineVisuals(); EndUndo(); RefreshHUD();
+                ClosePanel(true); OpenLineScreen(line.id); Toast("涂装已应用");
+            });TInk(button,Color.white);
+        }
+    }
     void OpenCompanyScreen()
     {
-        OpenPage("公司", "公司系统筹备中：总部、员工、评级与全球区域将在这里展开。", "PageArt/company_watercolor");
+        var pg=OpenPage("公司", "资金紧张时可申请一笔无息周转金；归还后才能再次申请。", "PageArt/company_watercolor");
+        Txt(pg.transform,"周转金",34,Ink,32,H-310,800,45,TextAnchor.MiddleLeft);
+        Txt(pg.transform,loanOutstanding?"已有未还周转金 ¥500":"尚无周转金；金币低于 ¥100 且预计利润不为正时可申请。",24,InkSoft,32,H-390,980,80,TextAnchor.UpperLeft);
+        var loan=Btn(pg.transform,"Loan",loanOutstanding?"归还 ¥500":"申请 ¥500",28,32,H-540,950,96,Indigo,()=>{
+            if(loanOutstanding){if(coins<500){Toast("金币不足，暂无法还款");return;}BeginUndo("归还周转金");coins-=500;loanOutstanding=false;}
+            else {if(coins>=100||income>0){Toast("金币低于 ¥100 且预计利润不为正时可申请");return;}BeginUndo("领取周转金");coins+=500;loanOutstanding=true;}
+            EndUndo();RefreshHUD();OpenCompanyScreen();Toast(loanOutstanding?"已领取无息周转金":"周转金已还清");
+        });TInk(loan,Color.white);
     }
 
     // ---------- 图鉴 ----------
