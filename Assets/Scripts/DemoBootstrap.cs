@@ -47,6 +47,7 @@ public partial class DemoBootstrap : MonoBehaviour
     Font font;
     Sprite spriteRound, spriteCircle, spriteWhite, spriteDiamond, spriteRing, spriteStationRing;
     Canvas canvas; RectTransform root, mapRect, lineLayer, stationLayer, trainLayer, previewLayer;
+    MapWheelZoom mapWheelZoom;
     GraphicRaycaster raycaster;
     float coins = 2378f, diamonds = 20f, rp = 60f, progress = 0.08f;
     float income = 0f;
@@ -86,6 +87,7 @@ public partial class DemoBootstrap : MonoBehaviour
     // ---------- boot ----------
     void OnEnable()
     {
+        if (mapRect) mapWheelZoom = mapRect.GetComponent<MapWheelZoom>();
         // 关键防御：应对 Unity 编辑器热重载 (Domain Reload) 导致 lineVisuals 字典被重置的问题
         if (canvas != null && lines != null && lines.Count > 0)
         {
@@ -376,6 +378,7 @@ public partial class DemoBootstrap : MonoBehaviour
         mapRect = map.GetComponent<RectTransform>();
         Img(map, new Color(1, 1, 1, 0));
         var mapZoom = map.AddComponent<MapWheelZoom>();
+        mapWheelZoom = mapZoom;
         mapZoom.map = mapRect; mapZoom.viewport = root;
         mapZoom.canZoom = () => !dragging && pageRoot == null && activePanel == null && sceneryViewer == null;
         mapZoom.maxZoom = () => currentRegion == "广东" ? 12f : 2.5f;
@@ -1303,6 +1306,10 @@ public partial class DemoBootstrap : MonoBehaviour
         if (dragging && draft.Count > 0 && previewImg)
         {
             if (dragFrom < 0) dragFrom = draft[draft.Count-1];
+
+            // 拖拽开线到边缘自动推镜 / 平滑滚屏
+            TickDragEdgeAutoPan(dt);
+
             Vector2 local; RectTransformUtility.ScreenPointToLocalPointInRectangle(mapRect, Input.mousePosition, null, out local);
             float snapR = (currentRegion == "广东" || currentRegion == "澳门") ? 44f / Mathf.Max(1f, mapRect.localScale.x) : 44f;
             int near = NearestStationAny(local, snapR);
@@ -1329,6 +1336,57 @@ public partial class DemoBootstrap : MonoBehaviour
         else if (!dragging) UpdateRings();
         if (Input.GetMouseButtonUp(0) && dragging) EndDraw();
         if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0 && toastGo) toastGo.SetActive(false); }
+    }
+
+    void TickDragEdgeAutoPan(float dt)
+    {
+        if (!mapWheelZoom && mapRect) mapWheelZoom = mapRect.GetComponent<MapWheelZoom>();
+        if (!mapWheelZoom || !mapRect || pageRoot != null || activePanel != null) return;
+
+        Vector2 mouse = Input.mousePosition;
+        Rect safe = Screen.safeArea;
+        if (safe.width <= 0 || safe.height <= 0) return;
+
+        // 边缘智能感应区缓冲区厚度 (水平约 110px，垂直约 140px，预留顶部栏与底栏)
+        float marginX = Mathf.Min(110f, safe.width * 0.16f);
+        float marginY = Mathf.Min(140f, safe.height * 0.16f);
+
+        float dirX = 0f;
+        float dirY = 0f;
+
+        // 左边缘：视口向左探寻 -> 地图向右平移
+        if (mouse.x < safe.xMin + marginX && mouse.x >= safe.xMin - 40f)
+        {
+            float f = Mathf.Clamp01((safe.xMin + marginX - mouse.x) / marginX);
+            dirX = f * f; // 二次平滑推进曲线
+        }
+        // 右边缘：视口向右探寻 -> 地图向左平移
+        else if (mouse.x > safe.xMax - marginX && mouse.x <= safe.xMax + 40f)
+        {
+            float f = Mathf.Clamp01((mouse.x - (safe.xMax - marginX)) / marginX);
+            dirX = -f * f;
+        }
+
+        // 下边缘：视口向下探寻 -> 地图向上平移
+        if (mouse.y < safe.yMin + marginY && mouse.y >= safe.yMin - 40f)
+        {
+            float f = Mathf.Clamp01((safe.yMin + marginY - mouse.y) / marginY);
+            dirY = f * f;
+        }
+        // 上边缘：视口向上探寻 -> 地图向下平移
+        else if (mouse.y > safe.yMax - marginY && mouse.y <= safe.yMax + 40f)
+        {
+            float f = Mathf.Clamp01((mouse.y - (safe.yMax - marginY)) / marginY);
+            dirY = -f * f;
+        }
+
+        if (dirX != 0f || dirY != 0f)
+        {
+            // 基础巡航速度：460px/s，丝滑稳健，受 MapWheelZoom.ClampPosition 防穿帮锁保护
+            float speed = 460f;
+            Vector2 delta = new Vector2(dirX, dirY) * (speed * dt);
+            mapWheelZoom.PanBy(delta);
+        }
     }
 
     // 只吸附当前真正显示出来的站点；吸附半径按级别给，小点不该有大门户的吸附范围

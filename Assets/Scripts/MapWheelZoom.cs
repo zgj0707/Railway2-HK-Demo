@@ -12,13 +12,18 @@ public class MapWheelZoom : MonoBehaviour, IScrollHandler, IBeginDragHandler, ID
     float pinchDistance;
     bool panning;
     Vector2 previous;
-    Vector2 ClampPosition(Vector2 position, float scale)
+    public Vector2 ClampPosition(Vector2 position, float scale)
     {
         float width = map.rect.width, height = map.rect.height;
         float marginX = width * 0.08f, marginY = height * 0.05f;
         position.x = Mathf.Clamp(position.x, width * (1f - scale) - marginX, marginX);
         position.y = Mathf.Clamp(position.y, height * (1f - scale) - marginY, marginY);
         return position;
+    }
+    public void PanBy(Vector2 delta)
+    {
+        if (!map) return;
+        map.anchoredPosition = ClampPosition(map.anchoredPosition + delta, map.localScale.x);
     }
     void ZoomAt(Vector2 screenPoint, float next)
     {
