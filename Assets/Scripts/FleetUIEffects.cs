@@ -1,5 +1,33 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+/// <summary>仅当已打卡相片进入图鉴视口时加载对应大图。</summary>
+public class JournalLazyPhoto : MonoBehaviour
+{
+    public RawImage image;
+    public RectTransform viewport;
+    public string resourcePath;
+    float nextCheck;
+    void Update()
+    {
+        if (!image || !viewport) { enabled = false; return; }
+        if (Time.unscaledTime < nextCheck) return;
+        nextCheck = Time.unscaledTime + 0.25f;
+        Bounds bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(viewport, image.rectTransform);
+        Rect picture = Rect.MinMaxRect(bounds.min.x, bounds.min.y, bounds.max.x, bounds.max.y);
+        if (!viewport.rect.Overlaps(picture)) return;
+        image.texture = Resources.Load<Texture2D>(resourcePath);
+        if (image.texture) {
+            float aspect = (float)image.texture.width / image.texture.height;
+            float frame = image.rectTransform.rect.width / Mathf.Max(1f, image.rectTransform.rect.height);
+            if (aspect > frame) { float width = frame / aspect; image.uvRect = new Rect((1f - width) * 0.5f, 0, width, 1); }
+            else { float height = aspect / frame; image.uvRect = new Rect(0, (1f - height) * 0.5f, 1, height); }
+            image.color = Color.white;
+        }
+        enabled = false;
+    }
+}
 
 public class FleetCardEntrance : MonoBehaviour
 {

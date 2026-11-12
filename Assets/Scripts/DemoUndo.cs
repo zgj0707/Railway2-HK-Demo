@@ -7,16 +7,17 @@ public partial class DemoBootstrap
 {
     sealed class UndoLine
     {
-        public Line line; public string name; public List<int> path; public int[] upgrades; public int trains;
+        public Line line; public string name; public Color color; public List<int> path; public int[] dispatch; public int trains; public float fare;
     }
     sealed class UndoVehicle { public ResearchVehicle vehicle; public int lineId; }
     sealed class UndoState
     {
-        public string label; public float coinsBefore, diamondsBefore, rpBefore, coinsDelta, diamondsDelta, rpDelta;
-        public int nextId, speed; public bool macau, guangdong;
+        public string label, region; public float coinsBefore, diamondsBefore, rpBefore, coinsDelta, diamondsDelta, rpDelta;
+        public int nextId, speed; public bool macau, guangdong, loanOutstanding;
         public List<UndoLine> lines = new List<UndoLine>();
-        public int[] levels; public bool[] closed, sceneryUnlocked, sceneryFound;
-        public List<string> technologies; public List<UndoVehicle> vehicles = new List<UndoVehicle>();
+        public int[] levels; public bool[] built, closed, sceneryUnlocked, sceneryFound;
+        public List<int> ownedSkins; public List<string> technologies; public List<UndoVehicle> vehicles = new List<UndoVehicle>();
+        public Dictionary<Line, FrozenLineTraffic> frozen = new Dictionary<Line, FrozenLineTraffic>();
     }
     UndoState pendingUndo, lastUndo;
     Button undoButton;
@@ -32,13 +33,14 @@ public partial class DemoBootstrap
     }
     void BeginUndo(string label)
     {
-        var state = new UndoState { label=label, coinsBefore=coins, diamondsBefore=diamonds, rpBefore=rp, nextId=nextLineId,
-            macau=macauUnlocked, guangdong=guangdongUnlocked, speed=timeSpeed, levels=new int[stations.Count], closed=new bool[stations.Count],
+        var state = new UndoState { label=label, region=currentRegion, coinsBefore=coins, diamondsBefore=diamonds, rpBefore=rp, nextId=nextLineId,
+            macau=macauUnlocked, guangdong=guangdongUnlocked, loanOutstanding=loanOutstanding, ownedSkins=new List<int>(ownedLineSkins), speed=timeSpeed, levels=new int[stations.Count], built=new bool[stations.Count], closed=new bool[stations.Count],
             sceneryUnlocked=new bool[sceneries.Count], sceneryFound=new bool[sceneries.Count], technologies=new List<string>(techDone) };
-        foreach (var line in lines) state.lines.Add(new UndoLine { line=line, name=line.name, path=new List<int>(line.st), upgrades=(int[])line.up.Clone(), trains=line.trains });
-        for (int i=0;i<stations.Count;i++) { state.levels[i]=stations[i].level; state.closed[i]=stations[i].closed; }
+        foreach (var line in lines) state.lines.Add(new UndoLine { line=line, name=line.name, color=line.color, path=new List<int>(line.st), dispatch=(int[])line.dispatch.Clone(), trains=line.trains, fare=line.fare });
+        for (int i=0;i<stations.Count;i++) { state.levels[i]=stations[i].level; state.built[i]=stations[i].built; state.closed[i]=stations[i].closed; }
         for (int i=0;i<sceneries.Count;i++) { state.sceneryUnlocked[i]=sceneries[i].unlocked; state.sceneryFound[i]=sceneries[i].found; }
         foreach (var item in researchVehicles) state.vehicles.Add(new UndoVehicle { vehicle=item, lineId=item.lineId });
+        foreach (var item in frozenTraffic) state.frozen[item.Key] = item.Value.Copy();
         pendingUndo=state;
     }
     void EndUndo()
@@ -51,15 +53,18 @@ public partial class DemoBootstrap
     {
         if (dragging || activePanel || pageRoot || sceneryViewer) return;
         if (lastUndo == null) { Toast("没有可撤销的操作"); return; }
+        if (lastUndo.region != currentRegion) { Toast("请先回到" + lastUndo.region + "撤销上一步操作"); return; }
         var state=lastUndo; lastUndo=null; pendingUndo=null; CloseLineBubble(); CancelDraft();
         coins-=state.coinsDelta; diamonds-=state.diamondsDelta; rp-=state.rpDelta; nextLineId=state.nextId; timeSpeed=state.speed; UpdateTimeText();
         lines.Clear(); foreach (var record in state.lines)
-        { record.line.name=record.name; record.line.st=new List<int>(record.path); record.line.up=(int[])record.upgrades.Clone(); record.line.trains=record.trains; lines.Add(record.line); }
-        for (int i=0;i<stations.Count;i++) { stations[i].level=state.levels[i]; stations[i].closed=state.closed[i]; }
+        { record.line.name=record.name; record.line.color=record.color; record.line.st=new List<int>(record.path); record.line.dispatch=(int[])record.dispatch.Clone(); record.line.trains=record.trains; record.line.fare=record.fare; lines.Add(record.line); }
+        for (int i=0;i<stations.Count;i++) { stations[i].level=state.levels[i]; stations[i].built=state.built[i]; stations[i].closed=state.closed[i]; }
         for (int i=0;i<sceneries.Count;i++) { sceneries[i].unlocked=state.sceneryUnlocked[i]; sceneries[i].found=state.sceneryFound[i]; }
         techDone.Clear(); techDone.AddRange(state.technologies);
+        frozenTraffic.Clear(); foreach (var item in state.frozen) frozenTraffic[item.Key] = item.Value.Copy();
         researchVehicles.Clear(); foreach (var item in state.vehicles) { item.vehicle.lineId=item.lineId; researchVehicles.Add(item.vehicle); }
-        macauUnlocked=state.macau; guangdongUnlocked=state.guangdong;
+        macauUnlocked=state.macau; guangdongUnlocked=state.guangdong; loanOutstanding=state.loanOutstanding;
+        ownedLineSkins.Clear(); foreach (int skin in state.ownedSkins) ownedLineSkins.Add(skin);
         pendingCheckin.Clear(); foreach (var sc in sceneries) if (sc.unlocked && !sc.found && TryGetSceneryContent(sc,out _,out _)) pendingCheckin.Add(sc);
         RefreshSceneryViews(); RefreshPendingBadge(); CreateLineVisuals(); RefreshStationDots(); RecalcIncome();
         if (!RegionUnlocked(currentRegion)) SwitchRegion("香港");
