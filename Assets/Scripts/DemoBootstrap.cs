@@ -84,6 +84,16 @@ public partial class DemoBootstrap : MonoBehaviour
     float overlayZoom = 1f;
 
     // ---------- boot ----------
+    void OnEnable()
+    {
+        // 关键防御：应对 Unity 编辑器热重载 (Domain Reload) 导致 lineVisuals 字典被重置的问题
+        if (canvas != null && lines != null && lines.Count > 0)
+        {
+            if (lineVisuals == null) lineVisuals = new Dictionary<int, LineVisual>();
+            CreateLineVisuals();
+            RefreshAllLines();
+        }
+    }
     void Start()
     {
         qualityTier = Mathf.Clamp(PlayerPrefs.GetInt("visual_quality", 1), 0, 2);
@@ -933,6 +943,7 @@ public partial class DemoBootstrap : MonoBehaviour
         QueueStory("new_line", "不被看好的新线", "有人说这条线不会有乘客。首班车靠站时，等车的人却排到了街角。\n你把时刻表贴上墙：从今天起，这座城市多了一条路。");
         CheckLineStory(line);
         EndUndo();
+        SaveGame();
     }
 
     void CommitExtend(Line line, List<int> newPath, List<int> draftStations, int cost)
@@ -949,6 +960,7 @@ public partial class DemoBootstrap : MonoBehaviour
         CheckSceneryOnLine(draftStations);
         CheckLineStory(line);
         EndUndo();
+        SaveGame();
     }
 
     void CheckLineStory(Line line)
@@ -1179,6 +1191,8 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         var oldVisuals = new Dictionary<int, LineVisual>(lineVisuals);
         foreach (var v in lineVisuals.Values) { foreach (var g in v.segs) if (g) Destroy(g); if (v.train) Destroy(v.train); }
+        if (lineLayer) { for (int i = lineLayer.childCount - 1; i >= 0; i--) Destroy(lineLayer.GetChild(i).gameObject); }
+        if (trainLayer) { for (int i = trainLayer.childCount - 1; i >= 0; i--) Destroy(trainLayer.GetChild(i).gameObject); }
         lineVisuals.Clear();
         zoomRects.Clear();
         foreach (var line in lines)

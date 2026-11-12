@@ -28,13 +28,17 @@ public partial class DemoBootstrap
             var byKey = new Dictionary<string,int>(); for (int i=0;i<stations.Count;i++) byKey.Add(StationSaveKey(stations[i]),i);
             var restoredLines = new List<Line>(); var ids = new HashSet<int>();
             foreach (var record in data.lines) {
-                if(record == null || record.stations == null || record.stations.Count < 2 || record.dispatch == null || record.dispatch.Length != 4 || !ids.Add(record.id)) throw new Exception("invalid line");
+                if(record == null || record.stations == null || record.stations.Count < 2 || record.dispatch == null || record.dispatch.Length != 4 || !ids.Add(record.id)) continue;
                 var line = new Line { id=record.id, name=record.name, color=record.color, trains=record.trains, dispatch=record.dispatch, fare=record.fare, todayRevenue=record.todayRevenue, todayGross=record.todayGross, todayMaintenance=record.todayMaintenance, todayTrack=record.todayTrack, recent=record.recent ?? new List<int>() };
-                foreach (string key in record.stations) { if(!byKey.TryGetValue(key,out int index)) throw new Exception("unknown station " + key); line.st.Add(index); }
-                restoredLines.Add(line);
+                bool valid = true;
+                foreach (string key in record.stations) {
+                    if(!byKey.TryGetValue(key,out int index)) { valid = false; break; }
+                    line.st.Add(index);
+                }
+                if (valid && line.st.Count >= 2) restoredLines.Add(line);
             }
-            foreach(var record in data.stations) if(record == null || !byKey.ContainsKey(record.key)) throw new Exception("unknown saved station");
-            foreach(var record in data.vehicles) if(record == null || record.node < 0 || record.node >= LocoNames.Length || (record.lineId != 0 && !ids.Contains(record.lineId))) throw new Exception("invalid vehicle");
+            foreach(var record in data.stations) if(record == null || !byKey.ContainsKey(record.key)) continue;
+            foreach(var record in data.vehicles) if(record == null || record.node < 0 || record.node >= LocoNames.Length || (record.lineId != 0 && !ids.Contains(record.lineId))) continue;
             foreach(var record in data.stations) { var station=stations[byKey[record.key]]; station.level=record.level; station.trafficEvent=record.trafficEvent; station.built=record.built; station.closed=record.closed; station.riderBonus=record.riderBonus; station.facLevel=record.facLevel; }
             var sceneryByKey = new Dictionary<string,Scenery>(); foreach(var item in sceneries) sceneryByKey[ScenerySaveKey(item)]=item;
             foreach(var record in data.scenery) if(record != null && sceneryByKey.TryGetValue(record.key,out var item)) { item.found=record.found; item.unlocked=record.unlocked; }
@@ -66,4 +70,5 @@ public partial class DemoBootstrap
     void OnApplicationPause(bool paused) { if(paused) SaveGame(); }
     void OnApplicationFocus(bool focused) { if(!focused) SaveGame(); }
     void OnApplicationQuit() { SaveGame(); }
+    void OnDisable() { SaveGame(); }
 }

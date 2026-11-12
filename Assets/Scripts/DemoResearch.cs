@@ -380,15 +380,29 @@ public partial class DemoBootstrap
             var cardRect = card.GetComponent<RectTransform>(); graphRects[node.key] = cardRect; historyNodeRects[node.key] = cardRect;
             layout.Add(node.key, cardRect, node.key == "pressure" ? -1 : HistoryEra(node.key), node.parents);
             Color categoryColor = HistoryEffectColor(node);
-            Rounded(card, done ? Color.Lerp(categoryColor, Color.white, 0.60f) : Color.white);
+            bool locked = !done && !ready; // 前置不足
+
+            // 卡片底色：前置不足采用低透明度半透明设定，其余（已解锁/可解锁）恢复原样
+            Color cardBg = done ? Color.Lerp(categoryColor, Color.white, 0.60f)
+                         : locked ? new Color(1f, 1f, 1f, 0.38f)
+                         : Color.white;
+            Rounded(card, cardBg);
+
+            // 分类圆标：前置不足低透明度弱化，其余恢复原样饱和色
             var marker = Rect("Category", card.transform, 8, 90, 17, 17);
-            Img(marker, categoryColor, spriteCircle).raycastTarget = false;
-            var name = Txt(card.transform, node.name, 24, Ink, 6, node.loco >= 0 ? 83 : 62, 188, node.loco >= 0 ? 32 : 48, TextAnchor.MiddleCenter);
+            Color dotColor = locked ? new Color(categoryColor.r, categoryColor.g, categoryColor.b, 0.35f) : categoryColor;
+            Img(marker, dotColor, spriteCircle).raycastTarget = false;
+
+            // 标题文字：前置不足半透明，其余恢复 Ink 纯黑墨色
+            Color nameColor = locked ? new Color(Ink.r, Ink.g, Ink.b, 0.45f) : Ink;
+            var name = Txt(card.transform, node.name, 24, nameColor, 6, node.loco >= 0 ? 83 : 62, 188, node.loco >= 0 ? 32 : 48, TextAnchor.MiddleCenter);
             name.resizeTextForBestFit = true; name.resizeTextMinSize = 17; name.resizeTextMaxSize = 24;
+
             if (node.loco >= 0)
             {
                 var art = Rect("Locomotive", card.transform, 12, 36, 176, 46).AddComponent<RawImage>();
                 art.texture = Resources.Load<Texture2D>("Research/Train/" + LocoArt[node.loco]); art.raycastTarget = false;
+                if (locked) art.color = new Color(1f, 1f, 1f, 0.35f); // 前置不足机车图低透明度
                 if (art.texture)
                 {
                     float ratio = (float)art.texture.width / art.texture.height;
@@ -396,8 +410,11 @@ public partial class DemoBootstrap
                     art.rectTransform.sizeDelta = new Vector2(iw, ih); art.rectTransform.anchoredPosition = new Vector2((200 - iw) / 2, 36 + (46 - ih) / 2);
                 }
             }
+
+            // 状态标签文本：前置不足半透明，其余恢复原样排版与 InkSoft 字色
             string label = node.loco >= 0 ? "机车" : node.effect == ResearchEffect.None ? "运营解锁" : HistoryEffectText(node).Replace(" 基础值（同类收益递减）", "");
-            var labelText = Txt(card.transform, label + (done ? " · 已解锁" : ready ? " · 可解锁" : " · 前置不足"), 17, InkSoft, 6, 20, 188, 30, TextAnchor.MiddleCenter);
+            Color labelColor = locked ? new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.45f) : InkSoft;
+            var labelText = Txt(card.transform, label + (done ? " · 已解锁" : ready ? " · 可解锁" : " · 前置不足"), 17, labelColor, 6, 20, 188, 30, TextAnchor.MiddleCenter);
             labelText.resizeTextForBestFit = true; labelText.resizeTextMinSize = 12; labelText.resizeTextMaxSize = 17;
             var touch = card.AddComponent<HistoryNodeTouch>(); string key = node.key;
             touch.onTap = () => TapHistoryNode(key); touch.onHold = () => HoldHistoryNode(key); touch.onRelease = HideHistoryInfo;
