@@ -124,42 +124,70 @@ public partial class DemoBootstrap
     string StationTrafficDescription(int index)
     {
         var station = stations[index]; int lineCount = StationLineCount(index);
-        string state = station.closed ? "已关停 · 列车通过不停站" : lineCount == 0 ? "已开站 · 尚未接入线路" : "运营中 · " + lineCount + " 条线路";
+        string state = !station.built ? "未开站 · 开站费用 ¥" + StationOpeningCost(index) : station.closed ? "已关停 · 列车通过不停站" : lineCount == 0 ? "已开站 · 等待线路接入" : "运营中 · " + lineCount + " 条线路";
         string lineNames = "";
         foreach (var line in lines) if (line.st.Contains(index)) lineNames += (lineNames.Length == 0 ? "" : "、") + line.name;
         float demand = StationRequestedFlow(index), served = StationPassengerFlow(index), cap = StationCapacity(index);
         string pressure = demand > cap ? "站点拥挤，升级可提高站内容量" : "站点容量充足";
-        return state + (lineNames.Length > 0 ? "\n途经线路：" + lineNames : "") + "\n当前客流 " + Mathf.RoundToInt(served) + " / 日  ·  需求 " + Mathf.RoundToInt(demand) + " / 日\n" +
+        return state + (lineNames.Length > 0 ? "\n途经线路：" + lineNames : "") + "\n预估客流 " + StationEstimatedDemand(index) + " 人/日（潜在需求）" + "\n当前客流 " + Mathf.RoundToInt(served) + " / 日  ·  需求 " + Mathf.RoundToInt(demand) + " / 日\n" +
             "站内容量 " + Mathf.RoundToInt(cap) + " / 日 · " + pressure + "\n" +
             "流量事件：" + TrafficEventNames[station.trafficEvent] + "（需求 " +
             (TrafficEventFactors[station.trafficEvent] >= 1 ? "+" : "") + Mathf.RoundToInt((TrafficEventFactors[station.trafficEvent]-1)*100) + "%）\n" +
             "线路覆盖、换乘、速度与班次决定可达客流；车站和线路容量限制实际服务量。";
     }
+    bool OpenStation(int index)
+    {
+        var station = stations[index];
+        int cost = StationOpeningCost(index);
+        if (coins < cost) { Toast("金币不足：还差 ¥" + Mathf.CeilToInt(cost - coins)); return false; }
+        if (station.built && !station.closed) return true;
+        BeginUndo(station.built ? "重新开站" : "开站");
+        coins -= cost; station.built = true; station.closed = false;
+        RefreshStationDots(); RecalcIncome(); CheckSceneryOnLine(null); EndUndo(); RefreshHUD();
+        Toast(StationDisplayName(index, currentRegion) + " 已开站" + (cost > 0 ? " · ¥" + cost : ""));
+        return true;
+    }
     void ShowStationActions(int index)
     {
         if (index < 0 || index >= stations.Count || pageRoot || sceneryViewer) return;
+        var station = stations[index];
         Vector3 world = mapRect.TransformPoint(Pos(index)); Vector2 anchor = root.InverseTransformPoint(world);
-        var p = OpenBubble(stations[index].name, 220, 520, anchor);
-        Txt(p.transform, stations[index].closed ? "已关停" : StationLineCount(index) == 0 ? "尚未接入线路" : "运营中 · " + Mathf.RoundToInt(StationPassengerFlow(index)) + " 人/日", 22, InkSoft, 28, 86, 455, 36, TextAnchor.MiddleLeft);
-        var detail = Btn(p.transform, "StationInfo", "站点详情", 24, 28, 18, 464, 62, Indigo, () => OpenStationInfo(index));
+        var p = OpenBubble(StationDisplayName(index, currentRegion), 260, 520, anchor);
+        string status = "预估客流 " + StationEstimatedDemand(index) + " 人/日";
+        if (!station.built) status += " · 开站 ¥" + StationOpeningCost(index);
+        else if (station.closed) status += " · 已关停";
+        else if (StationLineCount(index) > 0) status += "\n当前客流 " + Mathf.RoundToInt(StationPassengerFlow(index)) + " 人/日";
+        else status += " · 已开站";
+        Txt(p.transform, status, 22, InkSoft, 28, 96, 464, 62, TextAnchor.MiddleLeft);
+        bool canOpen = !station.built || station.closed;
+        if (canOpen)
+        {
+            var open = Btn(p.transform, "OpenStation", station.built ? "重新开站" : "开站 ¥" + StationOpeningCost(index), 23, 28, 18, 224, 62, Matcha, () => { if (OpenStation(index)) { ClosePanel(true); ShowStationActions(index); } });
+            TInk(open, Color.white);
+        }
+        var detail = Btn(p.transform, "StationInfo", "站点详情", 24, canOpen ? 268 : 28, 18, canOpen ? 224 : 464, 62, Indigo, () => OpenStationInfo(index));
         TInk(detail, Color.white);
     }
     void OpenStationInfo(int index)
     {
         if (index < 0 || index >= stations.Count || pageRoot || sceneryViewer) return;
         var station = stations[index];
-        var p = OpenPopup(station.name + " · Lv." + station.level, 940, 960);
+        var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, 940, 960);
         stationTrafficPanel = p; stationTrafficIndex = index;
         stationTrafficLabel = Txt(p.transform, StationTrafficDescription(index), 28, InkSoft, 38, 300, 884, 490, TextAnchor.UpperLeft);
         int cost = Mathf.RoundToInt(100f * Mathf.Pow(1.65f, station.level - 1));
         var upgrade = Btn(p.transform, "UpgradeStation", station.level >= 10 ? "已满级" : "升级  ¥" + cost, 27, 38, 155, 420, 92, Matcha, () => {
+            if (!station.built) { Toast("请先开站"); return; }
             if (station.level >= 10) { Toast("车站已满级"); return; }
             if (coins < cost) { Toast("金币不足"); return; }
             BeginUndo("升级车站"); coins -= cost; station.level++; RecalcIncome(); EndUndo(); RefreshHUD(); OpenStationInfo(index); Toast("车站升级成功");
         }); TInk(upgrade, Color.white);
-        var toggle = Btn(p.transform, "ToggleStation", station.closed ? "开站" : "关停", 27, 500, 155, 420, 92, station.closed ? Indigo : Vermilion, () => {
-            BeginUndo(station.closed ? "开站" : "关停车站"); station.closed = !station.closed; RefreshStationDots(); RecalcIncome(); if (!station.closed) CheckSceneryOnLine(null); EndUndo(); RefreshHUD(); OpenStationInfo(index);
-            Toast(station.name + (station.closed ? " 已关停" : " 已开站"));
+        bool needsOpening = !station.built || station.closed;
+        string toggleLabel = !station.built ? "开站 ¥" + StationOpeningCost(index) : station.closed ? "重新开站" : "关停";
+        var toggle = Btn(p.transform, "ToggleStation", toggleLabel, 27, 500, 155, 420, 92, needsOpening ? Indigo : Vermilion, () => {
+            if (needsOpening) { if (!OpenStation(index)) return; }
+            else { BeginUndo("关停车站"); station.closed = true; RefreshStationDots(); RecalcIncome(); EndUndo(); RefreshHUD(); Toast(StationDisplayName(index, currentRegion) + " 已关停"); }
+            OpenStationInfo(index);
         }); TInk(toggle, Color.white);
         var close = Btn(p.transform, "StationClose", "关闭", 26, 38, 36, 882, 80, new Color(0.92f,0.89f,0.83f), () => { ClosePanel(true); ShowStationActions(index); });
         TInk(close, Ink);
@@ -273,8 +301,7 @@ public partial class DemoBootstrap
     void RefreshStationDots()
     {
         if (stationOpen == null || stationOpen.Length != stations.Count) stationOpen = new bool[stations.Count];
-        for (int i = 0; i < stationOpen.Length; i++) stationOpen[i] = false;
-        foreach (var l in lines) foreach (var i in l.st) if (i >= 0 && i < stationOpen.Length) stationOpen[i] = !stations[i].closed;
+        for (int i = 0; i < stationOpen.Length; i++) stationOpen[i] = stations[i].built && !stations[i].closed;
         foreach (var kv in stationImgs)
         {
             if (stations[kv.Key].portal) continue;
@@ -353,7 +380,7 @@ public partial class DemoBootstrap
             return;
         }
         CloseLineBubble();
-        draft.Clear(); draft.Add(idx); draftCost = 0;
+        draft.Clear(); draft.Add(idx); draftCost = DraftCostOf(draft);
         dragFrom = idx; dragging = true; hoverStation = -1;
         dragCostDisplayed = 0; dragCostLastCommitted = 0; dragCostPulse = 0;
         if (dragCostBadge) { dragCostBadge.SetActive(true); UpdateDragCostBadge(Pos(idx), Pos(idx), 1f); }

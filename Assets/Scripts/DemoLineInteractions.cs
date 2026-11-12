@@ -70,7 +70,7 @@ public partial class DemoBootstrap
             Rounded(card, new Color(1f, 0.985f, 0.95f, 0.985f)); SoftShadow(card);
             Img(Rect("Accent", card.transform, 0, 12, 6, bh - 24), line.color, spriteRound).raycastTarget = false;
             Txt(card.transform, line.name, 25, Ink, 18, bh - 50, 150, 34, TextAnchor.MiddleLeft);
-            Txt(card.transform, stations[a].name + " ⇄ " + stations[b].name, 18, InkSoft, 168, bh - 48, 280, 30, TextAnchor.MiddleLeft);
+            Txt(card.transform, StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion), 18, InkSoft, 168, bh - 48, 280, 30, TextAnchor.MiddleLeft);
 
             var b1 = Btn(card.transform, "CutSeg", "拆该段", 21, 18, 16, 128, 64, new Color(0.965f,0.895f,0.85f), () => {
                 CloseLineBubble();
@@ -97,7 +97,7 @@ public partial class DemoBootstrap
         float d = Vector2.Distance(Pos(a), Pos(b));
         int refund = Mathf.RoundToInt((30f + d * 0.75f) * 0.6f);
         string tail = line.st.Count <= 2 ? "\n该段拆除后，这条线路会消失。" : "\n拆除后退还 ¥" + refund + "。";
-        return stations[a].name + " ⇄ " + stations[b].name + tail;
+        return StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion) + tail;
     }
     string LineConfirmText(Line line)
     {
@@ -139,13 +139,13 @@ public partial class DemoBootstrap
         {
             line.st.RemoveAt(0);
             coins += refund;
-            msg = "已拆除一段：" + stations[a].name + " ⇄ " + stations[b].name;
+            msg = "已拆除一段：" + StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion);
         }
         else if (seg == n - 2)
         {
             line.st.RemoveAt(n - 1);
             coins += refund;
-            msg = "已拆除一段：" + stations[a].name + " ⇄ " + stations[b].name;
+            msg = "已拆除一段：" + StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion);
         }
         else
         {

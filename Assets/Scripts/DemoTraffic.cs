@@ -18,24 +18,44 @@ public partial class DemoBootstrap
     static readonly string[] TrafficEventNames = { "日常运营", "社区活动", "景点活动", "道路施工", "暴雨出行减少" };
     static readonly float[] TrafficEventFactors = { 1f, 1.25f, 1.35f, 0.80f, 0.70f };
 
-    float StationBaseDemand(int i)
+    // 每个模拟客流单位对应 100 人次；收入仍使用原经济尺度。
+    const float PassengerScale = 100f;
+    float CityDemandWeight(Station station)
+    {
+        if (station.portal) return 1.6f;
+        if (station.region == "香港") return 1.25f;
+        if (station.region == "澳门") return 0.75f;
+        switch (station.city)
+        {
+            case "广州市": case "深圳市": return station.county ? 1.1f : 1.7f;
+            case "佛山市": case "东莞市": return station.county ? 0.95f : 1.35f;
+            case "惠州市": case "珠海市": case "中山市": case "江门市": return station.county ? 0.8f : 1.1f;
+            default: return station.county ? 0.65f : 0.9f;
+        }
+    }
+    float StationBaselineDemand(int i)
     {
         var s = stations[i];
-        float baseValue = 68f + (i * 19 % 28);
+        float baseValue = 80f;
         switch (s.name)
         {
             case "沙田": case "大围": case "天水围": case "元朗": case "上水": case "粉岭": case "荃湾": case "屯门": case "氹仔": case "青洲": case "石排湾": baseValue *= 1.25f; break;
             case "中环": case "金钟": case "尖沙咀": case "旺角": case "铜锣湾": case "大三巴": case "妈阁": case "澳门机场": case "深圳": case "广州": baseValue *= 1.30f; break;
         }
         foreach (var sc in sceneries) if (sc.triggerStation == s.name && s.region == sc.region) { baseValue *= 1.15f; break; }
+        return baseValue * CityDemandWeight(s);
+    }
+    float StationBaseDemand(int i)
+    {
+        var s = stations[i];
         float hour = Mathf.Repeat(8f + dayClock / 60f * 24f, 24f);
         float morning = Mathf.Exp(-Mathf.Pow((hour - 8.5f) / 2f, 2f));
         float evening = Mathf.Exp(-Mathf.Pow((hour - 18f) / 2.4f, 2f));
         float leisure = Mathf.Exp(-Mathf.Pow((hour - 14f) / 4f, 2f));
-        return baseValue * (0.72f + 0.30f * morning + 0.30f * evening + 0.14f * leisure) * TrafficEventFactors[s.trafficEvent];
+        return StationBaselineDemand(i) * (0.72f + 0.30f * morning + 0.30f * evening + 0.14f * leisure) * TrafficEventFactors[s.trafficEvent];
     }
-    float StationCapacity(int i) { return 180f + (stations[i].level - 1) * 100f; }
-    float LineCapacity(Line line) { return 260f * Mathf.Max(1, line.trains) * (1f + 0.35f * line.up[1]) * (1f + 0.25f * line.up[2]); }
+    float StationCapacity(int i) { return (180f + (stations[i].level - 1) * 100f) * PassengerScale; }
+    float LineCapacity(Line line) { return PassengerScale * 260f * Mathf.Max(1, line.trains) * (1f + 0.35f * line.up[1]) * (1f + 0.25f * line.up[2]); }
     void RollTrafficEvents()
     {
         foreach (var station in stations)
@@ -98,7 +118,7 @@ public partial class DemoBootstrap
                 int target=-1; float best=float.PositiveInfinity;
                 for (int l=0;l<lineCount;l++) if (node[l,dest]>=0 && dist[node[l,dest]]<best) {target=node[l,dest];best=dist[target];}
                 if (target<0) continue;
-                float amount=0.58f*baseDemand[origin]*baseDemand[dest]/80f/(1f+best*0.07f);
+                float amount=PassengerScale*0.58f*baseDemand[origin]*baseDemand[dest]/80f/(1f+best*0.07f);
                 var route=new List<int>(); for (int u=target;u>=0;u=prev[u]) route.Add(u);
                 var seenStations=new HashSet<int>(); var seenLines=new HashSet<int>();
                 foreach (int u in route) { if (!stations[nodeStation[u]].closed) seenStations.Add(nodeStation[u]); seenLines.Add(nodeLine[u]); }
@@ -123,6 +143,6 @@ public partial class DemoBootstrap
     float LinePassengerFlow(Line line) { return traffic != null && traffic.lineServed.TryGetValue(line,out float value) ? value : 0f; }
     float TrafficRevenue(Line line, TrafficResult result)
     {
-        return result.lineServed.TryGetValue(line,out float served) ? served * 1.5f * TechMult() : 0f;
+        return result.lineServed.TryGetValue(line,out float served) ? served / PassengerScale * 1.5f * TechMult() : 0f;
     }
 }
