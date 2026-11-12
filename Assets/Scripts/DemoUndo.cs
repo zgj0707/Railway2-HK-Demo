@@ -7,7 +7,7 @@ public partial class DemoBootstrap
 {
     sealed class UndoLine
     {
-        public Line line; public string name; public List<int> path; public int[] upgrades; public int trains;
+        public Line line; public string name; public List<int> path; public int[] dispatch; public int trains; public float fare;
     }
     sealed class UndoVehicle { public ResearchVehicle vehicle; public int lineId; }
     sealed class UndoState
@@ -15,7 +15,7 @@ public partial class DemoBootstrap
         public string label; public float coinsBefore, diamondsBefore, rpBefore, coinsDelta, diamondsDelta, rpDelta;
         public int nextId, speed; public bool macau, guangdong;
         public List<UndoLine> lines = new List<UndoLine>();
-        public int[] levels; public bool[] closed, sceneryUnlocked, sceneryFound;
+        public int[] levels; public bool[] built, closed, sceneryUnlocked, sceneryFound;
         public List<string> technologies; public List<UndoVehicle> vehicles = new List<UndoVehicle>();
     }
     UndoState pendingUndo, lastUndo;
@@ -33,10 +33,10 @@ public partial class DemoBootstrap
     void BeginUndo(string label)
     {
         var state = new UndoState { label=label, coinsBefore=coins, diamondsBefore=diamonds, rpBefore=rp, nextId=nextLineId,
-            macau=macauUnlocked, guangdong=guangdongUnlocked, speed=timeSpeed, levels=new int[stations.Count], closed=new bool[stations.Count],
+            macau=macauUnlocked, guangdong=guangdongUnlocked, speed=timeSpeed, levels=new int[stations.Count], built=new bool[stations.Count], closed=new bool[stations.Count],
             sceneryUnlocked=new bool[sceneries.Count], sceneryFound=new bool[sceneries.Count], technologies=new List<string>(techDone) };
-        foreach (var line in lines) state.lines.Add(new UndoLine { line=line, name=line.name, path=new List<int>(line.st), upgrades=(int[])line.up.Clone(), trains=line.trains });
-        for (int i=0;i<stations.Count;i++) { state.levels[i]=stations[i].level; state.closed[i]=stations[i].closed; }
+        foreach (var line in lines) state.lines.Add(new UndoLine { line=line, name=line.name, path=new List<int>(line.st), dispatch=(int[])line.dispatch.Clone(), trains=line.trains, fare=line.fare });
+        for (int i=0;i<stations.Count;i++) { state.levels[i]=stations[i].level; state.built[i]=stations[i].built; state.closed[i]=stations[i].closed; }
         for (int i=0;i<sceneries.Count;i++) { state.sceneryUnlocked[i]=sceneries[i].unlocked; state.sceneryFound[i]=sceneries[i].found; }
         foreach (var item in researchVehicles) state.vehicles.Add(new UndoVehicle { vehicle=item, lineId=item.lineId });
         pendingUndo=state;
@@ -54,8 +54,8 @@ public partial class DemoBootstrap
         var state=lastUndo; lastUndo=null; pendingUndo=null; CloseLineBubble(); CancelDraft();
         coins-=state.coinsDelta; diamonds-=state.diamondsDelta; rp-=state.rpDelta; nextLineId=state.nextId; timeSpeed=state.speed; UpdateTimeText();
         lines.Clear(); foreach (var record in state.lines)
-        { record.line.name=record.name; record.line.st=new List<int>(record.path); record.line.up=(int[])record.upgrades.Clone(); record.line.trains=record.trains; lines.Add(record.line); }
-        for (int i=0;i<stations.Count;i++) { stations[i].level=state.levels[i]; stations[i].closed=state.closed[i]; }
+        { record.line.name=record.name; record.line.st=new List<int>(record.path); record.line.dispatch=(int[])record.dispatch.Clone(); record.line.trains=record.trains; record.line.fare=record.fare; lines.Add(record.line); }
+        for (int i=0;i<stations.Count;i++) { stations[i].level=state.levels[i]; stations[i].built=state.built[i]; stations[i].closed=state.closed[i]; }
         for (int i=0;i<sceneries.Count;i++) { sceneries[i].unlocked=state.sceneryUnlocked[i]; sceneries[i].found=state.sceneryFound[i]; }
         techDone.Clear(); techDone.AddRange(state.technologies);
         researchVehicles.Clear(); foreach (var item in state.vehicles) { item.vehicle.lineId=item.lineId; researchVehicles.Add(item.vehicle); }

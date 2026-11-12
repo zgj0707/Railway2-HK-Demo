@@ -70,7 +70,7 @@ public partial class DemoBootstrap
             Rounded(card, new Color(1f, 0.985f, 0.95f, 0.985f)); SoftShadow(card);
             Img(Rect("Accent", card.transform, 0, 12, 6, bh - 24), line.color, spriteRound).raycastTarget = false;
             Txt(card.transform, line.name, 25, Ink, 18, bh - 50, 150, 34, TextAnchor.MiddleLeft);
-            Txt(card.transform, stations[a].name + " ⇄ " + stations[b].name, 18, InkSoft, 168, bh - 48, 280, 30, TextAnchor.MiddleLeft);
+            Txt(card.transform, StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion), 18, InkSoft, 168, bh - 48, 280, 30, TextAnchor.MiddleLeft);
 
             var b1 = Btn(card.transform, "CutSeg", "拆该段", 21, 18, 16, 128, 64, new Color(0.965f,0.895f,0.85f), () => {
                 CloseLineBubble();
@@ -97,7 +97,7 @@ public partial class DemoBootstrap
         float d = Vector2.Distance(Pos(a), Pos(b));
         int refund = Mathf.RoundToInt((30f + d * 0.75f) * 0.6f);
         string tail = line.st.Count <= 2 ? "\n该段拆除后，这条线路会消失。" : "\n拆除后退还 ¥" + refund + "。";
-        return stations[a].name + " ⇄ " + stations[b].name + tail;
+        return StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion) + tail;
     }
     string LineConfirmText(Line line)
     {
@@ -110,9 +110,9 @@ public partial class DemoBootstrap
     {
         if (line == null || !lines.Contains(line) || seg < 0 || seg >= line.st.Count - 1) return;
         int n = line.st.Count;
-        if (!IsLoop(line.st) && n > 3 && seg > 0 && seg < n - 2 && lines.Count >= 6)
+        if (!IsLoop(line.st) && n > 3 && seg > 0 && seg < n - 2 && lines.Count >= LineLimit())
         {
-            Toast("线路已满 6 条，无法拆分该段；可拆除整线");
+            Toast("线路已达上限，无法拆分该段；可拆除整线或研究扩建");
             return;
         }
         int a = line.st[seg], b = line.st[seg + 1];
@@ -131,7 +131,7 @@ public partial class DemoBootstrap
         }
         else if (n <= 2)
         {
-            lines.Remove(line);
+            ReleaseLineFleet(line); lines.Remove(line);
             coins += refund;
             msg = "已拆除 " + line.name;
         }
@@ -139,13 +139,13 @@ public partial class DemoBootstrap
         {
             line.st.RemoveAt(0);
             coins += refund;
-            msg = "已拆除一段：" + stations[a].name + " ⇄ " + stations[b].name;
+            msg = "已拆除一段：" + StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion);
         }
         else if (seg == n - 2)
         {
             line.st.RemoveAt(n - 1);
             coins += refund;
-            msg = "已拆除一段：" + stations[a].name + " ⇄ " + stations[b].name;
+            msg = "已拆除一段：" + StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion);
         }
         else
         {
@@ -172,7 +172,7 @@ public partial class DemoBootstrap
         if (line == null || !lines.Contains(line)) return;
         BeginUndo("拆除整条线路");
         float refund = 120f * (UniqueCount(line.st) - 1) * 0.6f;
-        coins += refund; lines.Remove(line);
+        coins += refund; ReleaseLineFleet(line); lines.Remove(line);
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); RefreshHUD();
         EndUndo(); Toast("已拆除 " + line.name);
     }
@@ -190,12 +190,13 @@ public partial class DemoBootstrap
         int recentSum = 0;
         for (int i = 0; i < line.recent.Count; i++) recentSum += line.recent[i];
 
-        StatBox(p.transform, "每日收入", Mathf.RoundToInt(LineDaily(line)) + "", 34, h - 300, 430, 150, Gold);
-        StatBox(p.transform, "今日实收", line.todayRevenue + "", 496, h - 300, 430, 150, Matcha);
+        var forecast = ForecastFor(line);
+        StatBox(p.transform, "预计日收入", Mathf.RoundToInt(forecast.gross) + "", 34, h - 300, 430, 150, Gold);
+        StatBox(p.transform, "预计日利润", Mathf.RoundToInt(forecast.Profit) + "", 496, h - 300, 430, 150, Matcha);
         StatBox(p.transform, "客 流", Mathf.RoundToInt(LinePassengerFlow(line)) + "", 34, h - 470, 430, 150, Indigo);
-        StatBox(p.transform, "运 力", Mathf.RoundToInt(LineCapacity(line)) + " 人/日", 496, h - 470, 430, 150, Sakura);
+        StatBox(p.transform, "日接载能力", Mathf.RoundToInt(LineCapacity(line)) + " 人次", 496, h - 470, 430, 150, Sakura);
 
-        Txt(p.transform, "近 7 日实收", 24, Ink, 36, 675, 420, 34, TextAnchor.MiddleLeft);
+        Txt(p.transform, "近 7 日净利润", 24, Ink, 36, 675, 420, 34, TextAnchor.MiddleLeft);
         if (line.recent.Count == 0)
         {
             for (int i = 0; i < 7; i++)
@@ -204,13 +205,13 @@ public partial class DemoBootstrap
                 Img(ghost, new Color(0.90f, 0.87f, 0.81f, 0.42f), spriteRound).raycastTarget = false;
             }
             Img(Rect("ChartBase", p.transform, 36, 500, 888, 2), new Color(0.55f,0.50f,0.42f,0.28f)).raycastTarget = false;
-            Txt(p.transform, "首日运营中 · 今日 ¥" + line.todayRevenue + "\n日结后生成近 7 日营收曲线", 21, InkSoft, 36, 545, 860, 70, TextAnchor.UpperLeft);
+            Txt(p.transform, "首日运营中 · 今日收入 ¥" + line.todayRevenue + "\n日结后生成近 7 日利润曲线", 21, InkSoft, 36, 545, 860, 70, TextAnchor.UpperLeft);
         }
         else
         {
             Txt(p.transform, "已结算 " + line.recent.Count + " 日 · 日均 ¥" + (recentSum / line.recent.Count), 19, InkSoft, 480, 678, 430, 30, TextAnchor.MiddleRight);
             int max = 1;
-            foreach (int v in line.recent) if (v > max) max = v;
+            foreach (int v in line.recent) if (Mathf.Abs(v) > max) max = Mathf.Abs(v);
             int start = 7 - line.recent.Count;
             for (int i = 0; i < 7; i++)
             {
@@ -219,20 +220,22 @@ public partial class DemoBootstrap
                 if (i >= start)
                 {
                     int v = line.recent[i - start];
-                    float bh = Mathf.Max(3f, 135f * v / max);
-                    Img(Rect("Bar", p.transform, bx, 505, 64, bh), line.color, spriteRound).raycastTarget = false;
+                    float bh = Mathf.Max(3f, 67f * Mathf.Abs(v) / max);
+                    Img(Rect("Bar", p.transform, bx, v >= 0 ? 572 : 572-bh, 64, bh), v >= 0 ? line.color : Vermilion, spriteRound).raycastTarget = false;
                 }
             }
         }
 
         Txt(p.transform, "运 营", 24, Ink, 36, 470, 300, 34, TextAnchor.MiddleLeft);
         Txt(p.transform, "车站 " + unique + " · 列车 " + line.trains + "/8 · 线路长度 " + Mathf.RoundToInt(PathLength(line.st)) + "m", 21, Ink, 36, 420, 860, 34, TextAnchor.MiddleLeft);
-        Txt(p.transform, "车速 Lv." + line.up[0] + " · 编组 Lv." + line.up[1] + " · 班次 Lv." + line.up[2], 21, InkSoft, 36, 384, 860, 30, TextAnchor.MiddleLeft);
+        Txt(p.transform, "需求 " + Mathf.RoundToInt(LineRequestedFlow(line)) + " 人次/日 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line, 2)*100) + "%", 21, InkSoft, 36, 384, 860, 30, TextAnchor.MiddleLeft);
         if (seg >= 0 && seg < line.st.Count - 1)
             Txt(p.transform, "选中段：" + stations[line.st[seg]].name + " ⇄ " + stations[line.st[seg + 1]].name, 19, line.color, 36, 344, 860, 30, TextAnchor.MiddleLeft);
         Txt(p.transform, "沿线 " + UniquePathText(line.st), 19, InkSoft, 36, 296, 860, 48, TextAnchor.UpperLeft);
 
-        Btn(p.transform, "LineDetail", "线路详情 / 升级", 26, 34, 34, 430, 82, Indigo, () => {
+        Txt(p.transform, "预计成本：车辆 ¥" + Mathf.RoundToInt(forecast.vehicle) + " · 线路 ¥" + Mathf.RoundToInt(forecast.track) + " · 税 ¥" + Mathf.RoundToInt(forecast.tax), 20, InkSoft, 36, 246, 860, 34, TextAnchor.MiddleLeft);
+        var planning = Btn(p.transform, "Operations", "票价与调度", 25, 34, 132, 892, 70, Indigo, () => { ClosePanel(true); OpenLineOperations(line); }); TInk(planning, Color.white);
+        Btn(p.transform, "LineDetail", "线路详情 / 车辆", 26, 34, 34, 430, 82, Indigo, () => {
             ClosePanel(); OpenLineScreen(line.id, () => OpenLineInfo(line, seg));
         });
         var close = Btn(p.transform, "InfoClose", "关 闭", 26, 496, 34, 430, 82, new Color(0.92f,0.89f,0.83f), ClosePanel);
@@ -294,7 +297,7 @@ public partial class DemoBootstrap
     float PathLength(List<int> path)
     {
         float total = 0;
-        for (int i = 0; i < path.Count - 1; i++) total += Vector2.Distance(Pos(path[i]), Pos(path[i+1]));
+        for (int i = 0; i < path.Count - 1; i++) { string region = SegmentRegion(path[i], path[i+1]); if (region != null) total += Vector2.Distance(PosInRegion(path[i],region), PosInRegion(path[i+1],region)); }
         return total;
     }
 
