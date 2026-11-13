@@ -23,7 +23,7 @@ public partial class DemoBootstrap
     static readonly string[] LocoArt = { "art_train_penydarren_1804", "art_train_salamanca_1812", "art_train_puffing_billy_1813", "art_train_locomotion_no1_1825", "art_train_rocket_1829", "art_train_john_bull_1831", "art_train_adler_1835", "art_train_fairy_queen_1855", "art_train_nyc_999_1893" };
     string historySelected;
     float historyScrollX = 0.5f, historyScrollY = 0.5f;
-    Text historyInfo, historyHeading;
+    Text historyInfo, historyHeading, historyRpText;
     GameObject historyInfoPanel, historyControls;
     TechCoinWidget historyCoinWidget;
     readonly HashSet<string> historyAnimated = new HashSet<string>();
@@ -157,12 +157,17 @@ public partial class DemoBootstrap
     int HistoryCost(HistoryNode node)
     {
         switch(node.key) {
-            case "dispatch_basic": return 250; case "dispatch_peak": return 600; case "fare_policy": return 500;
-            case "network_expand1": return 1000; case "network_expand2": return 3000;
+            case "dispatch_basic": return 400; case "dispatch_peak": return 1600; case "fare_policy": return 1200;
+            case "network_expand1": return 4500; case "network_expand2": return 18000;
         }
-        if (node.loco == 0) return 300;
-        float price = 100f * Mathf.Pow(1.35f, node.depth) * (node.loco >= 0 ? 1.8f : 1f);
-        return Mathf.Max(100, Mathf.RoundToInt(price / 10f) * 10);
+        if (node.loco == 0) return 450;
+        float price = 250f * Mathf.Pow(1.75f, node.depth) * (node.loco >= 0 ? 2.2f : 1f);
+        return Mathf.Max(200, Mathf.RoundToInt(price / 10f) * 10);
+    }
+    int HistoryRpCost(HistoryNode node)
+    {
+        if (node == null || node.key == "pressure") return 0;
+        return 2 + node.depth * 3;
     }
     string HistoryEffectText(HistoryNode node)
     {
@@ -226,13 +231,15 @@ public partial class DemoBootstrap
         string effect = HistoryEffectText(node);
         string missing = "";
         foreach (var parent in node.parents) if (!techDone.Contains(parent)) missing += (missing.Length == 0 ? "" : "、") + historyByKey[parent].name;
-        string state = techDone.Contains(node.key) ? "已解锁" : missing.Length > 0 ? "尚需：" + missing : "点击解锁";
+        int rpNeed = HistoryRpCost(node);
+        string costPart = "¥" + HistoryCost(node) + (rpNeed > 0 ? " · " + rpNeed + " RP" : "");
+        string state = techDone.Contains(node.key) ? "已解锁" : missing.Length > 0 ? "前置：" + missing : "点击立研";
         string estimate = "";
         if (!techDone.Contains(key) && node.loco < 0 && node.effect != ResearchEffect.None) {
             float delta = EstimateResearchProfit(node);
-            estimate = "\n当前线网预计日利润 " + (delta >= 0 ? "+" : "") + delta.ToString("0.0") + " 金币（按当前运营估算）";
+            estimate = "\n当前线网日利润预计 " + (delta >= 0 ? "+" : "") + "¥" + delta.ToString("0");
         }
-        historyInfo.text = DisplayPlaceAliases("年代：" + HistoryPeriod(node) + " · 研究费用 ¥" + HistoryCost(node) + "\n" + node.description + "\n" + effect + " · " + state + estimate);
+        historyInfo.text = DisplayPlaceAliases(HistoryPeriod(node) + " · 研发 " + costPart + "\n" + node.description + "\n" + effect + " · " + state + estimate);
     }
     void HideHistoryInfo() { if (historyInfoPanel) historyInfoPanel.SetActive(false); }
     void SetHistoryDragging(bool dragging)
@@ -244,16 +251,21 @@ public partial class DemoBootstrap
     {
         if (!historyByKey.TryGetValue(key, out var node) || techDone.Contains(key)) return;
         if (!HistoryAvailable(node)) { HoldHistoryNode(key); Invoke(nameof(HideHistoryInfo), 2f); return; }
-        int cost=HistoryCost(node);
-        if(coins<cost) {
-            Toast("金币不足，研究需要 ¥" + cost + "，还差 ¥" + Mathf.CeilToInt(cost-coins));
+        int cost = HistoryCost(node);
+        int rpCost = HistoryRpCost(node);
+        if (coins < cost) {
+            Toast("研发经费不足：还差 ¥" + Mathf.CeilToInt(cost - coins));
             if (historyCoinWidget) historyCoinWidget.Shake();
+            return;
+        }
+        if (rp < rpCost) {
+            Toast("科研点不足：需要 " + rpCost + " RP（还差 " + Mathf.CeilToInt(rpCost - rp) + "，推进运营或接公司标书可获 RP）");
             return;
         }
         historyAnimated.Clear();
         foreach (var candidate in historyNodes) if (HistoryVisible(candidate)) historyAnimated.Add(candidate.key);
         BeginUndo("解锁科技");
-        coins -= cost; techDone.Add(key);
+        coins -= cost; rp -= rpCost; techDone.Add(key);
         if (node.loco >= 0) {
             researchVehicles.Add(new ResearchVehicle { node = node.loco });
             if(node.loco==0 || node.loco==4 || node.loco==8) { diamonds+=50; Toast("机车里程碑：钻石 +50"); }
@@ -485,10 +497,17 @@ public partial class DemoBootstrap
         var headerLayout = historyControls.AddComponent<PageHeaderLayout>();
         headerLayout.page = controlsRt; headerLayout.back = backRt; headerLayout.home = homeRt; headerLayout.title = titleRt;
         headerLayout.coinBadge = coinBadgeRt;
-        var progressBadge = Rect("ProgressBadge", historyControls.transform, 24, 125, 260, 44);
-        var pbg = Img(progressBadge, new Color(1f, 0.99f, 0.97f, 0.88f), spriteRound); pbg.type = Image.Type.Sliced;
-        var prt = progressBadge.GetComponent<RectTransform>(); prt.anchorMin = prt.anchorMax = new Vector2(0,1); prt.pivot = new Vector2(0,1); prt.anchoredPosition = new Vector2(24,-135);
-        var progress = Txt(progressBadge.transform, "研究进度  " + techDone.Count + " / " + historyNodes.Count, 22, InkSoft, 12, 6, 236, 32, TextAnchor.MiddleLeft);
+        var progressBadge = Rect("ProgressBadge", historyControls.transform, 24, 125, 248, 50);
+        var pbg = Img(progressBadge, new Color(1f, 0.99f, 0.97f, 0.99f), spriteRound); pbg.type = Image.Type.Sliced; SoftShadow(progressBadge);
+        var prt = progressBadge.GetComponent<RectTransform>(); prt.anchorMin = prt.anchorMax = new Vector2(0,1); prt.pivot = new Vector2(0,1); prt.anchoredPosition = new Vector2(24,-138);
+        Txt(progressBadge.transform, "进度  " + techDone.Count + " / " + historyNodes.Count, 22, Ink, 16, 8, 218, 34, TextAnchor.MiddleLeft);
+
+        var rpBadge = Rect("RPBadge", historyControls.transform, 286, 125, 268, 50);
+        var rbg = Img(rpBadge, new Color(1f, 0.99f, 0.97f, 0.99f), spriteRound); rbg.type = Image.Type.Sliced; SoftShadow(rpBadge);
+        var rrt = rpBadge.GetComponent<RectTransform>(); rrt.anchorMin = rrt.anchorMax = new Vector2(0,1); rrt.pivot = new Vector2(0,1); rrt.anchoredPosition = new Vector2(286,-138);
+        var rpDot = Rect("RPDot", rpBadge.transform, 16, 16, 18, 18); Img(rpDot, Indigo, spriteCircle).raycastTarget = false;
+        historyRpText = Txt(rpBadge.transform, "科研点  " + Mathf.FloorToInt(rp) + " RP", 22, Indigo, 42, 8, 212, 34, TextAnchor.MiddleLeft);
+        historyRpText.resizeTextForBestFit = true; historyRpText.resizeTextMinSize = 16; historyRpText.resizeTextMaxSize = 22;
         var legend = Rect("ResearchLegend", historyControls.transform, 0, 0, 1032, 104);
         var legendRt = legend.GetComponent<RectTransform>(); legendRt.anchorMin = legendRt.anchorMax = new Vector2(0.5f, 0); legendRt.pivot = new Vector2(0.5f, 0); legendRt.anchoredPosition = new Vector2(0, 20);
         Rounded(legend, new Color(1f, 0.99f, 0.96f, 0.94f));
@@ -508,7 +527,8 @@ public partial class DemoBootstrap
         historyInfo = Txt(info.transform, "", 25, InkSoft, 28, 24, 844, 210, TextAnchor.UpperLeft);
         historyInfoPanel.SetActive(false);
     }
-    int LocoPrice(int index) { return 500 + index * 350; }
+    static readonly int[] LocoPrices = { 600, 1200, 2200, 4000, 7200, 13000, 22000, 38000, 65000 };
+    int LocoPrice(int index) { return LocoPrices[Mathf.Clamp(index, 0, LocoPrices.Length - 1)]; }
     void PurchaseLoco(int index)
     {
         if (index < 0 || index >= LocoNames.Length || !techDone.Contains(LocoKey(index))) { Toast("请先解锁对应机车节点"); return; }

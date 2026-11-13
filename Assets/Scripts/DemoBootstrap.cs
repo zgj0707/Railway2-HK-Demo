@@ -434,7 +434,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
         var gb = Btn(bar.transform, "Gear", "设", 26, 24, -24, 60, 60, CardBg, OpenAudioSettings);
         gb.GetComponentInChildren<Text>().color = Ink;
-        var hb = Btn(bar.transform, "Help", "?", 30, 94, -24, 60, 60, CardBg, () => HelpPopup("长按站点拖动铺线。\n从线路端点出发可延长，从中间站出发可新建；拖回起点可成环。\n长按线路拖到新站，可插入途经站。\n交界站可衔接区域，点击线路查看运营。\n在图鉴打开名胜大图即可打卡。\n右侧可调倍速，1 倍速下 6 分钟为一天。"));
+        var hb = Btn(bar.transform, "Help", "?", 30, 94, -24, 60, 60, CardBg, () => HelpPopup("长按车站拖到下一站即可铺线，拖回起点成环。\n已有线路端点拖出可延线，中间站拖出可建新线；长按线路拖至新站可插站。\n点开图鉴大图即完成名胜打卡；交界站可跨区衔接。\n右上可调运行倍速（1× 下 6 分钟为一游戏日）。"));
         hb.GetComponentInChildren<Text>().color = InkSoft;
         lastDisplayedMinute = -1; lastDisplayedDay = -1;
         lastHudCoins = int.MinValue; lastHudIncome = int.MinValue; lastHudDiamonds = int.MinValue;
@@ -1744,6 +1744,7 @@ public partial class DemoBootstrap : MonoBehaviour
             if (progFill) progFill.sizeDelta = new Vector2(180f * progress, 8f);
             lastHudProgress = pct;
         }
+        if (historyRpText) historyRpText.text = "科研点  " + Mathf.FloorToInt(rp) + " RP";
     }
     // ---------- panels ----------
     void TInk(Button b, Color c) { var t = b.GetComponentInChildren<Text>(); if (t) t.color = c; }
@@ -2224,17 +2225,17 @@ public partial class DemoBootstrap : MonoBehaviour
     static readonly string[] CompanyPolicyNames = { "均衡发展", "惠民扩容", "精益运维", "文旅专线" };
     static readonly string[] CompanyPolicyDescs =
     {
-        "无特殊偏科加成，稳步经营全域路网",
-        "客流需求 +12%、开站成本 -15%，票款 -5%",
-        "车辆与轨道维护费 -12%，全队车速 +10%",
-        "名胜站客流 +35%、名胜线票款 +10%，享景点日红利"
+        "稳步扩网，全网收支无额外增减",
+        "客流 +12% · 开站费 -15% · 票款 -5%",
+        "车/轨维护费 -12% · 全队车速 +10%",
+        "名胜客流 +35% · 名胜线票款 +10% · 享景点日红利"
     };
-    static readonly string[] StationFacilityNames = { "未开发空地", "便民小卖部", "站前商业街", "枢纽都会广场" };
-    static readonly int[] StationFacilityCosts = { 180, 420, 880, 0 };
-    static readonly int[] StationFacilityRents = { 0, 28, 72, 165 };
+    static readonly string[] StationFacilityNames = { "未开发空地", "站厅便利店", "站前商业街", "枢纽都会广场" };
+    static readonly int[] StationFacilityCosts = { 600, 3600, 18000, 0 };
+    static readonly int[] StationFacilityRents = { 0, 90, 480, 2100 };
 
     static readonly string[] PartnerNames = { "陈志豪", "阿珍姐", "基建强叔", "林博士", "沈小姐", "何先生", "霍老督办" };
-    static readonly string[] PartnerTitles = { "港铁精算师", "茶楼商业总监", "工程老总工", "高铁调度总监", "跨境招商官", "湾区资本推手", "特聘传奇顾问（IAA）" };
+    static readonly string[] PartnerTitles = { "港铁精算师", "茶楼商业总监", "工程老总工", "高铁调度总监", "跨境招商官", "湾区资本推手", "特聘传奇顾问" };
     static readonly string[] PartnerPros =
     {
         "车辆与轨道维护费 -12%",
@@ -2242,8 +2243,8 @@ public partial class DemoBootstrap : MonoBehaviour
         "建线造价 -14%，拆线退款率升至 72%",
         "全队车速 +12%，线路票款收益 +8%",
         "全网客流需求 +12%",
-        "债券授信 & 市政中标奖金 +15%，开站费 -10%",
-        "全能零负面：客流 +10% · 车速 +8% · 建线 -10% · 维护 -10%"
+        "债券额度与中标赏金 +15%，开站费 -10%",
+        "客流+10% · 车速+8% · 建线-10% · 维保-10%"
     };
     static readonly string[] PartnerCons =
     {
@@ -2259,11 +2260,11 @@ public partial class DemoBootstrap : MonoBehaviour
     static readonly string[] EconomyCycleNames = { "常态运营周", "广交会客流季", "粤港澳文旅嘉年华", "台风梅雨维护周", "基建低息窗口周" };
     static readonly string[] EconomyCycleDescs =
     {
-        "湾区路网平稳运作，客流、票价与造价均处于基准水平",
-        "商贸云集！全网客流 +16%，票款收益 +8%，旺季稳健增收",
-        "景区爆火！名胜关联站客流 +24%，含名胜线路票款 +10%",
-        "天气承压：轨道维护 +15%、客流 -6%，每日获防汛稳底补贴 +¥80",
-        "大兴土木良机！开站、铺轨与站前商业开发成本一律 -15%"
+        "全网客流、票价与基建造价处于基准水平",
+        "商贸高峰：全网客流 +16%，票款收益 +8%",
+        "景区大热：名胜站客流 +24%，名胜线票款 +10%",
+        "防汛承压：轨道维护 +15%、客流 -6%，每日补贴 +¥600",
+        "窗口期优惠：开站、铺轨与站前商业造价一律 -15%"
     };
 
     bool IsSealUnlocked(int sealIndex)
@@ -2417,7 +2418,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     float CycleDailySubsidy()
     {
-        return economyCycle == 3 ? 80f : 0f;
+        return economyCycle == 3 ? 600f : 0f;
     }
 
     int CompanyCreditScore()
@@ -2442,8 +2443,8 @@ public partial class DemoBootstrap : MonoBehaviour
     }
 
     static readonly string[] CreditTierLabels = { "C 级", "B 级", "A 级", "AA 级", "AAA 级" };
-    static readonly int[] CreditBondAmounts = { 900, 1500, 2400, 3600, 5000 };
-    static readonly int[] CreditBondDailyDues = { 102, 168, 264, 388, 528 };
+    static readonly int[] CreditBondAmounts = { 1800, 5000, 15000, 40000, 100000 };
+    static readonly int[] CreditBondDailyDues = { 205, 560, 1650, 4320, 10500 };
 
     int CurrentCreditBondAmount(int tier)
     {
@@ -2493,33 +2494,34 @@ public partial class DemoBootstrap : MonoBehaviour
         int type = (day + slotIdx + nextContractId) % 4;
         var c = new MunicipalContract { id = nextContractId++, type = type, deadlineDay = day + 6 };
         float mult = PartnerContractBonusFactor();
+        int scale = Mathf.Clamp(Mathf.RoundToInt(Mathf.Max(0f, income) * 0.35f), 0, 12000);
         if (type == 0)
         {
             c.startValue = DailyConnectedCount();
             c.targetValue = 3 + (DailyConnectedCount() >= 18 ? 1 : 0);
-            c.rewardCoins = Mathf.RoundToInt(420 * mult);
-            c.rewardRp = 15; c.rewardDiamonds = 3;
+            c.rewardCoins = Mathf.RoundToInt((900 + scale) * mult);
+            c.rewardRp = 16; c.rewardDiamonds = 3;
         }
         else if (type == 1)
         {
             c.startValue = DevelopedCommercialCount();
             c.targetValue = c.startValue + 2;
-            c.rewardCoins = Mathf.RoundToInt(380 * mult);
-            c.rewardRp = 15; c.rewardDiamonds = 5;
+            c.rewardCoins = Mathf.RoundToInt((1100 + scale) * mult);
+            c.rewardRp = 14; c.rewardDiamonds = 5;
         }
         else if (type == 2)
         {
             int curProfit = Mathf.Max(0, Mathf.RoundToInt(income));
             c.startValue = 0;
-            c.targetValue = Mathf.Max(220, ((curProfit + 180) / 50) * 50);
-            c.rewardCoins = Mathf.RoundToInt(480 * mult);
-            c.rewardRp = 20; c.rewardDiamonds = 4;
+            c.targetValue = Mathf.Max(400, ((curProfit + Mathf.Max(300, Mathf.RoundToInt(curProfit * 0.25f))) / 100) * 100);
+            c.rewardCoins = Mathf.RoundToInt((1300 + scale * 1.2f) * mult);
+            c.rewardRp = 22; c.rewardDiamonds = 4;
         }
         else
         {
             c.startValue = FoundCount();
             c.targetValue = Mathf.Min(sceneries.Count, c.startValue + 1);
-            c.rewardCoins = Mathf.RoundToInt(360 * mult);
+            c.rewardCoins = Mathf.RoundToInt((850 + scale * 0.9f) * mult);
             c.rewardRp = 15; c.rewardDiamonds = 6;
         }
         return c;
@@ -2578,29 +2580,30 @@ public partial class DemoBootstrap : MonoBehaviour
         int dev = DevelopedCommercialCount();
         int conn = DailyConnectedCount();
         int found = FoundCount();
+        int profitBonus = Mathf.Clamp(Mathf.RoundToInt(Mathf.Max(0f, income) * 0.4f), 0, 8000);
         if (bondDaysLeft == 0 && !loanOutstanding && income >= 300f)
         {
             medalName = "零负债稳健总社";
-            reason = "财务稳健无坏账，现金流充沛且利润丰厚";
-            grantCoins = 320 + conn * 8; grantDiamonds = 6;
+            reason = "零坏账高现金流，财务结构稳健";
+            grantCoins = 1600 + conn * 50 + profitBonus; grantDiamonds = 6;
         }
         else if (dev >= 4)
         {
-            medalName = "湾区包租公金印";
-            reason = "站前商业体已达 " + dev + " 处，路网与地产双翼齐飞";
-            grantCoins = 300 + dev * 45; grantDiamonds = 8;
+            medalName = "湾区地产金印";
+            reason = "站前商业已达 " + dev + " 处，客流与物业双轮驱动";
+            grantCoins = 1500 + dev * 350 + profitBonus; grantDiamonds = 8;
         }
         else if (found >= 5)
         {
             medalName = "粤港澳文旅金招牌";
-            reason = "累计串联打卡 " + found + " 处城市地标与自然风景";
-            grantCoins = 280 + found * 35; grantDiamonds = 10;
+            reason = "已串联打卡 " + found + " 处地标风景";
+            grantCoins = 1400 + found * 280 + profitBonus; grantDiamonds = 10;
         }
         else
         {
             medalName = "湾区基建先锋局";
-            reason = "持续推进跨城铁路覆盖，全网已连通 " + conn + " 座枢纽站";
-            grantCoins = 260 + conn * 9; grantDiamonds = 6;
+            reason = "全网持续扩张，已连通 " + conn + " 座车站";
+            grantCoins = 1200 + conn * 55 + profitBonus; grantDiamonds = 6;
         }
     }
 
@@ -2626,7 +2629,11 @@ public partial class DemoBootstrap : MonoBehaviour
         float sum = 0f;
         float mult = TechMult() * (HasPartner(1) ? 1.25f : 1f);
         foreach (var s in stations)
-            if (s.built && !s.closed && s.riderBonus > 0f) sum += s.riderBonus * mult;
+        {
+            if (!s.built || s.closed || s.facLevel <= 0) continue;
+            float baseRent = StationFacilityRents[Mathf.Clamp(s.facLevel, 0, StationFacilityRents.Length - 1)];
+            sum += baseRent * mult;
+        }
         return sum;
     }
 
@@ -2641,12 +2648,12 @@ public partial class DemoBootstrap : MonoBehaviour
     float TourismDividendDaily()
     {
         if (companyPolicy != 3) return 0f;
-        return FoundCount() * 12f;
+        return FoundCount() * 120f;
     }
 
     int AdTourismSubsidyAmount()
     {
-        return Mathf.Min(420, 140 + DailyConnectedCount() * 8);
+        return Mathf.Min(5000, 500 + DailyConnectedCount() * 60);
     }
 
     int BondEarlyRedeemCost()

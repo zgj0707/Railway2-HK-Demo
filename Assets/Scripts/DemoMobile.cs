@@ -107,7 +107,7 @@ public partial class DemoBootstrap
             int themeIdx = i;
             bool avail = IsThemeAvailable(themeIdx);
             bool active = currentTheme == themeIdx && avail;
-            string label = Themes[themeIdx].shortName + (active ? " ✓" : avail ? "" : " 🔒");
+            string label = Themes[themeIdx].shortName + (active ? " ✓" : avail ? "" : " · 锁");
             var tb = Btn(bubble.transform, "ThemeBtn" + i, label, 23,
                 34 + i * 155, 220, 146, 78, active ? Indigo : avail ? Paper2 : new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f), () => {
                     if (IsThemeAvailable(themeIdx)) {
@@ -297,13 +297,13 @@ public partial class DemoBootstrap
         string lineNames = "";
         foreach (var line in lines) if (line.st.Contains(index)) lineNames += (lineNames.Length == 0 ? "" : "、") + line.name;
         float demand = StationRequestedFlow(index), served = StationPassengerFlow(index), cap = StationCapacity(index);
-        string pressure = demand > cap ? "站点拥挤，升级可提高站内容量" : "站点容量充足";
+        string pressure = demand > cap ? "客流爆满，建议扩建升级" : "运力宽裕";
         string compass = StationCompassHint(index);
-        return state + (lineNames.Length > 0 ? "\n途经线路：" + lineNames : "") + "\n预估客流 " + StationEstimatedDemand(index) + " 人/日（潜在需求）" + "\n当前客流 " + Mathf.RoundToInt(served) + " / 日  ·  需求 " + Mathf.RoundToInt(demand) + " / 日\n" +
-            "站内容量 " + Mathf.RoundToInt(cap) + " / 日 · " + pressure + "\n" +
-            "流量事件：" + TrafficEventNames[station.trafficEvent] + "（需求 " +
+        return state + (lineNames.Length > 0 ? "\n途经：" + lineNames : "") + "\n日均需求 " + StationEstimatedDemand(index) + " 人 · 当前输送 " + Mathf.RoundToInt(served) + " / 需求 " + Mathf.RoundToInt(demand) + "\n" +
+            "站内容量 " + Mathf.RoundToInt(cap) + " · " + pressure + "\n" +
+            "站场动态：" + TrafficEventNames[station.trafficEvent] + "（需求 " +
             (TrafficEventFactors[station.trafficEvent] >= 1 ? "+" : "") + Mathf.RoundToInt((TrafficEventFactors[station.trafficEvent]-1)*100) + "%）\n" +
-            StationAreaHint(index) + (string.IsNullOrEmpty(compass) ? "" : "\n客流罗盘：优先引流去向 " + compass);
+            StationAreaHint(index) + (string.IsNullOrEmpty(compass) ? "" : "\n主要客流去向：" + compass);
     }
     bool OpenStation(int index)
     {
@@ -402,8 +402,8 @@ public partial class DemoBootstrap
         var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, contentHeight + 510, 960);
         stationTrafficPanel = p; stationTrafficIndex = index;
         stationTrafficLabel = ScrollableText(p.transform, description, 28, InkSoft, 38, 420, 884, contentHeight);
-        int cost = Mathf.RoundToInt(100f * Mathf.Pow(1.65f, station.level - 1));
-        var upgrade = Btn(p.transform, "UpgradeStation", station.level >= 10 ? "已满级" : "升级  ¥" + cost, 27, 38, 275, 420, 92, Matcha, () => {
+        int cost = Mathf.RoundToInt(180f * Mathf.Pow(1.85f, station.level - 1) / 10f) * 10;
+        var upgrade = Btn(p.transform, "UpgradeStation", station.level >= 10 ? "已满级" : "扩建升级  ¥" + cost, 27, 38, 275, 420, 92, Matcha, () => {
             if (!station.built) { Toast("请先开站"); return; }
             if (station.level >= 10) { Toast("车站已满级"); return; }
             if (coins < cost) { Toast("金币不足"); return; }
@@ -419,9 +419,10 @@ public partial class DemoBootstrap
         int curFac = Mathf.Clamp(station.facLevel, 0, StationFacilityNames.Length - 1);
         int facCost = FacilityUpgradeCost(curFac);
         int nextRent = curFac < 3 ? StationFacilityRents[curFac + 1] : 0;
+        int curRent = StationFacilityRents[curFac];
         string facLabel = curFac < 3
-            ? "站前商业 · " + StationFacilityNames[curFac] + " → 建" + StationFacilityNames[curFac + 1] + " (¥" + facCost + " / 日租+¥" + nextRent + ")"
-            : "站前商业 · " + StationFacilityNames[curFac] + "（已满级 · 日租¥" + Mathf.RoundToInt(station.riderBonus * TechMult()) + "）";
+            ? "站前物业 · 建设「" + StationFacilityNames[curFac + 1] + "」 (¥" + facCost + " · 日租 ¥" + nextRent + ")"
+            : "站前物业 · " + StationFacilityNames[curFac] + "（满级 · 日租 ¥" + Mathf.RoundToInt(curRent * TechMult() * (HasPartner(1) ? 1.25f : 1f)) + "）";
         var facBtn = Btn(p.transform, "StationFacility", facLabel, 24, 38, 155, 882, 92, curFac < 3 ? new Color(0.76f, 0.50f, 0.16f) : new Color(0.86f, 0.84f, 0.78f), () => {
             if (!station.built) { Toast("请先开站"); return; }
             if (curFac >= 3) { Toast("站前商业已达最高等级"); return; }
