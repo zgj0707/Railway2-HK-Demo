@@ -185,15 +185,23 @@ public partial class DemoBootstrap
                 if (bondDaysLeft > 0)
                 {
                     int targetDue = EffectiveBondDailyPayment();
-                    float due = Mathf.Min(Mathf.Max(0f, coins), targetDue);
-                    coins -= due;
-                    bondDaysLeft--;
-                    if (bondDaysLeft <= 0)
+                    if (coins >= targetDue)
                     {
-                        bondDaysLeft = 0; bondPrincipal = 0; bondDailyDue = 0; bondSubsidized = false; bondsRepaid++;
-                        Toast("基建债券最后一期 ¥" + Mathf.RoundToInt(due) + " 已全额结清，企业信用上升！");
+                        coins -= targetDue;
+                        bondDaysLeft--;
+                        if (bondDaysLeft <= 0)
+                        {
+                            bondDaysLeft = 0; bondPrincipal = 0; bondDailyDue = 0; bondSubsidized = false; bondsRepaid++;
+                            Toast("基建债券最后一期 ¥" + targetDue + " 已全额结清，企业信用上升！");
+                        }
+                        else Toast("基建债券扣款 ¥" + targetDue + "（剩 " + bondDaysLeft + " 天）");
                     }
-                    else Toast("基建债券扣款 ¥" + Mathf.RoundToInt(due) + "（剩 " + bondDaysLeft + " 天）");
+                    else
+                    {
+                        float penalty = Mathf.Round(Mathf.Max(0f, coins) * 0.5f);
+                        coins = Mathf.Max(0f, coins - penalty);
+                        Toast("资金不足无法缴付今日债券 ¥" + targetDue + "，已扣除 ¥" + Mathf.RoundToInt(penalty) + " 滞纳延息（本期顺延，仍剩 " + bondDaysLeft + " 天）");
+                    }
                 }
                 if (companyPolicy == 3 && FoundCount() > 0)
                 {

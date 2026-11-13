@@ -95,14 +95,14 @@ public partial class DemoBootstrap
         if (line == null || seg < 0 || seg >= line.st.Count - 1) return "";
         int a = line.st[seg], b = line.st[seg + 1];
         float d = Vector2.Distance(Pos(a), Pos(b));
-        int refund = Mathf.RoundToInt((30f + d * 0.75f) * DemolishRefundRate());
+        int refund = Mathf.RoundToInt((30f + d * 0.75f) * TrackBuildCostFactor() * DemolishRefundRate());
         string tail = line.st.Count <= 2 ? "\n该段拆除后，这条线路会消失。" : "\n拆除后退还 ¥" + refund + "。";
         return StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion) + tail;
     }
     string LineConfirmText(Line line)
     {
         if (line == null) return "";
-        int refund = Mathf.RoundToInt(120f * (UniqueCount(line.st) - 1) * DemolishRefundRate());
+        int refund = Mathf.RoundToInt(120f * (UniqueCount(line.st) - 1) * TrackBuildCostFactor() * DemolishRefundRate());
         return UniqueCount(line.st) + " 站 · " + line.trains + " 列车\n拆除后退还 ¥" + refund + "。";
     }
 
@@ -120,7 +120,7 @@ public partial class DemoBootstrap
         }
         int a = line.st[seg], b = line.st[seg + 1];
         float d = Vector2.Distance(Pos(a), Pos(b));
-        int refund = Mathf.RoundToInt((30f + d * 0.75f) * DemolishRefundRate());
+        int refund = Mathf.RoundToInt((30f + d * 0.75f) * TrackBuildCostFactor() * DemolishRefundRate());
         BeginUndo("拆除线路段");
         string msg;
 
@@ -174,7 +174,7 @@ public partial class DemoBootstrap
     {
         if (line == null || !lines.Contains(line)) return;
         BeginUndo("拆除整条线路");
-        float refund = 120f * (UniqueCount(line.st) - 1) * DemolishRefundRate();
+        float refund = 120f * (UniqueCount(line.st) - 1) * TrackBuildCostFactor() * DemolishRefundRate();
         coins += refund; SettleRemovedLineTax(line); ReleaseLineFleet(line); lines.Remove(line);
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); RefreshHUD();
         EndUndo(); Toast("已拆除 " + line.name);

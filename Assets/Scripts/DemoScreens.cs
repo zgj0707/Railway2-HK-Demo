@@ -799,7 +799,7 @@ public partial class DemoBootstrap
     }
     void OpenDailyTasks()
     {
-        var page = OpenPage("每日任务", "每日零点刷新进度；今日净增连通 2 站后可领取现金与研发点数补贴。", "PageArt/album_watercolor");
+        var page = OpenPage("每日任务", "每日零点刷新进度；今日净增连通 2 站后可领取现金与钻石补贴。", "PageArt/album_watercolor");
         Txt(page.transform, "今日旅程", 38, Ink, 36, H-245, 600, 54, TextAnchor.MiddleLeft);
         Txt(page.transform, "DAY " + day + "  ·  每日零点刷新", 22, InkSoft, 38, H-287, 700, 34, TextAnchor.MiddleLeft);
         var card = Rect("DailyTaskCard", page.transform, 28, H-760, W-56, 420);
@@ -807,7 +807,7 @@ public partial class DemoBootstrap
         int progress = Mathf.Clamp(DailyConnectedCount() - dailyStationBaseline, 0, 2);
         bool claimedToday = dailyTaskClaimedDay == day;
         Txt(card.transform, "让旅程更远一点", 38, Ink, 38, 324, 760, 50, TextAnchor.MiddleLeft);
-        Txt(card.transform, "今日净增连通 2 个站点（奖励：+¥300 · +15 RP，可看片翻倍）", 26, InkSoft, 40, 270, 940, 38, TextAnchor.MiddleLeft);
+        Txt(card.transform, "今日净增连通 2 个站点（奖励：+¥150 · +2 钻，可看片翻倍）", 26, InkSoft, 40, 270, 940, 38, TextAnchor.MiddleLeft);
         Img(Rect("Track", card.transform, 40, 212, 780, 16), new Color(0.89f,0.87f,0.81f), spriteRound).raycastTarget = false;
         if (progress > 0) Img(Rect("Progress", card.transform, 40, 212, 780 * progress / 2f, 16), Matcha, spriteRound).raycastTarget = false;
         Txt(card.transform, progress + " / 2", 30, Ink, 840, 196, 140, 45, TextAnchor.MiddleRight);
@@ -825,19 +825,19 @@ public partial class DemoBootstrap
         }
         else
         {
-            var claimBtn = Btn(card.transform, "ClaimNormal", "领取  +¥300 · +15 RP", 26, 40, 34, 444, 90, Matcha, () => {
+            var claimBtn = Btn(card.transform, "ClaimNormal", "领取  +¥150 · +2 钻", 26, 40, 34, 444, 90, Matcha, () => {
                 if (dailyTaskClaimedDay == day) return;
-                coins += 300; rp += 15; dailyTaskClaimedDay = day;
+                coins += 150; diamonds += 2; dailyTaskClaimedDay = day;
                 SaveGame(); RefreshHUD(); OpenDailyTasks();
-                Toast("每日补贴已到账 +¥300 · +15 RP");
+                Toast("每日补贴已到账 +¥150 · +2 钻");
             });
             TInk(claimBtn, Color.white);
-            var dblBtn = Btn(card.transform, "ClaimDouble", "看片双倍  +¥600 · +30 RP", 25, 504, 34, 480, 90, new Color(0.76f, 0.50f, 0.16f), () => {
-                PromptRewardedAd("daily_double_" + day, 1, "每日任务双倍补贴 (+¥600 · +30 RP)", () => {
+            var dblBtn = Btn(card.transform, "ClaimDouble", "看片双倍  +¥300 · +4 钻", 25, 504, 34, 480, 90, new Color(0.76f, 0.50f, 0.16f), () => {
+                PromptRewardedAd("daily_double_" + day, 1, "每日任务双倍补贴 (+¥300 · +4 钻)", () => {
                     if (dailyTaskClaimedDay == day) return;
-                    coins += 600; rp += 30; dailyTaskClaimedDay = day;
+                    coins += 300; diamonds += 4; dailyTaskClaimedDay = day;
                     SaveGame(); RefreshHUD(); OpenDailyTasks();
-                    Toast("双倍每日补贴已到账 +¥600 · +30 RP");
+                    Toast("双倍每日补贴已到账 +¥300 · +4 钻");
                 });
             });
             TInk(dblBtn, Color.white);
@@ -1055,7 +1055,7 @@ public partial class DemoBootstrap
             {
                 if (shown > 0) propSummary += "、";
                 int lvl = Mathf.Clamp(st.facLevel, 0, StationFacilityNames.Length - 1);
-                propSummary += StationDisplayName(i, currentRegion) + "(" + StationFacilityNames[lvl] + " ¥" + Mathf.RoundToInt(st.riderBonus * TechMult() * (HasPartner(1) ? 1.35f : 1f)) + "/日)";
+                propSummary += StationDisplayName(i, currentRegion) + "(" + StationFacilityNames[lvl] + " ¥" + Mathf.RoundToInt(st.riderBonus * TechMult() * (HasPartner(1) ? 1.25f : 1f)) + "/日)";
             }
             shown++;
         }
@@ -1230,7 +1230,7 @@ public partial class DemoBootstrap
             int curDaily = EffectiveBondDailyPayment();
             int redeemCost = BondEarlyRedeemCost();
             Txt(bondBox.transform, "在还基建扩张债券（本金 ¥" + (bondPrincipal > 0 ? bondPrincipal : BondPrincipal) + "）", 26, Ink, 20f, 184f, 880f, 40f, TextAnchor.MiddleLeft);
-            Txt(bondBox.transform, "剩余 " + bondDaysLeft + " 期 · 当前每晚自动扣款 ¥" + curDaily + (bondSubsidized ? "（已享 IAA 贴息 85 折 ✓）" : "（最低扣至 ¥0 不负债）"),
+            Txt(bondBox.transform, "剩余 " + bondDaysLeft + " 期 · 当前每晚自动扣款 ¥" + curDaily + (bondSubsidized ? "（已享 IAA 贴息 85 折 ✓）" : "（资金不足将扣半作滞纳延息并顺延）"),
                 21, bondSubsidized ? Matcha : InkSoft, 20f, 134f, 880f, 38f, TextAnchor.MiddleLeft);
 
             var redeemBtn = Btn(bondBox.transform, "RedeemBondBtn", "提前赎回 ¥" + redeemCost + "（省半息）", 22, 20f, 26f, 446f, 84f, Vermilion, () => {
@@ -1258,7 +1258,7 @@ public partial class DemoBootstrap
         else
         {
             Txt(bondBox.transform, "按当前「" + CreditTierLabels[tier] + "」信用可发行：¥" + maxBond, 28, Indigo, 20f, 178f, 880f, 44f, TextAnchor.MiddleLeft);
-            Txt(bondBox.transform, "期限 10 日 · 每晚扣款 ¥" + stdDaily + "（全部结清可累计信用升至 AAA 最高 ¥12,000）",
+            Txt(bondBox.transform, "期限 10 日 · 每晚扣款 ¥" + stdDaily + "（全部结清可累计信用升至 AAA 最高 ¥5,000）",
                 21, InkSoft, 20f, 126f, 880f, 40f, TextAnchor.MiddleLeft);
             var issueBtn = Btn(bondBox.transform, "IssueCreditBondBtn", "发行 ¥" + maxBond + " 基建债券", 25, 20f, 24f, cardW - 108f, 84f, Matcha, () => {
                 BeginUndo("发行信用债券");
@@ -1300,16 +1300,19 @@ public partial class DemoBootstrap
         Rounded(contractCard, CardBg); SoftShadow(contractCard);
         Txt(contractCard.transform, "市政特急招标合约", 30, Ink, 34f, 612f, 520f, 46f, TextAnchor.MiddleLeft);
 
-        var refreshBtn = Btn(contractCard.transform, "RefreshContractsBtn", "看片重投标书 ↻", 22, 706f, 604f, 284f, 58f, new Color(0.76f, 0.50f, 0.16f), () => {
-            PromptRewardedAd("refresh_contracts_" + day + "_" + nextContractId, 1, "重新竞标 2 份优质市政招标书", () => {
-                activeContracts.Clear();
-                nextContractId += 2;
-                EnsureCompanyInitialized();
-                SaveGame(); OpenCompanyScreen();
-                Toast("已换取两份全新市政招标标书！");
+        int rc = adWatchCounts.TryGetValue("refresh_cnt_" + day, out int rcVal) ? rcVal : 0;
+        var refreshBtn = Btn(contractCard.transform, "RefreshContractsBtn", rc >= 2 ? "今日换标已上限" : "看片重投标书 ↻ (" + rc + "/2)", 22, 706f, 604f, 284f, 58f,
+            rc >= 2 ? new Color(0.84f, 0.85f, 0.81f) : new Color(0.76f, 0.50f, 0.16f), () => {
+                if (rc >= 2) { Toast("每日最多看片重投 2 次市政标书，明日再来"); return; }
+                PromptRewardedAd("refresh_cnt_" + day, 1, "重新竞标 2 份优质市政招标书", () => {
+                    activeContracts.Clear();
+                    nextContractId += 2;
+                    EnsureCompanyInitialized();
+                    SaveGame(); OpenCompanyScreen();
+                    Toast("已换取两份全新市政招标标书！");
+                });
             });
-        });
-        TInk(refreshBtn, Color.white);
+        TInk(refreshBtn, rc >= 2 ? InkSoft : Color.white);
 
         for (int i = 0; i < activeContracts.Count && i < 2; i++)
         {
@@ -1344,11 +1347,11 @@ public partial class DemoBootstrap
                 });
                 TInk(claimBtn, Color.white);
 
-                int xCoins = Mathf.RoundToInt(c.rewardCoins * 1.8f);
-                int xRp = Mathf.RoundToInt(c.rewardRp * 1.8f);
-                int xGems = Mathf.RoundToInt(c.rewardDiamonds * 1.8f);
-                var vipBtn = Btn(box.transform, "ClaimContractVip_" + c.id, "看片专访 · ×1.8 领 ¥" + xCoins, 22, 460f, 16f, 476f, 64f, new Color(0.76f, 0.50f, 0.16f), () => {
-                    PromptRewardedAd("contract_vip_" + c.id, 1, "媒体头版专访（中标奖金/RP/钻石全额 ×1.8）", () => {
+                int xCoins = Mathf.RoundToInt(c.rewardCoins * 1.5f);
+                int xRp = Mathf.RoundToInt(c.rewardRp * 1.5f);
+                int xGems = Mathf.RoundToInt(c.rewardDiamonds * 1.5f);
+                var vipBtn = Btn(box.transform, "ClaimContractVip_" + c.id, "看片专访 · ×1.5 领 ¥" + xCoins, 22, 460f, 16f, 476f, 64f, new Color(0.76f, 0.50f, 0.16f), () => {
+                    PromptRewardedAd("contract_vip_" + c.id, 1, "媒体头版专访（中标奖金/RP/钻石全额 ×1.5）", () => {
                         if (c.claimed) return;
                         c.claimed = true;
                         coins += xCoins; rp += xRp; diamonds += xGems;
@@ -1447,7 +1450,7 @@ public partial class DemoBootstrap
         int grant = AdTourismSubsidyAmount();
         bool adClaimed = lastAdSubsidyDay == day;
         Txt(subCard.transform, "💰 每日文旅财政补贴", 25, Ink, 24f, 168f, halfW - 48f, 38f, TextAnchor.MiddleLeft);
-        Txt(subCard.transform, "¥350 + 连通 " + DailyConnectedCount() + " 站×¥25\n今日可领无偿发展金 ¥" + grant, 20, InkSoft, 24f, 100f, halfW - 48f, 62f, TextAnchor.UpperLeft);
+        Txt(subCard.transform, "¥140 + 连通 " + DailyConnectedCount() + " 站×¥8（上限 ¥420）\n今日可领无偿发展金 ¥" + grant, 20, InkSoft, 24f, 100f, halfW - 48f, 62f, TextAnchor.UpperLeft);
         var subBtn = Btn(subCard.transform, "SubsidyQuickBtn", adClaimed ? "今日补贴已领 ✓" : "看片立领 ¥" + grant, 22, 24f, 22f, halfW - 48f, 68f,
             adClaimed ? new Color(0.84f, 0.85f, 0.81f) : Matcha, () => {
                 if (lastAdSubsidyDay == day) { Toast("今日文旅补贴已领取，明日再来"); return; }
@@ -1464,7 +1467,7 @@ public partial class DemoBootstrap
         Rounded(huoCard, CardBg); SoftShadow(huoCard);
         bool hasHuo = consultantDaysLeft > 0 && consultantId == 6;
         Txt(huoCard.transform, "🌟 特聘传奇·霍老督办", 25, Ink, 24f, 168f, halfW - 48f, 38f, TextAnchor.MiddleLeft);
-        Txt(huoCard.transform, "占用独立第4高管席：客流+15%·车速+10%\n建线-15%·维护-12%（零负面特质）", 20, InkSoft, 24f, 100f, halfW - 48f, 62f, TextAnchor.UpperLeft);
+        Txt(huoCard.transform, "占用独立第4高管席：客流+10%·车速+8%\n建线-10%·维护-10%（零负面特质）", 20, InkSoft, 24f, 100f, halfW - 48f, 62f, TextAnchor.UpperLeft);
         var huoBtn = Btn(huoCard.transform, "HuoQuickBtn", hasHuo ? "已在岗(剩" + consultantDaysLeft + "天)点延" : "看片特聘 3 天", 22, 24f, 22f, halfW - 48f, 68f,
             new Color(0.76f, 0.50f, 0.16f), () => {
                 PromptRewardedAd("hire_huo_" + day, 1, "特聘传奇顾问·霍老督办（3日全能零负面）", () => {

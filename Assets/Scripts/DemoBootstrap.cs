@@ -2237,13 +2237,13 @@ public partial class DemoBootstrap : MonoBehaviour
     static readonly string[] PartnerTitles = { "港铁精算师", "茶楼商业总监", "工程老总工", "高铁调度总监", "跨境招商官", "湾区资本推手", "特聘传奇顾问（IAA）" };
     static readonly string[] PartnerPros =
     {
-        "车辆与轨道维护费 -15%",
-        "站前商业租金 +35%，名胜站客流 +15%",
-        "建线造价 -22%，拆线退款率升至 80%",
-        "全队车速 +14%，线路票款收益 +10%",
-        "全网客流需求 +16%",
-        "债券授信 & 市政中标奖金 +25%，开站费 -12%",
-        "全能零负面：客流 +15% · 车速 +10% · 建线 -15% · 维护 -12%"
+        "车辆与轨道维护费 -12%",
+        "站前商业租金 +25%，名胜站客流 +12%",
+        "建线造价 -14%，拆线退款率升至 72%",
+        "全队车速 +12%，线路票款收益 +8%",
+        "全网客流需求 +12%",
+        "债券授信 & 市政中标奖金 +15%，开站费 -10%",
+        "全能零负面：客流 +10% · 车速 +8% · 建线 -10% · 维护 -10%"
     };
     static readonly string[] PartnerCons =
     {
@@ -2260,10 +2260,10 @@ public partial class DemoBootstrap : MonoBehaviour
     static readonly string[] EconomyCycleDescs =
     {
         "湾区路网平稳运作，客流、票价与造价均处于基准水平",
-        "商贸云集！全网客流 +22%，票款收益 +12%，旺季吸金必争",
-        "景区爆火！名胜关联站客流 +40%，含名胜线路票款 +18%",
-        "天气承压：轨道维护 +18%、客流 -8%，每日获防汛稳底补贴 +¥120",
-        "大兴土木良机！开站、铺轨与站前商业开发成本一律 -20%"
+        "商贸云集！全网客流 +16%，票款收益 +8%，旺季稳健增收",
+        "景区爆火！名胜关联站客流 +24%，含名胜线路票款 +10%",
+        "天气承压：轨道维护 +15%、客流 -6%，每日获防汛稳底补贴 +¥80",
+        "大兴土木良机！开站、铺轨与站前商业开发成本一律 -15%"
     };
 
     bool IsSealUnlocked(int sealIndex)
@@ -2322,29 +2322,29 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         float m = 1f;
         if (HasPartner(0)) m *= 1.10f;
-        if (HasPartner(5)) m *= 0.88f;
+        if (HasPartner(5)) m *= 0.90f;
         return m;
     }
 
     float TrackBuildCostFactor()
     {
-        float m = economyCycle == 4 ? 0.80f : 1f;
-        if (HasPartner(2)) m *= 0.78f;
-        if (HasPartner(6)) m *= 0.85f;
-        return m;
+        float m = economyCycle == 4 ? 0.85f : 1f;
+        if (HasPartner(2)) m *= 0.86f;
+        if (HasPartner(6)) m *= 0.90f;
+        return Mathf.Max(0.68f, m);
     }
 
     float DemolishRefundRate()
     {
-        return HasPartner(2) ? 0.80f : 0.60f;
+        return HasPartner(2) ? 0.72f : 0.60f;
     }
 
     float PartnerDemandFactor(bool isScenery)
     {
         float m = 1f;
-        if (HasPartner(1) && isScenery) m *= 1.15f;
-        if (HasPartner(4)) m *= 1.16f;
-        if (HasPartner(6)) m *= 1.15f;
+        if (HasPartner(1) && isScenery) m *= 1.12f;
+        if (HasPartner(4)) m *= 1.12f;
+        if (HasPartner(6)) m *= 1.10f;
         return m;
     }
 
@@ -2352,41 +2352,41 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         float m = 1f;
         if (HasPartner(2)) m *= 0.95f;
-        if (HasPartner(3)) m *= 1.14f;
-        if (HasPartner(6)) m *= 1.10f;
+        if (HasPartner(3)) m *= 1.12f;
+        if (HasPartner(6)) m *= 1.08f;
         return m;
     }
 
     float PartnerVehicleMaintFactor()
     {
         float m = autoDispatchDaysLeft > 0 ? 0.90f : 1f;
-        if (HasPartner(0)) m *= 0.85f;
+        if (HasPartner(0)) m *= 0.88f;
         if (HasPartner(1)) m *= 1.06f;
         if (HasPartner(3)) m *= 1.10f;
-        if (HasPartner(6)) m *= 0.88f;
+        if (HasPartner(6)) m *= 0.90f;
         return m;
     }
 
     float PartnerTrackMaintFactor()
     {
         float m = autoDispatchDaysLeft > 0 ? 0.90f : 1f;
-        if (HasPartner(0)) m *= 0.85f;
+        if (HasPartner(0)) m *= 0.88f;
         if (HasPartner(4)) m *= 1.08f;
-        if (HasPartner(6)) m *= 0.88f;
+        if (HasPartner(6)) m *= 0.90f;
         return m;
     }
 
     float PartnerRevenueFactor()
     {
         float m = 1f;
-        if (HasPartner(3)) m *= 1.10f;
+        if (HasPartner(3)) m *= 1.08f;
         if (HasPartner(5)) m *= 0.96f;
         return m;
     }
 
     float PartnerContractBonusFactor()
     {
-        return HasPartner(5) ? 1.25f : 1f;
+        return HasPartner(5) ? 1.15f : 1f;
     }
 
     int CycleDaysRemaining()
@@ -2397,27 +2397,27 @@ public partial class DemoBootstrap : MonoBehaviour
 
     float CycleDemandFactor(bool isScenery)
     {
-        if (economyCycle == 1) return 1.22f;
-        if (economyCycle == 2 && isScenery) return 1.40f;
-        if (economyCycle == 3) return 0.92f;
+        if (economyCycle == 1) return 1.16f;
+        if (economyCycle == 2 && isScenery) return 1.24f;
+        if (economyCycle == 3) return 0.94f;
         return 1f;
     }
 
     float CycleRevenueFactor(bool lineHasScenery)
     {
-        if (economyCycle == 1) return 1.12f;
-        if (economyCycle == 2 && lineHasScenery) return 1.18f;
+        if (economyCycle == 1) return 1.08f;
+        if (economyCycle == 2 && lineHasScenery) return 1.10f;
         return 1f;
     }
 
     float CycleTrackMaintFactor()
     {
-        return economyCycle == 3 ? 1.18f : 1f;
+        return economyCycle == 3 ? 1.15f : 1f;
     }
 
     float CycleDailySubsidy()
     {
-        return economyCycle == 3 ? 120f : 0f;
+        return economyCycle == 3 ? 80f : 0f;
     }
 
     int CompanyCreditScore()
@@ -2442,20 +2442,20 @@ public partial class DemoBootstrap : MonoBehaviour
     }
 
     static readonly string[] CreditTierLabels = { "C 级", "B 级", "A 级", "AA 级", "AAA 级" };
-    static readonly int[] CreditBondAmounts = { 1800, 3000, 5000, 8000, 12000 };
-    static readonly int[] CreditBondDailyDues = { 205, 335, 545, 855, 1260 };
+    static readonly int[] CreditBondAmounts = { 900, 1500, 2400, 3600, 5000 };
+    static readonly int[] CreditBondDailyDues = { 102, 168, 264, 388, 528 };
 
     int CurrentCreditBondAmount(int tier)
     {
         int amt = CreditBondAmounts[Mathf.Clamp(tier, 0, CreditBondAmounts.Length - 1)];
-        if (HasPartner(5)) amt = Mathf.RoundToInt(amt * 1.25f);
+        if (HasPartner(5)) amt = Mathf.RoundToInt(amt * 1.15f);
         return amt;
     }
 
     int CurrentCreditBondDaily(int tier)
     {
         int due = CreditBondDailyDues[Mathf.Clamp(tier, 0, CreditBondDailyDues.Length - 1)];
-        if (HasPartner(5)) due = Mathf.RoundToInt(due * 1.20f);
+        if (HasPartner(5)) due = Mathf.RoundToInt(due * 1.12f);
         return due;
     }
 
@@ -2497,30 +2497,30 @@ public partial class DemoBootstrap : MonoBehaviour
         {
             c.startValue = DailyConnectedCount();
             c.targetValue = 3 + (DailyConnectedCount() >= 18 ? 1 : 0);
-            c.rewardCoins = Mathf.RoundToInt(1350 * mult);
-            c.rewardRp = 25; c.rewardDiamonds = 15;
+            c.rewardCoins = Mathf.RoundToInt(420 * mult);
+            c.rewardRp = 15; c.rewardDiamonds = 3;
         }
         else if (type == 1)
         {
             c.startValue = DevelopedCommercialCount();
             c.targetValue = c.startValue + 2;
-            c.rewardCoins = Mathf.RoundToInt(1150 * mult);
-            c.rewardRp = 20; c.rewardDiamonds = 25;
+            c.rewardCoins = Mathf.RoundToInt(380 * mult);
+            c.rewardRp = 15; c.rewardDiamonds = 5;
         }
         else if (type == 2)
         {
             int curProfit = Mathf.Max(0, Mathf.RoundToInt(income));
             c.startValue = 0;
             c.targetValue = Mathf.Max(220, ((curProfit + 180) / 50) * 50);
-            c.rewardCoins = Mathf.RoundToInt(1550 * mult);
-            c.rewardRp = 35; c.rewardDiamonds = 20;
+            c.rewardCoins = Mathf.RoundToInt(480 * mult);
+            c.rewardRp = 20; c.rewardDiamonds = 4;
         }
         else
         {
             c.startValue = FoundCount();
             c.targetValue = Mathf.Min(sceneries.Count, c.startValue + 1);
-            c.rewardCoins = Mathf.RoundToInt(1080 * mult);
-            c.rewardRp = 20; c.rewardDiamonds = 30;
+            c.rewardCoins = Mathf.RoundToInt(360 * mult);
+            c.rewardRp = 15; c.rewardDiamonds = 6;
         }
         return c;
     }
@@ -2570,7 +2570,7 @@ public partial class DemoBootstrap : MonoBehaviour
     int FacilityUpgradeCost(int curFac)
     {
         int raw = StationFacilityCosts[Mathf.Clamp(curFac, 0, StationFacilityCosts.Length - 1)];
-        return economyCycle == 4 ? Mathf.RoundToInt(raw * 0.80f) : raw;
+        return economyCycle == 4 ? Mathf.RoundToInt(raw * 0.85f) : raw;
     }
 
     void ComputeAnnualAward(out string medalName, out string reason, out int grantCoins, out int grantDiamonds)
@@ -2582,25 +2582,25 @@ public partial class DemoBootstrap : MonoBehaviour
         {
             medalName = "零负债稳健总社";
             reason = "财务稳健无坏账，现金流充沛且利润丰厚";
-            grantCoins = 950 + conn * 15; grantDiamonds = 25;
+            grantCoins = 320 + conn * 8; grantDiamonds = 6;
         }
         else if (dev >= 4)
         {
             medalName = "湾区包租公金印";
             reason = "站前商业体已达 " + dev + " 处，路网与地产双翼齐飞";
-            grantCoins = 850 + dev * 120; grantDiamonds = 30;
+            grantCoins = 300 + dev * 45; grantDiamonds = 8;
         }
         else if (found >= 5)
         {
             medalName = "粤港澳文旅金招牌";
             reason = "累计串联打卡 " + found + " 处城市地标与自然风景";
-            grantCoins = 800 + found * 90; grantDiamonds = 35;
+            grantCoins = 280 + found * 35; grantDiamonds = 10;
         }
         else
         {
             medalName = "湾区基建先锋局";
             reason = "持续推进跨城铁路覆盖，全网已连通 " + conn + " 座枢纽站";
-            grantCoins = 700 + conn * 20; grantDiamonds = 20;
+            grantCoins = 260 + conn * 9; grantDiamonds = 6;
         }
     }
 
@@ -2624,7 +2624,7 @@ public partial class DemoBootstrap : MonoBehaviour
     float StationCommercialTotalDaily()
     {
         float sum = 0f;
-        float mult = TechMult() * (HasPartner(1) ? 1.35f : 1f);
+        float mult = TechMult() * (HasPartner(1) ? 1.25f : 1f);
         foreach (var s in stations)
             if (s.built && !s.closed && s.riderBonus > 0f) sum += s.riderBonus * mult;
         return sum;
@@ -2641,12 +2641,12 @@ public partial class DemoBootstrap : MonoBehaviour
     float TourismDividendDaily()
     {
         if (companyPolicy != 3) return 0f;
-        return FoundCount() * 18f;
+        return FoundCount() * 12f;
     }
 
     int AdTourismSubsidyAmount()
     {
-        return 350 + DailyConnectedCount() * 25;
+        return Mathf.Min(420, 140 + DailyConnectedCount() * 8);
     }
 
     int BondEarlyRedeemCost()
