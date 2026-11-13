@@ -847,16 +847,40 @@ public partial class DemoBootstrap
             TInk(dblBtn, Color.white);
         }
     }
+    GameObject CreateNeonPosterFrame(Transform parent, string name, float x, float y, float w, float h, Texture2D posterTex, float pad = 8f)
+    {
+        var frame = Rect(name, parent, x, y, w, h);
+        Rounded(frame, new Color(0.025f, 0.025f, 0.045f, 1f));
+        SoftShadow(frame);
+        frame.GetComponent<Image>().raycastTarget = false;
+        var rawGo = Rect("PosterRaw", frame.transform, pad, pad, w - pad * 2f, h - pad * 2f);
+        var raw = rawGo.AddComponent<RawImage>();
+        raw.texture = posterTex;
+        raw.color = Color.white;
+        raw.raycastTarget = false;
+        return frame;
+    }
+
     void OpenLeaderboard()
     {
         var page = OpenPage("排行榜", "查看湾区铁路建设规模与个人运营档案。", "PageArt/album_watercolor");
-        Txt(page.transform, "路网名录", 38, Ink, 36, H-245, 800, 54, TextAnchor.MiddleLeft);
-        Txt(page.transform, "RAILWAY ARCHIVES", 22, InkSoft, 38, H-287, 700, 34, TextAnchor.MiddleLeft);
-        var note = Rect("RankingNote", page.transform, 28, H-660, W-56, 320);
-        Rounded(note, CardBg); SoftShadow(note); JournalTape(note.transform, 440, 303, 144);
-        Txt(note.transform, companyName + " · 荣誉档案", 36, Ink, 40, 214, 800, 52, TextAnchor.MiddleLeft);
-        Txt(note.transform, "全网榜单筹备中，每一次扩线与日利润增长都会记入公司史册。", 26, InkSoft, 42, 150, 880, 42, TextAnchor.MiddleLeft);
-        Txt(note.transform, "当前版图  " + currentRegion + "   ·   已连通  " + DailyConnectedCount() + " 站   ·   预期日利  ¥" + Mathf.RoundToInt(income), 26, Matcha, 42, 72, 900, 42, TextAnchor.MiddleLeft);
+        Txt(page.transform, "路网名录", 38, Ink, 36, H - 245, 800, 54, TextAnchor.MiddleLeft);
+        Txt(page.transform, "RAILWAY ARCHIVES", 22, InkSoft, 38, H - 287, 700, 34, TextAnchor.MiddleLeft);
+        float cardW = W - 56f;
+        var note = Rect("RankingNote", page.transform, 28, H - 880, cardW, 540);
+        Rounded(note, CardBg); SoftShadow(note); JournalTape(note.transform, cardW * 0.5f - 72f, 523, 144);
+
+        int palette = currentRegion == "澳门" ? 2 : currentRegion == "广东" ? 1 : 0;
+        var posterTex = EraPosterGenerator.GetCustomPoster("rank_" + currentRegion, "RAILWAY", palette, 4, 768, 248, 1);
+        var posterFrame = CreateNeonPosterFrame(note.transform, "RankingNeonPoster", 26f, 224f, cardW - 52f, 284f, posterTex, 9f);
+        var badge = Rect("RegionTag", posterFrame.transform, 20f, 18f, 198f, 34f);
+        Rounded(badge, new Color(0.04f, 0.04f, 0.08f, 0.78f));
+        badge.GetComponent<Image>().raycastTarget = false;
+        Txt(badge.transform, "版图 · " + DisplayPlaceAliases(currentRegion), 18, new Color(0.96f, 0.97f, 1f, 0.95f), 0f, 0f, 198f, 34f, TextAnchor.MiddleCenter).raycastTarget = false;
+
+        Txt(note.transform, companyName + " · 荣誉档案", 36, Ink, 36, 152, cardW - 72f, 52, TextAnchor.MiddleLeft);
+        Txt(note.transform, "全网榜单筹备中，每一次扩线与日利润增长都会记入公司史册。", 24, InkSoft, 38, 96, cardW - 76f, 40, TextAnchor.MiddleLeft);
+        Txt(note.transform, "当前版图  " + DisplayPlaceAliases(currentRegion) + "   ·   已连通  " + DailyConnectedCount() + " 站   ·   预期日利  ¥" + Mathf.RoundToInt(income), 25, Matcha, 38, 34, cardW - 76f, 42, TextAnchor.MiddleLeft);
     }
 
     struct NoticeEntry
@@ -1693,21 +1717,31 @@ public partial class DemoBootstrap
         bool canClaim = day >= 15 && lastAwardDay < awardCycle;
         ComputeAnnualAward(out string medalName, out string reason, out int grantCoins, out int grantDiamonds);
 
-        var p = OpenPopup("大湾区年度铁道大赏", 640f, 920f);
-        var banner = Rect("AwardBanner", p.transform, 36f, 390f, 848f, 148f);
-        Rounded(banner, Color.Lerp(CardBg, new Color(0.95f, 0.72f, 0.20f), 0.22f));
-        Txt(banner.transform, "本期拟授勋：" + medalName, 32, Ink, 24f, 84f, 800f, 46f, TextAnchor.MiddleLeft);
-        Txt(banner.transform, reason, 22, InkSoft, 24f, 18f, 800f, 58f, TextAnchor.UpperLeft);
+        var p = OpenPopup("大湾区年度铁道大赏", 760f, 920f);
+        string posterTitle = awardCycle >= 15 ? ("DAY" + awardCycle) : "AWARD";
+        int awardPalette = (awardCycle / 15) % 4;
+        var awardTex = EraPosterGenerator.GetCustomPoster("annual_" + posterTitle, posterTitle, awardPalette, 3, 768, 248, 0);
+        var posterFrame = CreateNeonPosterFrame(p.transform, "AwardNeonPoster", 36f, 396f, 848f, 258f, awardTex, 8f);
+        var cornerTag = Rect("AwardCyclePill", posterFrame.transform, 598f, 16f, 232f, 34f);
+        Rounded(cornerTag, new Color(0.04f, 0.04f, 0.08f, 0.78f));
+        cornerTag.GetComponent<Image>().raycastTarget = false;
+        Txt(cornerTag.transform, awardCycle >= 15 ? ("第 " + awardCycle + " 日纪念刊") : "首届大赏筹备", 18, new Color(1f, 0.95f, 0.86f, 0.96f), 0f, 0f, 232f, 34f, TextAnchor.MiddleCenter).raycastTarget = false;
 
-        Txt(p.transform, "评比贺礼：+¥" + grantCoins + "   ·   +" + grantDiamonds + " 钻", 25, Indigo, 36f, 308f, 848f, 42f, TextAnchor.MiddleCenter);
+        var banner = Rect("AwardBanner", p.transform, 36f, 286f, 848f, 96f);
+        Rounded(banner, Color.Lerp(CardBg, new Color(0.95f, 0.72f, 0.20f), 0.16f));
+        Img(Rect("Accent", banner.transform, 0, 12, 8, 72), new Color(0.86f, 0.56f, 0.12f), spriteRound).raycastTarget = false;
+        Txt(banner.transform, "本期拟授勋：" + medalName, 30, Ink, 24f, 48f, 800f, 40f, TextAnchor.MiddleLeft);
+        Txt(banner.transform, reason, 21, InkSoft, 24f, 10f, 800f, 36f, TextAnchor.MiddleLeft);
+
+        Txt(p.transform, "评比贺礼：+¥" + grantCoins + "   ·   +" + grantDiamonds + " 钻", 25, Indigo, 36f, 230f, 848f, 40f, TextAnchor.MiddleCenter);
         Txt(p.transform, canClaim
             ? "第 " + awardCycle + " 日大赏名单已揭晓，可领发展金或接受专访翻倍。"
             : (day < 15 ? "第 15 日正式开启首次授勋（当前第 " + day + " 日）。" : "第 " + awardCycle + " 日贺礼已发，下届第 " + (awardCycle + 15) + " 日再会。"),
-            22, InkSoft, 36f, 200f, 848f, 92f, TextAnchor.UpperCenter);
+            22, InkSoft, 36f, 140f, 848f, 80f, TextAnchor.UpperCenter);
 
         if (canClaim)
         {
-            var normal = Btn(p.transform, "ClaimAwardNormal", "直接领赏 +¥" + grantCoins, 24, 36f, 42f, 408f, 88f, Matcha, () => {
+            var normal = Btn(p.transform, "ClaimAwardNormal", "直接领赏 +¥" + grantCoins, 24, 36f, 38f, 408f, 86f, Matcha, () => {
                 if (lastAwardDay >= awardCycle) return;
                 lastAwardDay = awardCycle;
                 coins += grantCoins; diamonds += grantDiamonds;
@@ -1716,7 +1750,7 @@ public partial class DemoBootstrap
             });
             TInk(normal, Color.white);
 
-            var vip = Btn(p.transform, "ClaimAwardVip", "看片专访 · 双倍 +¥" + (grantCoins * 2), 24, 476f, 42f, 408f, 88f, new Color(0.76f, 0.50f, 0.16f), () => {
+            var vip = Btn(p.transform, "ClaimAwardVip", "看片专访 · 双倍 +¥" + (grantCoins * 2), 24, 476f, 38f, 408f, 86f, new Color(0.76f, 0.50f, 0.16f), () => {
                 PromptRewardedAd("annual_award_" + awardCycle, 1, "铁道大赏头版专访（赏金与钻石双倍）", () => {
                     if (lastAwardDay >= awardCycle) return;
                     lastAwardDay = awardCycle;
@@ -1729,7 +1763,7 @@ public partial class DemoBootstrap
         }
         else
         {
-            var ok = Btn(p.transform, "CloseAward", "返回公司总览", 25, 36f, 42f, 848f, 88f, Indigo, ClosePanel);
+            var ok = Btn(p.transform, "CloseAward", "返回公司总览", 25, 36f, 38f, 848f, 86f, Indigo, ClosePanel);
             TInk(ok, Color.white);
         }
     }
@@ -1791,7 +1825,13 @@ public partial class DemoBootstrap
         Txt(pg.transform, "沿途记忆", 36, Ink, 34, H-238, 440, 52, TextAnchor.MiddleLeft);
         int regionTotal = 0, regionFound = 0;
         foreach (var item in sceneries) if (sceneryRegionFilter == 0 || item.region == SceneryRegions[sceneryRegionFilter]) { regionTotal++; if (item.found) regionFound++; }
-        Txt(pg.transform, "TRAVEL JOURNAL  ·  " + regionFound + " / " + regionTotal, 21, InkSoft, 36, H-278, 500, 32, TextAnchor.MiddleLeft);
+        Txt(pg.transform, "TRAVEL JOURNAL  ·  " + regionFound + " / " + regionTotal, 21, InkSoft, 36, H-278, 410, 32, TextAnchor.MiddleLeft);
+        if (regionTotal > 0 && regionFound == regionTotal)
+        {
+            var clearTex = EraPosterGenerator.GetCustomPoster("scenery_clear_" + sceneryRegionFilter, "CLEAR!", sceneryRegionFilter % 4, 5, 512, 184, 0);
+            var clearSeal = CreateNeonPosterFrame(pg.transform, "SceneryClearSeal", 456f, H - 274f, 214f, 78f, clearTex, 4f);
+            clearSeal.transform.localRotation = Quaternion.Euler(0, 0, -3.5f);
+        }
         Button filter = null;
         filter = Btn(pg.transform, "SceneryFilter", SceneryCategories[sceneryCategory] + "  ▾", 25, 694, H-264, 330, 72,
             new Color(0.91f,0.88f,0.80f,0.98f), () => ShowFleetDropdown(pg.transform, filter.transform, SceneryCategories, sceneryCategory, value => { sceneryCategory = value; OpenSceneryScreen(); }));
