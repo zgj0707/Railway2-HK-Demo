@@ -123,6 +123,7 @@ public partial class DemoBootstrap : MonoBehaviour
     class LineSegmentVisual
     {
         public int from, to;
+        public Vector2 basePos, baseOffset;
         public GameObject casing, body, core, hit;
         public Color baseCoreColor;
         public void SetVisible(bool visible)
@@ -726,7 +727,19 @@ public partial class DemoBootstrap : MonoBehaviour
             zoomRects[live++] = zr;
         }
         if (live < zoomRects.Count) zoomRects.RemoveRange(live, zoomRects.Count - live);
-        foreach (var lv in lineVisuals.Values) if (lv.train) lv.train.transform.localScale = Vector3.one * k;
+        foreach (var lv in lineVisuals.Values)
+        {
+            if (lv.train) lv.train.transform.localScale = Vector3.one * k;
+            foreach (var seg in lv.segments)
+            {
+                if (seg.baseOffset.sqrMagnitude < 0.0001f) continue;
+                Vector2 p = seg.basePos + seg.baseOffset * k;
+                if (seg.casing) seg.casing.GetComponent<RectTransform>().anchoredPosition = p;
+                if (seg.body) seg.body.GetComponent<RectTransform>().anchoredPosition = p;
+                if (seg.core) seg.core.GetComponent<RectTransform>().anchoredPosition = p;
+                if (seg.hit) seg.hit.GetComponent<RectTransform>().anchoredPosition = p;
+            }
+        }
         if (previewImg) previewImg.rectTransform.sizeDelta = new Vector2(previewImg.rectTransform.sizeDelta.x, 16f * k);
         if (dragTip) dragTip.rectTransform.localScale = Vector3.one * k;
     }
@@ -1316,14 +1329,28 @@ public partial class DemoBootstrap : MonoBehaviour
             for (int i = 0; i < line.st.Count - 1; i++)
             {
                 if (SegmentRegion(line.st[i], line.st[i+1]) != currentRegion) continue;
-                Vector2 offset = SegmentVisualOffset(line, i, currentRegion);
+                Vector2 baseOffset = SegmentBaseVisualOffset(line, i, currentRegion);
+                Vector2 offset = baseOffset * overlayZoom;
+                Vector2 basePos = Pos(line.st[i]);
                 var casing = AddSeg(line.st[i], line.st[i+1], new Color(0.20f,0.18f,0.15f,0.92f), 11.5f, lineLayer, offset);
                 var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 7.2f, lineLayer, offset);
                 var trackCore = AddSeg(line.st[i], line.st[i+1], coreColor, 2.4f, lineLayer, offset);
                 var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer, offset);
                 var lt = hit.AddComponent<LineTapPress>(); lt.boot = this; lt.lineId = line.id; lt.segment = i;
-                lv.segments.Add(new LineSegmentVisual { from = line.st[i], to = line.st[i + 1], casing = casing, body = segBody, core = trackCore, hit = hit, baseCoreColor = coreColor });
+                lv.segments.Add(new LineSegmentVisual { from = line.st[i], to = line.st[i + 1], basePos = basePos, baseOffset = baseOffset, casing = casing, body = segBody, core = trackCore, hit = hit, baseCoreColor = coreColor });
             }
+            lineVisuals[line.id] = lv;
+        }
+        // 统一按「底框 -> 主色 -> 线芯 -> 点击热区」分层，避免共线紧贴时后画线的黑框压盖先画线的彩色主体
+        foreach (var lv in lineVisuals.Values) foreach (var s in lv.segments) if (s.casing) s.casing.transform.SetAsLastSibling();
+        foreach (var lv in lineVisuals.Values) foreach (var s in lv.segments) if (s.body) s.body.transform.SetAsLastSibling();
+        foreach (var lv in lineVisuals.Values) foreach (var s in lv.segments) if (s.core) s.core.transform.SetAsLastSibling();
+        foreach (var lv in lineVisuals.Values) foreach (var s in lv.segments) if (s.hit) s.hit.transform.SetAsLastSibling();
+        foreach (var line in lines)
+        {
+            if (!lineVisuals.TryGetValue(line.id, out var lv)) continue;
+            int skin = GetLineSkin(line);
+            Color trim = skin >= 0 ? LineSkinTrimColors[skin] : Color.Lerp(line.color, Color.white, 0.40f);
             // 日式微缩铁道模型（硬朗修长车厢，规避肉感胶囊）
             var t = Rect("Train" + line.id, trainLayer, 0, 0, 34, 14);
             t.GetComponent<RectTransform>().pivot = new Vector2(0.5f, 0.5f);
@@ -1354,13 +1381,13 @@ public partial class DemoBootstrap : MonoBehaviour
             var lightR = Rect("LightR", body.transform, 30.5f, 8f, 1.5f, 2.5f);
             Img(lightR, new Color(1f,0.95f,0.45f,1f), spriteWhite).raycastTarget = false;
             lv.train = t;
-            lineVisuals[line.id] = lv;
         }
         ApplyZoomToOverlays(mapRect ? mapRect.localScale.x : 1f);
         UpdateRegionalMarkers(true);
         UpdateLineTrafficColors();
     }
-    Vector2 SegmentVisualOffset(Line line, int segIdx, string region)
+    const float CollinearStepPx = 7.6f;
+    Vector2 SegmentBaseVisualOffset(Line line, int segIdx, string region)
     {
         if (line == null || segIdx < 0 || segIdx >= line.st.Count - 1 || string.IsNullOrEmpty(region)) return Vector2.zero;
         int a = line.st[segIdx], b = line.st[segIdx + 1];
@@ -1385,7 +1412,11 @@ public partial class DemoBootstrap : MonoBehaviour
         Vector2 d = PosInRegion(hi, region) - PosInRegion(lo, region);
         if (d.sqrMagnitude < 0.001f) return Vector2.zero;
         Vector2 normal = new Vector2(-d.y, d.x).normalized;
-        return normal * ((rank - (sharedIds.Count - 1) * 0.5f) * 10f);
+        return normal * ((rank - (sharedIds.Count - 1) * 0.5f) * CollinearStepPx);
+    }
+    Vector2 SegmentVisualOffset(Line line, int segIdx, string region)
+    {
+        return SegmentBaseVisualOffset(line, segIdx, region) * overlayZoom;
     }
     void UpdateLineTrafficColors()
     {
