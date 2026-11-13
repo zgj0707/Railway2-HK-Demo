@@ -103,3 +103,21 @@ public class HistoryCameraShake : MonoBehaviour
     }
     void OnDisable() { if (target) target.anchoredPosition -= applied; applied = Vector2.zero; }
 }
+
+public class HistoryParallaxLayer : MonoBehaviour
+{
+    public RectTransform content, target;
+    public float parallaxFactor = 0.42f;
+    Vector2 baseCenter;
+    bool initialized;
+
+    void LateUpdate()
+    {
+        if (!content || !target) return;
+        if (!initialized) { baseCenter = content.anchoredPosition; initialized = true; }
+        Vector2 delta = content.anchoredPosition - baseCenter;
+        target.anchoredPosition = delta * parallaxFactor;
+        float s = Mathf.Lerp(1f, content.localScale.x, parallaxFactor);
+        target.localScale = new Vector3(s, s, 1f);
+    }
+}

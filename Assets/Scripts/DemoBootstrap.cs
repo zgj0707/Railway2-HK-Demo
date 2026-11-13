@@ -2353,9 +2353,14 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         int connected = DailyConnectedCount();
         int found = FoundCount();
-        if (connected >= 50 && income >= 15000f) return "地球陆海联运集团";
-        if (connected >= 30 && found >= 6 && income >= 3000f) return "大湾区铁路总社";
-        if (connected >= 16 && income >= 800f) return "跨海铁道社";
+        if (connected >= 128 && found >= 12 && income >= 200000f) return "全球铁道与交通总署";
+        if (connected >= 114 && income >= 100000f) return "东半球轨道枢密院";
+        if (connected >= 98 && income >= 50000f) return "欧亚大陆桥控股";
+        if (connected >= 80 && income >= 25000f) return "亚洲泛亚铁道局";
+        if (connected >= 62 && found >= 8 && income >= 12000f) return "东亚路网财团";
+        if (connected >= 44 && found >= 6 && income >= 5000f) return "华南干线联合体";
+        if (connected >= 28 && found >= 4 && income >= 2000f) return "大湾区铁路总社";
+        if (connected >= 16 && income >= 600f) return "跨海铁道社";
         if (connected >= 8 || lines.Count >= 3) return "城市干线局";
         return "初创轻轨社";
     }
@@ -2364,10 +2369,15 @@ public partial class DemoBootstrap : MonoBehaviour
         int connected = DailyConnectedCount();
         int found = FoundCount();
         if (connected < 8 && lines.Count < 3) return "下阶「城市干线局」：连通 8 站或开通 3 条线路";
-        if (connected < 16 || income < 800f) return "下阶「跨海铁道社」：连通 16 站且日利润 ¥800（解锁第 3 董事席）";
-        if (connected < 30 || found < 6 || income < 3000f) return "下阶「大湾区铁路总社」：30 站 · 6 名胜 · 日利润 ¥3,000";
-        if (connected < 50 || income < 15000f) return "地球终阶「地球陆海联运集团」：50 站且日利润 ¥1.5万";
-        return "地球起航篇顶阶达成 · 待命启航火星赤道重工 (Phase II)";
+        if (connected < 16 || income < 600f) return "下阶「跨海铁道社」：连通 16 站且日利润 ¥600（解锁第 3 董事席）";
+        if (connected < 28 || found < 4 || income < 2000f) return "下阶「大湾区铁路总社」：28 站 · 4 名胜 · 日利润 ¥2,000";
+        if (connected < 44 || found < 6 || income < 5000f) return "下阶「华南干线联合体」：44 站 · 6 名胜 · 日利润 ¥5,000";
+        if (connected < 62 || found < 8 || income < 12000f) return "下阶「东亚路网财团」：62 站 · 8 名胜 · 日利润 ¥1.2万";
+        if (connected < 80 || income < 25000f) return "下阶「亚洲泛亚铁道局」：80 站 · 日利润 ¥2.5万";
+        if (connected < 98 || income < 50000f) return "下阶「欧亚大陆桥控股」：98 站 · 日利润 ¥5万";
+        if (connected < 114 || income < 100000f) return "下阶「东半球轨道枢密院」：114 站 · 日利润 ¥10万";
+        if (connected < 128 || found < 12 || income < 200000f) return "终阶「全球铁道与交通总署」：128 站 · 12 名胜 · 日利润 ¥20万";
+        return "已加冕「全球铁道与交通总署」最高荣誉";
     }
 
     bool HasPartner(int id)
@@ -2378,7 +2388,7 @@ public partial class DemoBootstrap : MonoBehaviour
     int BoardSeatCapacity()
     {
         int connected = DailyConnectedCount();
-        if (connected >= 16 && income >= 800f) return 3;
+        if (connected >= 16 && income >= 600f) return 3;
         if (connected >= 8 || lines.Count >= 3) return 2;
         return 1;
     }

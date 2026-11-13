@@ -80,81 +80,31 @@ public partial class DemoBootstrap
         Txt(g.transform, value, 46, Ink, 30, 26, w-56, 54, TextAnchor.MiddleLeft);
     }
 
-    // ---------- 区域与星际版图选择 ----------
-    int regionPlanetTab = 0;
+    // ---------- 区域选择 ----------
     void OpenRegionScreen()
     {
-        var pg = OpenPage("星域版图", "第一阶段·地球粤港澳起航网已通航；后续将逐步开拓火星重工与水星极限干线。", "PageArt/line_watercolor");
-        string[] planetTabs = { "地球 · 起航篇", "火星 · 赤道重工", "水星 · 昼夜极限" };
-        float pTabW = 328f;
-        for (int p = 0; p < 3; p++)
+        var pg = OpenPage("切换区域", "各区依次解锁。每区线路上限为站点数的一半；交界站计入所连地区。", "PageArt/line_watercolor");
+        string[] regions = { "香港", "澳门", "广东" };
+        var content = FleetScroll(pg.transform, 42f, H - 250f, 800f);
+        float topY = content.sizeDelta.y, cardW = content.sizeDelta.x, cardX = 4f, innerW = cardW - 8f;
+        for (int i = 0; i < regions.Length; i++)
         {
-            int tabIdx = p;
-            bool sel = regionPlanetTab == p;
-            var pb = Btn(pg.transform, "PlanetTab" + p, planetTabs[p], 24, 28f + p * (pTabW + 16f), H - 246f, pTabW, 66f,
-                sel ? Indigo : CardBg, () => { regionPlanetTab = tabIdx; OpenRegionScreen(); });
-            TInk(pb, sel ? Color.white : Ink);
-            if (!sel) SoftShadow(pb.gameObject);
-        }
-
-        if (regionPlanetTab == 0)
-        {
-            string[] regions = { "香港", "澳门", "广东" };
-            var content = FleetScroll(pg.transform, 42f, H - 270f, 1040f);
-            float topY = content.sizeDelta.y, cardW = content.sizeDelta.x, cardX = 4f, innerW = cardW - 8f;
-            for (int i = 0; i < regions.Length; i++)
-            {
-                string region = regions[i]; bool available = RegionUnlocked(region); bool active = region == currentRegion;
-                float cy = topY - 12f - (i + 1) * 236f + 16f;
-                var card = Rect("Region_" + region, content, cardX, cy, innerW, 220f);
-                Rounded(card, new Color(1, 1, 1, 0.96f)); SoftShadow(card);
-                Img(Rect("Accent", card.transform, 0, 30, 7, 160), active ? Gold : available ? Matcha : InkSoft, spriteRound).raycastTarget = false;
-                Txt(card.transform, region + (region == "香港" ? " · 枢纽起点" : region == "澳门" ? " · 跨海初试" : " · 百站干线网"), 38, Ink, 32, 142, 460, 52, TextAnchor.MiddleLeft);
-                Txt(card.transform, "线路 " + RegionLineCount(region) + " / " + RegionLineLimit(region), 23, InkSoft, 520, 148, 250, 40, TextAnchor.MiddleLeft);
-                string condition = active ? "当前正在调度该区域" : available ? "已开放通航 · 可直接切换" : region == "澳门"
-                    ? "解锁条件：香港普通站 " + Mathf.Min(4, ConnectedOrdinaryStations("香港")) + "/4 · 日利润 ¥" + FormatCoins(income) + "/600"
-                    : "解锁条件：开放澳门 · 澳门普通站 " + Mathf.Min(2, ConnectedOrdinaryStations("澳门")) + "/2 · 日利润 ¥" + FormatCoins(income) + "/1,200";
-                Txt(card.transform, condition, 22, InkSoft, 32, 42, innerW - 260f, 76, TextAnchor.MiddleLeft);
-                var button = Btn(card.transform, "Select", active ? "当前" : available ? "前往" : "未解锁", 25,
-                    innerW - 216f, 65f, 186f, 90f, active ? Paper2 : available ? Matcha : new Color(0.78f,0.76f,0.71f), () => {
-                        if (RegionUnlocked(region)) SwitchRegion(region); else Toast("尚未达到" + region + "的解锁条件");
-                    });
-                TInk(button, active ? Ink : Color.white);
-            }
-            // 地球后续大区拓展预留位
-            float extY = topY - 12f - 4 * 236f + 16f;
-            var extCard = Rect("EarthHorizonCard", content, cardX, extY, innerW, 220f);
-            Rounded(extCard, Color.Lerp(CardBg, Indigo, 0.04f)); SoftShadow(extCard);
-            Img(Rect("Accent", extCard.transform, 0, 30, 7, 160), Indigo, spriteRound).raycastTarget = false;
-            Txt(extCard.transform, "地球泛区 · 跨洲高铁拓展网", 34, Ink, 32, 142, 560, 48, TextAnchor.MiddleLeft);
-            Txt(extCard.transform, "Phase I 后期筹备", 22, Indigo, innerW - 260f, 148, 228, 38, TextAnchor.MiddleRight);
-            Txt(extCard.transform, "预留大区：欧亚大陆桥 / 环太平洋走廊 · 承接百万级现金流向千万级跃迁", 22, InkSoft, 32, 42, innerW - 64f, 76, TextAnchor.MiddleLeft);
-        }
-        else
-        {
-            bool isMars = regionPlanetTab == 1;
-            string[] titles = isMars
-                ? new[] { "水手谷 · 赤道重工干线", "奥林帕斯 · 火山矿业环", "极冠 · 生态穹顶接驳网" }
-                : new[] { "晨昏线 · 太阳能采集干线", "极地环形 · 深寒超导轨道", "近地轨道 · 电磁弹射枢纽" };
-            string[] specs = isMars
-                ? new[] { "千万~亿级基建预算 · 真空管低阻货运 · 重型矿车编组", "亿级资本门槛 · 稀土与水冰外运走廊 · 高坡度牵引", "载人密封专列 · 多穹顶换乘汐流 · 火星核心大都市带" }
-                : new[] { "十亿级终局预算 · 追逐晨昏线移动发车 · 极昼供能补偿", "百亿级重器工程 · 超导零损耗长干线 · 高阶 RP 科技树解锁", "全太阳系货运总枢纽 · 亿级票款日结 · 终局资本试炼场" };
-            var content = FleetScroll(pg.transform, 42f, H - 270f, 960f);
-            float topY = content.sizeDelta.y, cardW = content.sizeDelta.x, cardX = 4f, innerW = cardW - 8f;
-            var banner = Rect("PlanetBanner", content, cardX, topY - 12f - 148f, innerW, 148f);
-            Rounded(banner, Color.Lerp(CardBg, isMars ? Vermilion : Gold, 0.08f)); SoftShadow(banner);
-            Txt(banner.transform, isMars ? "第二阶段 · 火星赤道重工纪元（长线规划预留）" : "第三阶段 · 水星昼夜极限纪元（终局规划预留）", 29, Ink, 28, 86, innerW - 56f, 44, TextAnchor.MiddleLeft);
-            Txt(banner.transform, isMars ? "定位：高额初始投入 · 大宗矿产货运 + 真空磁浮 · 承接地球千万~亿级资本" : "定位：太阳系极限工况 · 超导磁浮与电磁弹射 · 容纳亿级以上日营收规模", 21, InkSoft, 28, 22, innerW - 56f, 52, TextAnchor.MiddleLeft);
-            for (int i = 0; i < 3; i++)
-            {
-                float cy = topY - 178f - (i + 1) * 234f + 16f;
-                var card = Rect("StarZone_" + i, content, cardX, cy, innerW, 214f);
-                Rounded(card, new Color(1, 1, 1, 0.93f)); SoftShadow(card);
-                Img(Rect("Accent", card.transform, 0, 28, 7, 158), isMars ? Vermilion : Gold, spriteRound).raycastTarget = false;
-                Txt(card.transform, titles[i], 34, Ink, 32, 134, innerW - 250f, 48, TextAnchor.MiddleLeft);
-                Txt(card.transform, isMars ? "Phase II 预留" : "Phase III 预留", 21, isMars ? Vermilion : new Color(0.76f, 0.50f, 0.16f), innerW - 230f, 140, 198, 38, TextAnchor.MiddleRight);
-                Txt(card.transform, specs[i], 22, InkSoft, 32, 34, innerW - 64f, 84, TextAnchor.MiddleLeft);
-            }
+            string region = regions[i]; bool available = RegionUnlocked(region); bool active = region == currentRegion;
+            float cy = topY - 12f - (i + 1) * 246f + 16f;
+            var card = Rect("Region_" + region, content, cardX, cy, innerW, 224f);
+            Rounded(card, new Color(1, 1, 1, 0.96f)); SoftShadow(card);
+            Img(Rect("Accent", card.transform, 0, 30, 7, 164), active ? Gold : available ? Matcha : InkSoft, spriteRound).raycastTarget = false;
+            Txt(card.transform, region, 42, Ink, 32, 142, 380, 55, TextAnchor.MiddleLeft);
+            Txt(card.transform, "线路 " + RegionLineCount(region) + " / " + RegionLineLimit(region), 24, InkSoft, 450, 150, 280, 40, TextAnchor.MiddleLeft);
+            string condition = active ? "当前区域" : available ? "已开放" : region == "澳门"
+                ? "香港普通站 " + Mathf.Min(4, ConnectedOrdinaryStations("香港")) + "/4 · 预计日利润 ¥" + FormatCoins(income) + "/600"
+                : "开放澳门 · 澳门普通站 " + Mathf.Min(2, ConnectedOrdinaryStations("澳门")) + "/2 · 预计日利润 ¥" + FormatCoins(income) + "/1,200";
+            Txt(card.transform, condition, 23, InkSoft, 32, 42, innerW - 260f, 76, TextAnchor.MiddleLeft);
+            var button = Btn(card.transform, "Select", active ? "当前" : available ? "前往" : "未解锁", 26,
+                innerW - 216f, 67f, 186f, 90f, active ? Paper2 : available ? Matcha : new Color(0.78f,0.76f,0.71f), () => {
+                    if (RegionUnlocked(region)) SwitchRegion(region); else Toast("尚未达到" + region + "的解锁条件");
+                });
+            TInk(button, active ? Ink : Color.white);
         }
     }
 
@@ -1155,7 +1105,7 @@ public partial class DemoBootstrap
                 int pid = occupied ? boardPartners[i] : -1;
                 Color bg = !unlocked ? Color.Lerp(CardBg, Ink, 0.08f) : occupied ? Color.Lerp(CardBg, Indigo, 0.14f) : Color.Lerp(CardBg, Matcha, 0.10f);
                 var sBtn = Btn(seatCard.transform, "SeatSlot_" + i, "", 20, sx, 22f, slotW, 140f, bg, () => {
-                    if (!unlocked) { Toast(i == 1 ? "升至「城市干线局」（8站或3线）解锁" : "升至「跨海铁道社」（16站且日利润¥800）解锁"); return; }
+                    if (!unlocked) { Toast(i == 1 ? "升至「城市干线局」（8站或3线）解锁" : "升至「跨海铁道社」（16站且日利润¥600）解锁"); return; }
                     if (occupied)
                     {
                         BeginUndo("卸任高管");
