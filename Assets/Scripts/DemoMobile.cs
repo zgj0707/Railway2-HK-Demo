@@ -158,7 +158,7 @@ public partial class DemoBootstrap
             float step = Mathf.Min(remaining, (hour + 1) * 15f - dayClock);
             if (step <= 0.0001f) { dayClock = (hour + 1) * 15f; step = 0; }
             float fraction = step / GameDaySeconds;
-            researchClock += step * (turboDaysLeft > 0 ? 1.5f : 1f);
+            researchClock += step * ResearchSpeedMultiplier();
             while (researchClock >= 36f) { researchClock -= 36f; RPTick(); }
             foreach (var line in lines)
             {
@@ -198,9 +198,9 @@ public partial class DemoBootstrap
                     }
                     else
                     {
-                        float penalty = Mathf.Round(Mathf.Max(0f, coins) * 0.5f);
-                        coins = Mathf.Max(0f, coins - penalty);
-                        Toast("资金不足无法缴付今日债券 ¥" + targetDue + "，已扣除 ¥" + Mathf.RoundToInt(penalty) + " 滞纳延息（本期顺延，仍剩 " + bondDaysLeft + " 天）");
+                        double penalty = Math.Round(Math.Max(0d, coins) * 0.5d);
+                        coins = Math.Max(0d, coins - penalty);
+                        Toast("资金不足无法缴付今日债券 ¥" + targetDue + "，已扣除 ¥" + FormatCoins(penalty) + " 滞纳延息（本期顺延，仍剩 " + bondDaysLeft + " 天）");
                     }
                 }
                 if (companyPolicy == 3 && FoundCount() > 0)
@@ -309,7 +309,7 @@ public partial class DemoBootstrap
     {
         var station = stations[index];
         int cost = StationOpeningCost(index);
-        if (coins < cost) { Toast("金币不足：还差 ¥" + Mathf.CeilToInt(cost - coins)); return false; }
+        if (coins < cost) { Toast("金币不足：还差 ¥" + FormatShortfall(cost - coins)); return false; }
         if (station.built && !station.closed) return true;
         BeginUndo(station.built ? "重新开站" : "开站");
         coins -= cost; station.built = true; station.closed = false;

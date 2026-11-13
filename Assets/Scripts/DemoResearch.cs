@@ -23,6 +23,7 @@ public partial class DemoBootstrap
     static readonly string[] LocoArt = { "art_train_penydarren_1804", "art_train_salamanca_1812", "art_train_puffing_billy_1813", "art_train_locomotion_no1_1825", "art_train_rocket_1829", "art_train_john_bull_1831", "art_train_adler_1835", "art_train_fairy_queen_1855", "art_train_nyc_999_1893" };
     string historySelected;
     float historyScrollX = 0.5f, historyScrollY = 0.5f;
+    RectTransform historyInfoRect, rpBadgeRect;
     Text historyInfo, historyHeading, historyRpText;
     GameObject historyInfoPanel, historyControls;
     TechCoinWidget historyCoinWidget;
@@ -225,6 +226,7 @@ public partial class DemoBootstrap
     {
         historySelected = key;
         if (!historyInfoPanel || !historyByKey.TryGetValue(key, out var node)) return;
+        if (historyInfoRect) historyInfoRect.sizeDelta = new Vector2(900, 310);
         historyInfoPanel.SetActive(true);
         if (historyTooltipFollow && historyNodeRects.TryGetValue(key, out var target)) historyTooltipFollow.target = target;
         historyHeading.text = DisplayPlaceAliases(node.name);
@@ -232,14 +234,32 @@ public partial class DemoBootstrap
         string missing = "";
         foreach (var parent in node.parents) if (!techDone.Contains(parent)) missing += (missing.Length == 0 ? "" : "、") + historyByKey[parent].name;
         int rpNeed = HistoryRpCost(node);
-        string costPart = "¥" + HistoryCost(node) + (rpNeed > 0 ? " · " + rpNeed + " RP" : "");
+        string costPart = "¥" + FormatCoins(HistoryCost(node)) + (rpNeed > 0 ? " · " + rpNeed + " RP" : "");
         string state = techDone.Contains(node.key) ? "已解锁" : missing.Length > 0 ? "前置：" + missing : "点击立研";
         string estimate = "";
         if (!techDone.Contains(key) && node.loco < 0 && node.effect != ResearchEffect.None) {
             float delta = EstimateResearchProfit(node);
-            estimate = "\n当前线网日利润预计 " + (delta >= 0 ? "+" : "") + "¥" + delta.ToString("0");
+            estimate = "\n当前线网日利润预计 " + FormatSignedNumber(delta);
         }
         historyInfo.text = DisplayPlaceAliases(HistoryPeriod(node) + " · 研发 " + costPart + "\n" + node.description + "\n" + effect + " · " + state + estimate);
+    }
+    void HoldRpRules()
+    {
+        if (!historyInfoPanel) return;
+        if (historyInfoRect) historyInfoRect.sizeDelta = new Vector2(900, 360);
+        historyInfoPanel.SetActive(true);
+        if (historyTooltipFollow && rpBadgeRect) historyTooltipFollow.target = rpBadgeRect;
+        int connected = DailyConnectedCount();
+        int scalePct = Mathf.RoundToInt(ResearchScaleBonusRatio() * 100f);
+        string turboLine = turboDaysLeft > 0 ? " · 4×牌照 +50% 生效中" : "";
+        string dailyRate = EstimatedDailyRpRate().ToString("0.0");
+        historyHeading.text = "科研点 (RP) · 获取规则与产能";
+        historyInfo.text =
+            "当前推演产能：约 " + dailyRate + " RP / 游戏日（规模加成 +" + scalePct + "%" + turboLine + "）\n" +
+            "1. 时间积累：营业时每 36 游戏秒稳定产出 1 RP；全网每连通 15 站额外提速 +15%（上限 +60%，当前 " + connected + " 站）。\n" +
+            "2. 每日扩张补贴：公司页面每日净增 2 站领 +12 RP（看片双倍 +24 RP）。\n" +
+            "3. 市政标书与特权：完成招标每次获 +14~+22 RP（专访 ×1.5）；公司「4× 极速牌照」可提速 +50%。\n" +
+            "跨星际沿用：当前盈余 RP 将永久保留，直通后续「火星 / 水星」新纪元研发。";
     }
     void HideHistoryInfo() { if (historyInfoPanel) historyInfoPanel.SetActive(false); }
     void SetHistoryDragging(bool dragging)
@@ -254,7 +274,7 @@ public partial class DemoBootstrap
         int cost = HistoryCost(node);
         int rpCost = HistoryRpCost(node);
         if (coins < cost) {
-            Toast("研发经费不足：还差 ¥" + Mathf.CeilToInt(cost - coins));
+            Toast("研发经费不足：还差 ¥" + FormatShortfall(cost - coins));
             if (historyCoinWidget) historyCoinWidget.Shake();
             return;
         }
@@ -481,8 +501,8 @@ public partial class DemoBootstrap
         Img(coinRing, new Color(0.25f, 0.21f, 0.17f, 0.88f), spriteStationRing).raycastTarget = false;
         var coinIcon = Rect("Icon", coinRing.transform, 4, 4, 48, 48);
         Img(coinIcon, Gold, spriteCircle).raycastTarget = false;
-        var coinText = Txt(coinShakeTarget.transform, Mathf.FloorToInt(coins).ToString("N0"), 38, Ink, 82, 18, 126, 58, TextAnchor.MiddleLeft);
-        coinText.resizeTextForBestFit = true; coinText.resizeTextMinSize = 22; coinText.resizeTextMaxSize = 38;
+        var coinText = Txt(coinShakeTarget.transform, FormatCoins(coins), 36, Ink, 82, 18, 126, 58, TextAnchor.MiddleLeft);
+        coinText.resizeTextForBestFit = true; coinText.resizeTextMinSize = 18; coinText.resizeTextMaxSize = 36;
 
         var widget = coinBadge.AddComponent<TechCoinWidget>();
         widget.shakeTarget = coinShakeTarget.GetComponent<RectTransform>();
@@ -502,12 +522,24 @@ public partial class DemoBootstrap
         var prt = progressBadge.GetComponent<RectTransform>(); prt.anchorMin = prt.anchorMax = new Vector2(0,1); prt.pivot = new Vector2(0,1); prt.anchoredPosition = new Vector2(24,-138);
         Txt(progressBadge.transform, "进度  " + techDone.Count + " / " + historyNodes.Count, 22, Ink, 16, 8, 218, 34, TextAnchor.MiddleLeft);
 
-        var rpBadge = Rect("RPBadge", historyControls.transform, 286, 125, 268, 50);
-        var rbg = Img(rpBadge, new Color(1f, 0.99f, 0.97f, 0.99f), spriteRound); rbg.type = Image.Type.Sliced; SoftShadow(rpBadge);
+        var rpBadge = Rect("RPBadge", historyControls.transform, 286, 125, 290, 50);
+        var rbg = Img(rpBadge, new Color(1f, 0.99f, 0.97f, 0.99f), spriteRound); rbg.type = Image.Type.Sliced; rbg.raycastTarget = true; SoftShadow(rpBadge);
         var rrt = rpBadge.GetComponent<RectTransform>(); rrt.anchorMin = rrt.anchorMax = new Vector2(0,1); rrt.pivot = new Vector2(0,1); rrt.anchoredPosition = new Vector2(286,-138);
+        rpBadgeRect = rrt;
         var rpDot = Rect("RPDot", rpBadge.transform, 16, 16, 18, 18); Img(rpDot, Indigo, spriteCircle).raycastTarget = false;
-        historyRpText = Txt(rpBadge.transform, "科研点  " + Mathf.FloorToInt(rp) + " RP", 22, Indigo, 42, 8, 212, 34, TextAnchor.MiddleLeft);
-        historyRpText.resizeTextForBestFit = true; historyRpText.resizeTextMinSize = 16; historyRpText.resizeTextMaxSize = 22;
+        historyRpText = Txt(rpBadge.transform, "科研点  " + Mathf.FloorToInt(rp) + " RP", 22, Indigo, 42, 8, 206, 34, TextAnchor.MiddleLeft);
+        historyRpText.resizeTextForBestFit = true; historyRpText.resizeTextMinSize = 16; historyRpText.resizeTextMaxSize = 22; historyRpText.raycastTarget = false;
+        var rpHelpHint = Txt(rpBadge.transform, "?", 20, InkSoft, 250, 8, 28, 34, TextAnchor.MiddleCenter);
+        rpHelpHint.raycastTarget = false;
+        var rpTouch = rpBadge.AddComponent<HistoryNodeTouch>();
+        rpTouch.onHold = HoldRpRules;
+        rpTouch.onRelease = HideHistoryInfo;
+        rpTouch.onTap = () => Toast("长按科研点徽章查看获取规则（当前日产 " + EstimatedDailyRpRate().ToString("0.0") + " RP）");
+
+        var eraBadge = Btn(historyControls.transform, "EraRoadmapBadge", "第一纪元 · 地球奠基  |  火星·水星蓝图 ›", 20, 24, 0, 444, 42, new Color(1f, 0.99f, 0.97f, 0.96f), OpenTechRoadmapPopup);
+        TInk(eraBadge, InkSoft);
+        SoftShadow(eraBadge.gameObject);
+        var ert = eraBadge.GetComponent<RectTransform>(); ert.anchorMin = ert.anchorMax = new Vector2(0, 1); ert.pivot = new Vector2(0, 1); ert.anchoredPosition = new Vector2(24, -198);
         var legend = Rect("ResearchLegend", historyControls.transform, 0, 0, 1032, 104);
         var legendRt = legend.GetComponent<RectTransform>(); legendRt.anchorMin = legendRt.anchorMax = new Vector2(0.5f, 0); legendRt.pivot = new Vector2(0.5f, 0); legendRt.anchoredPosition = new Vector2(0, 20);
         Rounded(legend, new Color(1f, 0.99f, 0.96f, 0.94f));
@@ -521,11 +553,27 @@ public partial class DemoBootstrap
         }
         var info = Rect("HistoryInfo", page.transform, 0, 0, 900, 310); Rounded(info, new Color(0.96f,0.93f,0.87f,0.98f)); SoftShadow(info);
         var irt = info.GetComponent<RectTransform>(); irt.anchorMin = irt.anchorMax = new Vector2(0.5f,0.5f); irt.pivot = new Vector2(0.5f,0); irt.anchoredPosition = Vector2.zero;
+        historyInfoRect = irt;
         historyTooltipFollow = info.AddComponent<HistoryTooltipFollow>(); historyTooltipFollow.page = pageRt;
         historyInfoPanel = info;
-        historyHeading = Txt(info.transform, "", 34, Ink, 28, 250, 844, 45, TextAnchor.MiddleLeft);
-        historyInfo = Txt(info.transform, "", 25, InkSoft, 28, 24, 844, 210, TextAnchor.UpperLeft);
+        historyHeading = Txt(info.transform, "", 32, Ink, 28, 0, 844, 46, TextAnchor.MiddleLeft);
+        var hrt = historyHeading.rectTransform; hrt.anchorMin = new Vector2(0, 1); hrt.anchorMax = new Vector2(1, 1); hrt.pivot = new Vector2(0.5f, 1); hrt.offsetMin = new Vector2(28, -62); hrt.offsetMax = new Vector2(-28, -16);
+        historyInfo = Txt(info.transform, "", 24, InkSoft, 28, 24, 844, 210, TextAnchor.UpperLeft);
+        var infoBodyRt = historyInfo.rectTransform; infoBodyRt.anchorMin = Vector2.zero; infoBodyRt.anchorMax = Vector2.one; infoBodyRt.offsetMin = new Vector2(28, 20); infoBodyRt.offsetMax = new Vector2(-28, -68);
+        historyInfo.resizeTextForBestFit = true; historyInfo.resizeTextMinSize = 18; historyInfo.resizeTextMaxSize = 24;
         historyInfoPanel.SetActive(false);
+    }
+    void OpenTechRoadmapPopup()
+    {
+        HelpPopup(
+            "【跨星际三纪元科技演进规划】\n\n" +
+            "● 第一纪元 · 地球奠基（已实装 105 项）\n" +
+            "夯实蒸汽、牵引动力、分时调度与票务网络，在大湾区路网积累百万级资本与通用科研点 (RP)。\n\n" +
+            "● 第二纪元 · 火星赤道重工（Phase II 预留）\n" +
+            "真空管磁浮列车、低重力重载货运、极冠与峡谷基地接驳（面向千万~亿级经费预算）。\n\n" +
+            "● 第三纪元 · 水星昼夜极限（Phase III 预留）\n" +
+            "耐热超导材质、昼夜温差驱动与轨道电磁弹射干线（面向十亿级终局工程）。"
+        );
     }
     static readonly int[] LocoPrices = { 600, 1200, 2200, 4000, 7200, 13000, 22000, 38000, 65000 };
     int LocoPrice(int index) { return LocoPrices[Mathf.Clamp(index, 0, LocoPrices.Length - 1)]; }
@@ -533,7 +581,7 @@ public partial class DemoBootstrap
     {
         if (index < 0 || index >= LocoNames.Length || !techDone.Contains(LocoKey(index))) { Toast("请先解锁对应机车节点"); return; }
         int price = LocoPrice(index);
-        if (coins < price) { Toast("金币不足，还差 ¥" + Mathf.CeilToInt(price - coins)); return; }
+        if (coins < price) { Toast("金币不足，还差 ¥" + FormatShortfall(price - coins)); return; }
         BeginUndo("购买机车"); coins -= price; researchVehicles.Add(new ResearchVehicle { node = index }); EndUndo(); RefreshHUD(); OpenLocoShop(); Toast("已购买 " + LocoNames[index] + " ×1");
     }
 }

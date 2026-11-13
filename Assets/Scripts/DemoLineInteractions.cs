@@ -396,7 +396,7 @@ public partial class DemoBootstrap
     {
         if (!CanInsertStation(line, segment, target)) { ClosePanel(true); Toast("线路或站点已变化，请重新操作"); return; }
         int cost = InsertStationCost(line, segment, target);
-        if (coins < cost) { Toast("金币不足：还差 ¥" + Mathf.CeilToInt(cost - coins)); return; }
+        if (coins < cost) { Toast("金币不足：还差 ¥" + FormatShortfall(cost - coins)); return; }
         BeginUndo("插入途经站"); ClosePanel(true);
         coins -= cost; line.st.Insert(segment + 1, target); BuildStationsOnPath(new List<int> { target }); stations[target].closed = false;
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); RefreshHUD(); CheckSceneryOnLine(new List<int> { target });
@@ -476,7 +476,7 @@ public partial class DemoBootstrap
             Toast("线路已发生变化，请重新操作"); return;
         }
         int cost = WaystationChangeCost(previous, station, next);
-        if (cost > coins) { Toast("金币不足：还差 ¥" + Mathf.CeilToInt(cost - coins)); return; }
+        if (cost > coins) { Toast("金币不足：还差 ¥" + FormatShortfall(cost - coins)); return; }
         BeginUndo("移除途经站"); coins -= cost; line.st = path;
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); RefreshHUD(); EndUndo();
         Toast("已从 " + line.name + " 移除 " + StationDisplayName(station, currentRegion));

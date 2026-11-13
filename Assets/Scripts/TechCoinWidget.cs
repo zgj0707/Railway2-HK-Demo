@@ -9,12 +9,12 @@ public class TechCoinWidget : MonoBehaviour
     public Text coinText;
     public Image bgImage;
 
-    public Func<float> getCoins;
+    public Func<double> getCoins;
     public Color normalTextColor = new Color(0.18f, 0.16f, 0.14f);
     public Color normalBgColor = new Color(1f, 0.99f, 0.97f, 0.95f);
     public Color alertColor = new Color(0.88f, 0.22f, 0.16f); // 朱红警示色
 
-    private int lastCoins = int.MinValue;
+    private string lastCoinsText = "";
     private Coroutine shakeRoutine;
     private Vector2 initialPos = Vector2.zero;
 
@@ -27,11 +27,11 @@ public class TechCoinWidget : MonoBehaviour
     {
         if (getCoins != null && coinText != null)
         {
-            int currentCoins = Mathf.FloorToInt(getCoins());
-            if (currentCoins != lastCoins)
+            string formatted = DemoBootstrap.FormatCoins(getCoins());
+            if (formatted != lastCoinsText)
             {
-                lastCoins = currentCoins;
-                coinText.text = currentCoins.ToString("N0");
+                lastCoinsText = formatted;
+                coinText.text = formatted;
             }
         }
     }

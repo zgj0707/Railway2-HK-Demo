@@ -51,7 +51,8 @@ public partial class DemoBootstrap : MonoBehaviour
     Canvas canvas; RectTransform root, mapRect, lineLayer, stationLayer, trainLayer, floaterLayer, previewLayer;
     MapWheelZoom mapWheelZoom;
     GraphicRaycaster raycaster;
-    float coins = 2378f, diamonds = 20f, rp = 60f, progress = 0.08f;
+    double coins = 2378d;
+    float diamonds = 20f, rp = 60f, progress = 0.08f;
     float income = 0f;
     List<Station> stations = new List<Station>();
     List<Scenery> sceneries = new List<Scenery>();
@@ -409,10 +410,14 @@ public partial class DemoBootstrap : MonoBehaviour
         topBarGo = bar;
 
         var c1 = Rect("Coin", bar.transform, 24, 46, 318, 92); Rounded(c1, CardBg); SoftShadow(c1);
+        var coinBtn = c1.AddComponent<Button>(); coinBtn.targetGraphic = c1.GetComponent<Image>();
+        coinBtn.onClick.AddListener(() => Toast("当前账面资金：¥" + Math.Floor(coins).ToString("N0")));
         var coinRing = Rect("CoinRing", c1.transform, 12, 18, 56, 56); Img(coinRing, new Color(0.25f,0.21f,0.17f,0.88f), spriteStationRing).raycastTarget = false;
-        var coinIcon = Rect("Icon", coinRing.transform, 4, 4, 48, 48); Img(coinIcon, Gold, spriteCircle);
-        coinTxt = Txt(c1.transform, "2378", 46, Ink, 80, 38, 220, 54, TextAnchor.MiddleLeft);
-        incomeTxt = Txt(c1.transform, "每日收入 240", 24, InkSoft, 82, 8, 226, 30, TextAnchor.MiddleLeft);
+        var coinIcon = Rect("Icon", coinRing.transform, 4, 4, 48, 48); Img(coinIcon, Gold, spriteCircle).raycastTarget = false;
+        coinTxt = Txt(c1.transform, FormatCoins(coins), 44, Ink, 78, 38, 224, 54, TextAnchor.MiddleLeft);
+        coinTxt.resizeTextForBestFit = true; coinTxt.resizeTextMinSize = 22; coinTxt.resizeTextMaxSize = 44; coinTxt.raycastTarget = false;
+        incomeTxt = Txt(c1.transform, "预计日利润 +240", 23, InkSoft, 78, 8, 226, 30, TextAnchor.MiddleLeft);
+        incomeTxt.resizeTextForBestFit = true; incomeTxt.resizeTextMinSize = 15; incomeTxt.resizeTextMaxSize = 23; incomeTxt.raycastTarget = false;
 
         var cap = Rect("Cap", bar.transform, 354, 26, 400, 162); Rounded(cap, CardBg); SoftShadow(cap);
         var tape = Rect("CapTape", cap.transform, 130, 150, 140, 24);
@@ -437,7 +442,7 @@ public partial class DemoBootstrap : MonoBehaviour
         var hb = Btn(bar.transform, "Help", "?", 30, 94, -24, 60, 60, CardBg, () => HelpPopup("长按车站拖到下一站即可铺线，拖回起点成环。\n已有线路端点拖出可延线，中间站拖出可建新线；长按线路拖至新站可插站。\n点开图鉴大图即完成名胜打卡；交界站可跨区衔接。\n右上可调运行倍速（1× 下 6 分钟为一游戏日）。"));
         hb.GetComponentInChildren<Text>().color = InkSoft;
         lastDisplayedMinute = -1; lastDisplayedDay = -1;
-        lastHudCoins = int.MinValue; lastHudIncome = int.MinValue; lastHudDiamonds = int.MinValue;
+        lastHudCoinsText = ""; lastHudIncomeText = ""; lastHudDiamonds = int.MinValue; lastHudProgress = int.MinValue;
     }
 
     void BuildZoomNotice()
@@ -983,7 +988,7 @@ public partial class DemoBootstrap : MonoBehaviour
     void FinishDraft()
     {
         if (draft.Count < 2) { CancelDraft(); return; }
-        if (draftCost > coins) { Toast("金币不足：还差 ¥" + Mathf.RoundToInt(draftCost - coins)); CancelDraft(); return; }
+        if (draftCost > coins) { Toast("金币不足：还差 ¥" + FormatShortfall(draftCost - coins)); CancelDraft(); return; }
         int cost = draftCost;
         var snapshot = new List<int>(draft);
         int from = snapshot[0];
@@ -1731,13 +1736,61 @@ public partial class DemoBootstrap : MonoBehaviour
     int FoundCount() { int n = 0; foreach (var s in sceneries) if (s.found) n++; return n; }
     void RPTick() { rp += 1f; RefreshHUD(); }
 
-    // ---------- HUD ----------
-    int lastHudCoins = int.MinValue, lastHudIncome = int.MinValue, lastHudDiamonds = int.MinValue, lastHudProgress = int.MinValue;
+    // ---------- HUD & 大数格式化 ----------
+    public static string FormatCoins(double amount)
+    {
+        if (double.IsNaN(amount) || double.IsInfinity(amount)) return "0";
+        string sign = amount < 0 ? "-" : "";
+        double abs = Math.Abs(amount);
+        if (abs < 100000d) return sign + Math.Floor(abs).ToString("N0");
+        if (abs < 10000000d) return sign + (abs / 10000d).ToString("0.#") + "万";
+        if (abs < 100000000d) return sign + Math.Floor(abs / 10000d).ToString("N0") + "万";
+        if (abs < 1000000000000d)
+        {
+            double yi = abs / 100000000d;
+            if (yi < 100d) return sign + yi.ToString("0.00") + "亿";
+            if (yi < 1000d) return sign + yi.ToString("0.0") + "亿";
+            return sign + Math.Floor(yi).ToString("N0") + "亿";
+        }
+        return sign + (abs / 1000000000000d).ToString("0.00") + "万亿";
+    }
+    public static string FormatSignedNumber(double amount)
+    {
+        double v = Math.Round(amount);
+        return (v >= 0 ? "+" : "-") + FormatCoins(Math.Abs(v));
+    }
+    public static string FormatSignedCoins(double amount)
+    {
+        double v = Math.Round(amount);
+        return (v >= 0 ? "+¥" : "-¥") + FormatCoins(Math.Abs(v));
+    }
+    public static string FormatShortfall(double diff)
+    {
+        return FormatCoins(Math.Ceiling(Math.Max(1d, diff)));
+    }
+    float ResearchScaleBonusRatio()
+    {
+        int tier = DailyConnectedCount() / 15;
+        return Mathf.Min(0.60f, tier * 0.15f);
+    }
+    float ResearchSpeedMultiplier()
+    {
+        return (1f + ResearchScaleBonusRatio()) * (turboDaysLeft > 0 ? 1.5f : 1f);
+    }
+    float EstimatedDailyRpRate()
+    {
+        return (GameDaySeconds / 36f) * ResearchSpeedMultiplier();
+    }
+
+    string lastHudCoinsText = "", lastHudIncomeText = "";
+    int lastHudDiamonds = int.MinValue, lastHudProgress = int.MinValue;
     void RefreshHUD()
     {
-        int money = Mathf.FloorToInt(coins), profit = Mathf.RoundToInt(income), gems = Mathf.FloorToInt(diamonds), pct = Mathf.RoundToInt(progress * 100);
-        if (coinTxt && money != lastHudCoins) { coinTxt.text = money.ToString(); lastHudCoins = money; }
-        if (incomeTxt && profit != lastHudIncome) { incomeTxt.text = "预计日利润 " + profit; lastHudIncome = profit; }
+        int gems = Mathf.FloorToInt(diamonds), pct = Mathf.RoundToInt(progress * 100);
+        string coinStr = FormatCoins(coins);
+        if (coinTxt && coinStr != lastHudCoinsText) { coinTxt.text = coinStr; lastHudCoinsText = coinStr; }
+        string incomeStr = "预计日利润 " + FormatSignedNumber(income);
+        if (incomeTxt && incomeStr != lastHudIncomeText) { incomeTxt.text = incomeStr; lastHudIncomeText = incomeStr; }
         if (diamondTxt && gems != lastHudDiamonds) { diamondTxt.text = gems.ToString(); lastHudDiamonds = gems; }
         if (pct != lastHudProgress) {
             if (progTxt) progTxt.text = pct + "%";
@@ -2300,10 +2353,21 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         int connected = DailyConnectedCount();
         int found = FoundCount();
-        if (connected >= 28 && found >= 6 && income >= 1200f) return "大湾区铁路总社";
-        if (connected >= 16 && income >= 500f) return "跨海铁道社";
+        if (connected >= 50 && income >= 15000f) return "地球陆海联运集团";
+        if (connected >= 30 && found >= 6 && income >= 3000f) return "大湾区铁路总社";
+        if (connected >= 16 && income >= 800f) return "跨海铁道社";
         if (connected >= 8 || lines.Count >= 3) return "城市干线局";
         return "初创轻轨社";
+    }
+    string NextCompanyRankHint()
+    {
+        int connected = DailyConnectedCount();
+        int found = FoundCount();
+        if (connected < 8 && lines.Count < 3) return "下阶「城市干线局」：连通 8 站或开通 3 条线路";
+        if (connected < 16 || income < 800f) return "下阶「跨海铁道社」：连通 16 站且日利润 ¥800（解锁第 3 董事席）";
+        if (connected < 30 || found < 6 || income < 3000f) return "下阶「大湾区铁路总社」：30 站 · 6 名胜 · 日利润 ¥3,000";
+        if (connected < 50 || income < 15000f) return "地球终阶「地球陆海联运集团」：50 站且日利润 ¥1.5万";
+        return "地球起航篇顶阶达成 · 待命启航火星赤道重工 (Phase II)";
     }
 
     bool HasPartner(int id)
@@ -2314,7 +2378,7 @@ public partial class DemoBootstrap : MonoBehaviour
     int BoardSeatCapacity()
     {
         int connected = DailyConnectedCount();
-        if (connected >= 16 && income >= 500f) return 3;
+        if (connected >= 16 && income >= 800f) return 3;
         if (connected >= 8 || lines.Count >= 3) return 2;
         return 1;
     }

@@ -12,7 +12,7 @@ public partial class DemoBootstrap
     sealed class UndoVehicle { public ResearchVehicle vehicle; public int lineId; }
     sealed class UndoState
     {
-        public string label, region; public float coinsBefore, diamondsBefore, rpBefore, coinsDelta, diamondsDelta, rpDelta;
+        public string label, region; public double coinsBefore, coinsDelta; public float diamondsBefore, rpBefore, diamondsDelta, rpDelta;
         public int nextId, speed; public bool macau, guangdong, loanOutstanding;
         public List<UndoLine> lines = new List<UndoLine>();
         public int companyPolicy, bondDaysLeft, lastPolicyDay, bondPrincipal, bondDailyDue, bondsRepaid;

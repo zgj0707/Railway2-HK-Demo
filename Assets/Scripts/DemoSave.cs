@@ -10,7 +10,7 @@ public partial class DemoBootstrap
     [Serializable] sealed class SavedLine { public int id, trains, todayRevenue; public int skin = -1; public string name; public Color color; public List<string> stations; public int[] dispatch; public float fare, todayGross, todayMaintenance, todayTrack; public List<int> recent; }
     [Serializable] sealed class SavedVehicle { public int node, lineId; }
     [Serializable] sealed class SaveData {
-        public int version=1, day, speed, nextId, dailyBaseline, theme; public float coins, diamonds, rp, clock, researchClock;
+        public int version=1, day, speed, nextId, dailyBaseline, theme; public double coins; public float diamonds, rp, clock, researchClock;
         public bool macau, guangdong, loan, music; public string region;
         public List<SavedStation> stations = new List<SavedStation>(); public List<SavedScenery> scenery = new List<SavedScenery>();
         public List<SavedLine> lines = new List<SavedLine>(); public List<SavedVehicle> vehicles = new List<SavedVehicle>();
