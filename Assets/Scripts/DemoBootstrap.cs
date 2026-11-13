@@ -89,6 +89,13 @@ public partial class DemoBootstrap : MonoBehaviour
     readonly HashSet<int> ownedThemes = new HashSet<int> { 0 };
     readonly Dictionary<string, int> adWatchCounts = new Dictionary<string, int>();
     readonly Dictionary<int, long> themeTrialUntil = new Dictionary<int, long>();
+    string companyName = "湾区铁道社";
+    int companySeal = 0;
+    int companyPolicy = 0;
+    int bondDaysLeft = 0;
+    int lastPolicyDay = -1;
+    int lastAdSubsidyDay = -1;
+    int dailyTaskClaimedDay = -1;
 
     class LineSegmentVisual
     {
@@ -909,7 +916,7 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         if (k == 0) OpenLinesScreen();
         else if (k == 1) OpenGarageScreen();
-        else if (k == 2) Toast("尚未开放");
+        else if (k == 2) OpenCompanyScreen();
         else OpenTechScreen(0);
     }
 
@@ -1494,7 +1501,8 @@ public partial class DemoBootstrap : MonoBehaviour
         if (station.built) return 0;
         bool cityHub = station.administrativeCode > 0 && station.administrativeCode % 100 == 0;
         int hubCost = station.portal ? 70 : cityHub ? 50 : 0;
-        return Mathf.RoundToInt(40f + StationBaselineDemand(index) * 0.7f + hubCost);
+        float policyMult = companyPolicy == 1 ? 0.85f : 1f;
+        return Mathf.RoundToInt((40f + StationBaselineDemand(index) * 0.7f + hubCost) * policyMult);
     }
     int StationEstimatedDemand(int index)
     {
@@ -1640,7 +1648,7 @@ public partial class DemoBootstrap : MonoBehaviour
         RebuildOperatingRates();
         float total = 0;
         foreach (var line in lines) total += ForecastFor(line).Profit;
-        foreach (var station in stations) if (!station.closed) total += station.riderBonus * TechMult();
+        total += StationCommercialTotalDaily() + TourismDividendDaily();
         income = total;
         UpdateRegionUnlocks();
         progress = Mathf.Clamp01(lines.Count / 6f * 0.5f + FoundCount() / (float)Mathf.Max(1, sceneries.Count) * 0.5f);
@@ -2130,7 +2138,107 @@ public partial class DemoBootstrap : MonoBehaviour
         }
     }
 
+    // ---------- company, policies & commercial ----------
+    const int BondPrincipal = 2500;
+    const int BondTermDays = 10;
+    const int BondDailyPayment = 280;
+    const int BondEarlyPayPerDay = 265;
 
+    static readonly string[] CompanySealChars = { "轮", "海", "山", "茗", "星", "金" };
+    static readonly string[] CompanySealNames = { "轮轨初心", "山海潮声", "岭南峻岳", "早茶茗香", "湾区星轨", "鎏金枢纽" };
+    static readonly string[] CompanyPolicyNames = { "均衡发展", "惠民扩容", "精益运维", "文旅专线" };
+    static readonly string[] CompanyPolicyDescs =
+    {
+        "无特殊偏科加成，稳步经营全域路网",
+        "客流需求 +12%、开站成本 -15%，票款 -5%",
+        "车辆与轨道维护费 -12%，全队车速 +10%",
+        "名胜站客流 +35%、名胜线票款 +10%，享景点日红利"
+    };
+    static readonly string[] StationFacilityNames = { "未开发空地", "便民小卖部", "站前商业街", "枢纽都会广场" };
+    static readonly int[] StationFacilityCosts = { 180, 420, 880, 0 };
+    static readonly int[] StationFacilityRents = { 0, 28, 72, 165 };
+
+    bool IsSealUnlocked(int sealIndex)
+    {
+        if (sealIndex <= 1) return true;
+        if (sealIndex == 2) return DailyConnectedCount() >= 8;
+        if (sealIndex == 3) return FoundCount() >= 3;
+        if (sealIndex == 4) return techDone.Count >= 3;
+        if (sealIndex == 5) return income >= 400f;
+        return false;
+    }
+
+    string SealUnlockHint(int sealIndex)
+    {
+        switch (sealIndex)
+        {
+            case 2: return "连通 8 座车站解锁";
+            case 3: return "打卡 3 处名胜解锁";
+            case 4: return "完成 3 项科技解锁";
+            case 5: return "预计日利润达 ¥400 解锁";
+            default: return "初始解锁";
+        }
+    }
+
+    string CompanyTitle()
+    {
+        int connected = DailyConnectedCount();
+        int found = FoundCount();
+        if (connected >= 28 && found >= 6 && income >= 1200f) return "大湾区铁路总社";
+        if (connected >= 16 && income >= 500f) return "跨海铁道社";
+        if (connected >= 8 || lines.Count >= 3) return "城市干线局";
+        return "初创轻轨社";
+    }
+
+    bool StationHasScenery(int index)
+    {
+        if (index < 0 || index >= stations.Count) return false;
+        var s = stations[index];
+        foreach (var sc in sceneries)
+            if (sc.triggerStation == s.name && s.region == sc.region) return true;
+        return false;
+    }
+
+    bool LineHasSceneryStation(Line line)
+    {
+        if (line == null || line.st == null) return false;
+        foreach (int idx in line.st)
+            if (StationHasScenery(idx)) return true;
+        return false;
+    }
+
+    float StationCommercialTotalDaily()
+    {
+        float sum = 0f;
+        float mult = TechMult();
+        foreach (var s in stations)
+            if (s.built && !s.closed && s.riderBonus > 0f) sum += s.riderBonus * mult;
+        return sum;
+    }
+
+    int DevelopedCommercialCount()
+    {
+        int count = 0;
+        foreach (var s in stations)
+            if (s.facLevel > 0) count++;
+        return count;
+    }
+
+    float TourismDividendDaily()
+    {
+        if (companyPolicy != 3) return 0f;
+        return FoundCount() * 18f;
+    }
+
+    int AdTourismSubsidyAmount()
+    {
+        return 350 + DailyConnectedCount() * 25;
+    }
+
+    int BondEarlyRedeemCost()
+    {
+        return Mathf.Max(0, bondDaysLeft) * BondEarlyPayPerDay;
+    }
 }
 
 public class StationPress : MonoBehaviour, IPointerDownHandler, IPointerUpHandler

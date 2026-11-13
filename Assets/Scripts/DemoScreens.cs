@@ -799,19 +799,49 @@ public partial class DemoBootstrap
     }
     void OpenDailyTasks()
     {
-        var page = OpenPage("每日任务", "每日零点刷新进度；统计当天新增连通的站点数。奖励功能尚未开放。", "PageArt/album_watercolor");
+        var page = OpenPage("每日任务", "每日零点刷新进度；今日净增连通 2 站后可领取现金与研发点数补贴。", "PageArt/album_watercolor");
         Txt(page.transform, "今日旅程", 38, Ink, 36, H-245, 600, 54, TextAnchor.MiddleLeft);
         Txt(page.transform, "DAY " + day + "  ·  每日零点刷新", 22, InkSoft, 38, H-287, 700, 34, TextAnchor.MiddleLeft);
-        var card = Rect("DailyTaskCard", page.transform, 28, H-660, W-56, 320);
-        Rounded(card, new Color(1f,0.985f,0.95f,0.97f)); SoftShadow(card); JournalTape(card.transform, 440, 303, 144);
+        var card = Rect("DailyTaskCard", page.transform, 28, H-760, W-56, 420);
+        Rounded(card, CardBg); SoftShadow(card); JournalTape(card.transform, 440, 403, 144);
         int progress = Mathf.Clamp(DailyConnectedCount() - dailyStationBaseline, 0, 2);
-        Txt(card.transform, "让旅程更远一点", 38, Ink, 38, 224, 760, 50, TextAnchor.MiddleLeft);
-        Txt(card.transform, "今日净增连通 2 个站点", 28, InkSoft, 40, 170, 800, 38, TextAnchor.MiddleLeft);
-        Img(Rect("Track", card.transform, 40, 112, 780, 16), new Color(0.89f,0.87f,0.81f), spriteRound).raycastTarget = false;
-        if (progress > 0) Img(Rect("Progress", card.transform, 40, 112, 780 * progress / 2f, 16), Matcha, spriteRound).raycastTarget = false;
-        Txt(card.transform, progress + " / 2", 30, Ink, 840, 96, 140, 45, TextAnchor.MiddleRight);
-        Txt(card.transform, progress >= 2 ? "今日目标已达成" : "每一站，都是新的相遇", 24, progress >= 2 ? Matcha : InkSoft, 40, 36, 700, 36, TextAnchor.MiddleLeft);
-        Txt(page.transform, "奖励功能尚未开放", 25, InkSoft, 40, H-720, 900, 38, TextAnchor.MiddleLeft);
+        bool claimedToday = dailyTaskClaimedDay == day;
+        Txt(card.transform, "让旅程更远一点", 38, Ink, 38, 324, 760, 50, TextAnchor.MiddleLeft);
+        Txt(card.transform, "今日净增连通 2 个站点（奖励：+¥300 · +15 RP，可看片翻倍）", 26, InkSoft, 40, 270, 940, 38, TextAnchor.MiddleLeft);
+        Img(Rect("Track", card.transform, 40, 212, 780, 16), new Color(0.89f,0.87f,0.81f), spriteRound).raycastTarget = false;
+        if (progress > 0) Img(Rect("Progress", card.transform, 40, 212, 780 * progress / 2f, 16), Matcha, spriteRound).raycastTarget = false;
+        Txt(card.transform, progress + " / 2", 30, Ink, 840, 196, 140, 45, TextAnchor.MiddleRight);
+        string statusText = claimedToday ? "今日任务奖励已领取，明日零点刷新" : progress >= 2 ? "今日目标已达成，快领取建设补贴吧！" : "每一站，都是新的相遇";
+        Txt(card.transform, statusText, 24, (claimedToday || progress >= 2) ? Matcha : InkSoft, 40, 148, 900, 36, TextAnchor.MiddleLeft);
+        if (claimedToday)
+        {
+            var doneBtn = Btn(card.transform, "ClaimedDone", "今日奖励已领取  ✓", 28, 40, 34, W-136, 90, new Color(0.84f, 0.85f, 0.81f), () => Toast("今日奖励已领取，请明日再来"));
+            TInk(doneBtn, InkSoft);
+        }
+        else if (progress < 2)
+        {
+            var todoBtn = Btn(card.transform, "ClaimLocked", "再连通 " + (2 - progress) + " 座车站即可领奖", 27, 40, 34, W-136, 90, new Color(0.89f, 0.87f, 0.82f), () => Toast("还差 " + (2 - progress) + " 座新增连通车站即可领奖"));
+            TInk(todoBtn, InkSoft);
+        }
+        else
+        {
+            var claimBtn = Btn(card.transform, "ClaimNormal", "领取  +¥300 · +15 RP", 26, 40, 34, 444, 90, Matcha, () => {
+                if (dailyTaskClaimedDay == day) return;
+                coins += 300; rp += 15; dailyTaskClaimedDay = day;
+                SaveGame(); RefreshHUD(); OpenDailyTasks();
+                Toast("每日补贴已到账 +¥300 · +15 RP");
+            });
+            TInk(claimBtn, Color.white);
+            var dblBtn = Btn(card.transform, "ClaimDouble", "看片双倍  +¥600 · +30 RP", 25, 504, 34, 480, 90, new Color(0.76f, 0.50f, 0.16f), () => {
+                PromptRewardedAd("daily_double_" + day, 1, "每日任务双倍补贴 (+¥600 · +30 RP)", () => {
+                    if (dailyTaskClaimedDay == day) return;
+                    coins += 600; rp += 30; dailyTaskClaimedDay = day;
+                    SaveGame(); RefreshHUD(); OpenDailyTasks();
+                    Toast("双倍每日补贴已到账 +¥600 · +30 RP");
+                });
+            });
+            TInk(dblBtn, Color.white);
+        }
     }
     void OpenLeaderboard()
     {
@@ -819,7 +849,7 @@ public partial class DemoBootstrap
         Txt(page.transform, "旅途中的同行者", 38, Ink, 36, H-245, 800, 54, TextAnchor.MiddleLeft);
         Txt(page.transform, "RAILWAY NOTES", 22, InkSoft, 38, H-287, 700, 34, TextAnchor.MiddleLeft);
         var note = Rect("RankingNote", page.transform, 28, H-660, W-56, 320);
-        Rounded(note, new Color(1f,0.985f,0.95f,0.97f)); SoftShadow(note); JournalTape(note.transform, 440, 303, 144);
+        Rounded(note, CardBg); SoftShadow(note); JournalTape(note.transform, 440, 303, 144);
         Txt(note.transform, "排行榜尚未开放", 38, Ink, 40, 214, 800, 52, TextAnchor.MiddleLeft);
         Txt(note.transform, "先把沿途的风景与成绩，记在这里。", 27, InkSoft, 42, 150, 880, 42, TextAnchor.MiddleLeft);
         Txt(note.transform, "当前区域  " + currentRegion + "     全网已连通  " + DailyConnectedCount() + " 站", 28, Matcha, 42, 72, 900, 42, TextAnchor.MiddleLeft);
@@ -874,14 +904,229 @@ public partial class DemoBootstrap
     }
     void OpenCompanyScreen()
     {
-        var pg=OpenPage("公司", "资金紧张时可申请一笔无息周转金；归还后才能再次申请。", "PageArt/company_watercolor");
-        Txt(pg.transform,"周转金",34,Ink,32,H-310,800,45,TextAnchor.MiddleLeft);
-        Txt(pg.transform,loanOutstanding?"已有未还周转金 ¥500":"尚无周转金；金币低于 ¥100 且预计利润不为正时可申请。",24,InkSoft,32,H-390,980,80,TextAnchor.UpperLeft);
-        var loan=Btn(pg.transform,"Loan",loanOutstanding?"归还 ¥500":"申请 ¥500",28,32,H-540,950,96,Indigo,()=>{
-            if(loanOutstanding){if(coins<500){Toast("金币不足，暂无法还款");return;}BeginUndo("归还周转金");coins-=500;loanOutstanding=false;}
-            else {if(coins>=100||income>0){Toast("金币低于 ¥100 且预计利润不为正时可申请");return;}BeginUndo("领取周转金");coins+=500;loanOutstanding=true;}
-            EndUndo();RefreshHUD();OpenCompanyScreen();Toast(loanOutstanding?"已领取无息周转金":"周转金已还清");
-        });TInk(loan,Color.white);
+        var pg = OpenPage("公司", "管理公司印章、经营方针、资金周转与站前商业物业。", "PageArt/company_watercolor");
+        float totalH = 1560f;
+        float cardW = W - 56f;
+        var content = FleetScroll(pg.transform, 36f, H - 178f, totalH);
+
+        // 1. 品牌名片卡（朱红印章 + 成长头衔 + 公司改名 + 核心财务概览）
+        float y1 = totalH - 20f - 336f;
+        var brandCard = Rect("CompanyBrandCard", content, 28f, y1, cardW, 336f);
+        Rounded(brandCard, CardBg); SoftShadow(brandCard); JournalTape(brandCard.transform, 440f, 319f, 144f);
+
+        int sealIdx = Mathf.Clamp(companySeal, 0, CompanySealChars.Length - 1);
+        var sealBtn = Btn(brandCard.transform, "SealButton", CompanySealChars[sealIdx], 68, 34f, 152f, 138f, 138f, Vermilion, OpenCompanySealPicker);
+        TInk(sealBtn, Color.white);
+        Txt(brandCard.transform, "点击换印", 20, Vermilion, 34f, 114f, 138f, 32f, TextAnchor.MiddleCenter);
+
+        Txt(brandCard.transform, "头衔 · " + CompanyTitle() + "  （已连通 " + DailyConnectedCount() + " 站）", 23, Matcha, 198f, 268f, 796f, 36f, TextAnchor.MiddleLeft);
+
+        var nameBox = Rect("CompanyNameInputBox", brandCard.transform, 198f, 192f, 626f, 66f);
+        Rounded(nameBox, Color.Lerp(CardBg, Ink, 0.06f));
+        var nameTxt = Txt(nameBox.transform, companyName, 31, Ink, 18f, 0f, 590f, 66f, TextAnchor.MiddleLeft);
+        nameTxt.supportRichText = false;
+        var nameInput = nameBox.AddComponent<InputField>();
+        nameInput.textComponent = nameTxt;
+        nameInput.lineType = InputField.LineType.SingleLine;
+        nameInput.characterLimit = 12;
+        nameInput.text = companyName;
+        nameInput.onEndEdit.AddListener(val => {
+            string trimmed = string.IsNullOrWhiteSpace(val) ? "湾区铁道社" : val.Trim();
+            companyName = trimmed;
+            nameInput.text = companyName;
+            SaveGame();
+            Toast("公司名已更新为「" + companyName + "」");
+        });
+        var renameBtn = Btn(brandCard.transform, "RenameBtn", "改名", 24, 838f, 192f, 156f, 66f, Indigo, () => {
+            nameInput.Select();
+            nameInput.ActivateInputField();
+        });
+        TInk(renameBtn, Color.white);
+
+        Txt(brandCard.transform, "运营线路 " + lines.Count + " 条   ·   名胜打卡 " + FoundCount() + " 处   ·   已研科技 " + techDone.Count + " 项", 22, InkSoft, 198f, 122f, 796f, 40f, TextAnchor.MiddleLeft);
+
+        var statLeft = Rect("StatProfit", brandCard.transform, 34f, 24f, 468f, 68f);
+        Rounded(statLeft, Color.Lerp(CardBg, Ink, 0.04f));
+        Txt(statLeft.transform, "预期日利润  " + (income >= 0f ? "+" : "") + "¥" + Mathf.RoundToInt(income), 24, income >= 0f ? Matcha : Vermilion, 16f, 0f, 436f, 68f, TextAnchor.MiddleLeft);
+
+        var statRight = Rect("StatProperty", brandCard.transform, 522f, 24f, 468f, 68f);
+        Rounded(statRight, Color.Lerp(CardBg, Ink, 0.04f));
+        Txt(statRight.transform, "站前物业  " + DevelopedCommercialCount() + " 处（+¥" + Mathf.RoundToInt(StationCommercialTotalDaily()) + "/日）", 23, Indigo, 16f, 0f, 436f, 68f, TextAnchor.MiddleLeft);
+
+        // 2. 社长经营方针（4 选 1 全局策略卡）
+        float y2 = y1 - 24f - 456f;
+        var policyCard = Rect("CompanyPolicyCard", content, 28f, y2, cardW, 456f);
+        Rounded(policyCard, CardBg); SoftShadow(policyCard);
+        Txt(policyCard.transform, "社长经营方针", 32, Ink, 34f, 390f, 420f, 46f, TextAnchor.MiddleLeft);
+        bool policyLockedToday = lastPolicyDay == day;
+        Txt(policyCard.transform, policyLockedToday ? "今日已调整 · 明日零点解锁变更" : "每日限切换 1 次方针", 22, policyLockedToday ? Vermilion : Matcha, 460f, 392f, 530f, 42f, TextAnchor.MiddleRight);
+
+        for (int i = 0; i < CompanyPolicyNames.Length; i++)
+        {
+            int idx = i;
+            bool active = companyPolicy == idx;
+            float px = 34f + (i % 2) * 488f;
+            float py = (i < 2) ? 204f : 24f;
+            Color pBg = active ? Color.Lerp(CardBg, Indigo, 0.18f) : Color.Lerp(CardBg, Ink, 0.05f);
+            var pBtn = Btn(policyCard.transform, "Policy_" + idx, "", 20, px, py, 468f, 166f, pBg, () => {
+                if (companyPolicy == idx) { Toast("当前已采用「" + CompanyPolicyNames[idx] + "」方针"); return; }
+                if (lastPolicyDay == day) { Toast("经营方针每日限变更 1 次，明日零点后再试"); return; }
+                BeginUndo("切换经营方针");
+                companyPolicy = idx;
+                lastPolicyDay = day;
+                operatingRates.Clear();
+                RecalcIncome();
+                EndUndo();
+                SaveGame();
+                RefreshHUD();
+                OpenCompanyScreen();
+                Toast("社长方针已切换为「" + CompanyPolicyNames[idx] + "」");
+            });
+            var titleTxt = Txt(pBtn.transform, CompanyPolicyNames[idx] + (active ? "  ✓ 生效中" : ""), 27, active ? Indigo : Ink, 18f, 106f, 432f, 44f, TextAnchor.MiddleLeft);
+            titleTxt.raycastTarget = false;
+            var descTxt = Txt(pBtn.transform, CompanyPolicyDescs[idx], 21, InkSoft, 18f, 14f, 432f, 88f, TextAnchor.UpperLeft);
+            descTxt.raycastTarget = false;
+        }
+
+        // 3. 资金调度与财政补贴
+        float y3 = y2 - 24f - 416f;
+        var finCard = Rect("CompanyFinanceCard", content, 28f, y3, cardW, 416f);
+        Rounded(finCard, CardBg); SoftShadow(finCard);
+        Txt(finCard.transform, "资金调度与财政补贴", 32, Ink, 34f, 350f, 600f, 46f, TextAnchor.MiddleLeft);
+
+        // 3.1 应急周转金
+        var loanRow = Rect("LoanRow", finCard.transform, 34f, 236f, cardW - 68f, 96f);
+        Rounded(loanRow, Color.Lerp(CardBg, Ink, 0.04f));
+        Txt(loanRow.transform, "无息应急周转金", 25, Ink, 18f, 52f, 630f, 34f, TextAnchor.MiddleLeft);
+        Txt(loanRow.transform, loanOutstanding ? "已有未还周转金 ¥500，归还后可恢复借贷额度" : "金币低于 ¥100 且预期利润不为正时可领 ¥500", 20, InkSoft, 18f, 10f, 640f, 38f, TextAnchor.MiddleLeft);
+        var loanBtn = Btn(loanRow.transform, "LoanBtn", loanOutstanding ? "归还 ¥500" : "申请 ¥500", 23, 672f, 12f, 266f, 72f, Indigo, () => {
+            if (loanOutstanding)
+            {
+                if (coins < 500) { Toast("金币不足，暂无法还款"); return; }
+                BeginUndo("归还周转金"); coins -= 500; loanOutstanding = false;
+            }
+            else
+            {
+                if (coins >= 100 || income > 0) { Toast("需金币低于 ¥100 且预期利润不为正才可申请"); return; }
+                BeginUndo("领取周转金"); coins += 500; loanOutstanding = true;
+            }
+            EndUndo(); SaveGame(); RefreshHUD(); OpenCompanyScreen();
+            Toast(loanOutstanding ? "已领取无息周转金 ¥500" : "周转金已还清");
+        });
+        TInk(loanBtn, Color.white);
+
+        // 3.2 基建扩张债券
+        var bondRow = Rect("BondRow", finCard.transform, 34f, 128f, cardW - 68f, 96f);
+        Rounded(bondRow, Color.Lerp(CardBg, Ink, 0.04f));
+        Txt(bondRow.transform, "基建扩张债券（10 日期）", 25, Ink, 18f, 52f, 630f, 34f, TextAnchor.MiddleLeft);
+        int redeemCost = BondEarlyRedeemCost();
+        Txt(bondRow.transform, bondDaysLeft > 0
+            ? "剩余 " + bondDaysLeft + " 期（每晚扣 ¥" + BondDailyPayment + "，扣至 ¥0 不负债）· 提前赎回减半息"
+            : "发行即得 ¥2,500，未来 10 日每晚自动还本息 ¥280", 20, InkSoft, 18f, 10f, 640f, 38f, TextAnchor.MiddleLeft);
+        var bondBtn = Btn(bondRow.transform, "BondBtn", bondDaysLeft > 0 ? "赎回 ¥" + redeemCost : "发行 ¥2,500", 23, 672f, 12f, 266f, 72f, bondDaysLeft > 0 ? Vermilion : Matcha, () => {
+            if (bondDaysLeft > 0)
+            {
+                int cost = BondEarlyRedeemCost();
+                if (coins < cost) { Toast("提前赎回需要 ¥" + cost + "，金币不足"); return; }
+                BeginUndo("提前赎回债券");
+                coins -= cost;
+                bondDaysLeft = 0;
+                EndUndo(); SaveGame(); RefreshHUD(); OpenCompanyScreen();
+                Toast("基建债券已全额提前赎回");
+            }
+            else
+            {
+                BeginUndo("发行基建债券");
+                coins += BondPrincipal;
+                bondDaysLeft = BondTermDays;
+                EndUndo(); SaveGame(); RefreshHUD(); OpenCompanyScreen();
+                Toast("基建债券发行成功 +¥2,500");
+            }
+        });
+        TInk(bondBtn, Color.white);
+
+        // 3.3 IAA 文旅专项财政补贴
+        var adRow = Rect("SubsidyRow", finCard.transform, 34f, 20f, cardW - 68f, 96f);
+        Rounded(adRow, Color.Lerp(CardBg, Ink, 0.04f));
+        int subsidy = AdTourismSubsidyAmount();
+        bool adClaimedToday = lastAdSubsidyDay == day;
+        Txt(adRow.transform, "文旅专项财政补贴（每日 1 次）", 25, Ink, 18f, 52f, 630f, 34f, TextAnchor.MiddleLeft);
+        Txt(adRow.transform, "观看激励片立得无偿补贴：¥350 + 连通 " + DailyConnectedCount() + " 站×¥25 = ¥" + subsidy, 20, InkSoft, 18f, 10f, 640f, 38f, TextAnchor.MiddleLeft);
+        var adBtn = Btn(adRow.transform, "SubsidyBtn", adClaimedToday ? "今日补贴已领 ✓" : "看片领 ¥" + subsidy, 23, 672f, 12f, 266f, 72f, adClaimedToday ? new Color(0.84f, 0.85f, 0.81f) : new Color(0.76f, 0.50f, 0.16f), () => {
+            if (lastAdSubsidyDay == day) { Toast("今日文旅补贴已领取，明日零点再来"); return; }
+            int grant = AdTourismSubsidyAmount();
+            PromptRewardedAd("company_subsidy_" + day, 1, "文旅专项财政补贴 ¥" + grant, () => {
+                if (lastAdSubsidyDay == day) return;
+                coins += grant;
+                lastAdSubsidyDay = day;
+                SaveGame(); RefreshHUD(); OpenCompanyScreen();
+                Toast("文旅专项补贴到账 +¥" + grant);
+            });
+        });
+        TInk(adBtn, adClaimedToday ? InkSoft : Color.white);
+
+        // 4. 全网站前商业物业总览
+        float y4 = y3 - 24f - 240f;
+        var propCard = Rect("CommercialOverviewCard", content, 28f, y4, cardW, 240f);
+        Rounded(propCard, CardBg); SoftShadow(propCard);
+        int devCount = DevelopedCommercialCount();
+        Txt(propCard.transform, "站前商业物业总览（已建 " + devCount + " 处）", 30, Ink, 34f, 174f, 800f, 44f, TextAnchor.MiddleLeft);
+        string propSummary = "";
+        int shown = 0;
+        for (int i = 0; i < stations.Count; i++)
+        {
+            var st = stations[i];
+            if (st.facLevel <= 0) continue;
+            if (shown < 3)
+            {
+                if (shown > 0) propSummary += "、";
+                int lvl = Mathf.Clamp(st.facLevel, 0, StationFacilityNames.Length - 1);
+                propSummary += StationDisplayName(i, currentRegion) + "(" + StationFacilityNames[lvl] + " ¥" + Mathf.RoundToInt(st.riderBonus * TechMult()) + "/日)";
+            }
+            shown++;
+        }
+        if (shown > 3) propSummary += " 等共 " + shown + " 处";
+        if (shown == 0) propSummary = "暂未开发站前商业。点击地图中任意已建车站并打开「详情」，即可建设小卖部、商业街与都会广场。";
+        Txt(propCard.transform, propSummary, 22, InkSoft, 34f, 94f, cardW - 68f, 74f, TextAnchor.UpperLeft);
+
+        var goMapBtn = Btn(propCard.transform, "GoBuildCommercial", "前往地图挑选车站开发商业", 24, 34f, 20f, cardW - 68f, 64f, Matcha, () => {
+            ClosePage();
+            Toast("点击任意已建站点 → 打开「详情」即可升级站前商业");
+        });
+        TInk(goMapBtn, Color.white);
+    }
+
+    void OpenCompanySealPicker()
+    {
+        var panel = OpenPopup("选择公司朱红印章", 720f, 920f);
+        Txt(panel.transform, "随铁路规模与成就解锁专属公司印章，点选立即生效", 23, InkSoft, 36f, 616f, 848f, 38f, TextAnchor.MiddleLeft);
+        for (int i = 0; i < CompanySealChars.Length; i++)
+        {
+            int idx = i;
+            int col = i % 3;
+            int row = i / 3;
+            float x = 36f + col * 290f;
+            float y = row == 0 ? 336f : 72f;
+            bool unlocked = IsSealUnlocked(idx);
+            bool selected = companySeal == idx;
+            Color cardColor = selected ? Color.Lerp(CardBg, Vermilion, 0.14f) : (unlocked ? CardBg : Color.Lerp(CardBg, Ink, 0.08f));
+            var btn = Btn(panel.transform, "SealChoice_" + idx, "", 22, x, y, 268f, 240f, cardColor, () => {
+                if (!unlocked) { Toast("未解锁：" + SealUnlockHint(idx)); return; }
+                companySeal = idx;
+                SaveGame();
+                ClosePanel(true);
+                OpenCompanyScreen();
+                Toast("已换用印章「" + CompanySealNames[idx] + "」");
+            });
+            var stamp = Rect("Stamp", btn.transform, 78f, 108f, 112f, 112f);
+            Rounded(stamp, unlocked ? Vermilion : new Color(0.65f, 0.63f, 0.59f));
+            var chTxt = Txt(stamp.transform, CompanySealChars[idx], 58, Color.white, 0f, 0f, 112f, 112f, TextAnchor.MiddleCenter);
+            chTxt.raycastTarget = false;
+            var nameTxt = Txt(btn.transform, CompanySealNames[idx] + (selected ? " ✓" : ""), 24, unlocked ? Ink : InkSoft, 10f, 54f, 248f, 40f, TextAnchor.MiddleCenter);
+            nameTxt.raycastTarget = false;
+            var hintTxt = Txt(btn.transform, unlocked ? (selected ? "当前印章" : "点击选用") : SealUnlockHint(idx), 19, unlocked ? (selected ? Vermilion : Matcha) : InkSoft, 10f, 14f, 248f, 36f, TextAnchor.MiddleCenter);
+            hintTxt.raycastTarget = false;
+        }
     }
 
     // ---------- 图鉴 ----------

@@ -169,6 +169,7 @@ public partial class DemoBootstrap
                 coins += gross - vehicle - track;
                 line.todayRevenue = Mathf.RoundToInt(line.todayGross);
             }
+            coins += StationCommercialTotalDaily() * fraction;
             dayClock += step; remaining -= step;
             if (dayClock >= GameDaySeconds - 0.0001f)
             {
@@ -180,6 +181,21 @@ public partial class DemoBootstrap
                     line.recent.Add(Mathf.RoundToInt(beforeTax - tax));
                     if (line.recent.Count > 7) line.recent.RemoveAt(0);
                     line.todayGross = line.todayMaintenance = line.todayTrack = 0f; line.todayRevenue = 0;
+                }
+                if (bondDaysLeft > 0)
+                {
+                    float due = Mathf.Min(Mathf.Max(0f, coins), BondDailyPayment);
+                    coins -= due;
+                    bondDaysLeft--;
+                    Toast(bondDaysLeft > 0
+                        ? "基建债券扣款 ¥" + Mathf.RoundToInt(due) + "（剩 " + bondDaysLeft + " 天）"
+                        : "基建债券最后一期 ¥" + Mathf.RoundToInt(due) + " 已结清！");
+                }
+                if (companyPolicy == 3 && FoundCount() > 0)
+                {
+                    float dividend = TourismDividendDaily();
+                    coins += dividend;
+                    Toast("文旅专线红利 +¥" + Mathf.RoundToInt(dividend));
                 }
                 dailyStationBaseline = DailyConnectedCount();
                 RollTrafficEvents();
@@ -343,12 +359,12 @@ public partial class DemoBootstrap
         if (index < 0 || index >= stations.Count || pageRoot || sceneryViewer) return;
         var station = stations[index];
         string description = StationTrafficDescription(index);
-        float contentHeight = Mathf.Clamp(MeasureTextHeight(description, 28, 884) + 16, 100, H - 620);
-        var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, contentHeight + 390, 960);
+        float contentHeight = Mathf.Clamp(MeasureTextHeight(description, 28, 884) + 16, 100, H - 740);
+        var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, contentHeight + 510, 960);
         stationTrafficPanel = p; stationTrafficIndex = index;
-        stationTrafficLabel = ScrollableText(p.transform, description, 28, InkSoft, 38, 300, 884, contentHeight);
+        stationTrafficLabel = ScrollableText(p.transform, description, 28, InkSoft, 38, 420, 884, contentHeight);
         int cost = Mathf.RoundToInt(100f * Mathf.Pow(1.65f, station.level - 1));
-        var upgrade = Btn(p.transform, "UpgradeStation", station.level >= 10 ? "已满级" : "升级  ¥" + cost, 27, 38, 155, 420, 92, Matcha, () => {
+        var upgrade = Btn(p.transform, "UpgradeStation", station.level >= 10 ? "已满级" : "升级  ¥" + cost, 27, 38, 275, 420, 92, Matcha, () => {
             if (!station.built) { Toast("请先开站"); return; }
             if (station.level >= 10) { Toast("车站已满级"); return; }
             if (coins < cost) { Toast("金币不足"); return; }
@@ -356,11 +372,32 @@ public partial class DemoBootstrap
         }); TInk(upgrade, Color.white);
         bool needsOpening = !station.built || station.closed;
         string toggleLabel = !station.built ? "开站 ¥" + StationOpeningCost(index) : station.closed ? "重新开站" : "关停";
-        var toggle = Btn(p.transform, "ToggleStation", toggleLabel, 27, 500, 155, 420, 92, needsOpening ? Indigo : Vermilion, () => {
+        var toggle = Btn(p.transform, "ToggleStation", toggleLabel, 27, 500, 275, 420, 92, needsOpening ? Indigo : Vermilion, () => {
             if (needsOpening) { if (!OpenStation(index)) return; }
             else { BeginUndo("关停车站"); station.closed = true; RefreshStationDots(); RecalcIncome(); EndUndo(); RefreshHUD(); Toast(StationDisplayName(index, currentRegion) + " 已关停"); }
             OpenStationInfo(index);
         }); TInk(toggle, Color.white);
+        int curFac = Mathf.Clamp(station.facLevel, 0, StationFacilityNames.Length - 1);
+        int facCost = StationFacilityCosts[curFac];
+        int nextRent = curFac < 3 ? StationFacilityRents[curFac + 1] : 0;
+        string facLabel = curFac < 3
+            ? "站前商业 · " + StationFacilityNames[curFac] + " → 建" + StationFacilityNames[curFac + 1] + " (¥" + facCost + " / 日租+¥" + nextRent + ")"
+            : "站前商业 · " + StationFacilityNames[curFac] + "（已满级 · 日租¥" + Mathf.RoundToInt(station.riderBonus * TechMult()) + "）";
+        var facBtn = Btn(p.transform, "StationFacility", facLabel, 24, 38, 155, 882, 92, curFac < 3 ? new Color(0.76f, 0.50f, 0.16f) : new Color(0.86f, 0.84f, 0.78f), () => {
+            if (!station.built) { Toast("请先开站"); return; }
+            if (curFac >= 3) { Toast("站前商业已达最高等级"); return; }
+            if (coins < facCost) { Toast("金币不足"); return; }
+            BeginUndo("站前商业升级");
+            coins -= facCost;
+            station.facLevel = curFac + 1;
+            station.riderBonus = StationFacilityRents[station.facLevel];
+            RecalcIncome();
+            EndUndo();
+            RefreshHUD();
+            OpenStationInfo(index);
+            Toast("站前商业升至" + StationFacilityNames[station.facLevel]);
+        });
+        TInk(facBtn, curFac < 3 ? Color.white : InkSoft);
         var close = Btn(p.transform, "StationClose", "关闭", 26, 38, 36, 882, 80, new Color(0.92f,0.89f,0.83f), () => { ClosePanel(true); ShowStationActions(index); });
         TInk(close, Ink);
     }

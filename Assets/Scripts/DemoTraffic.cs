@@ -74,7 +74,8 @@ public partial class DemoBootstrap
         float morning = Mathf.Exp(-Mathf.Pow((hour - 8.5f) / 2f, 2f));
         float evening = Mathf.Exp(-Mathf.Pow((hour - 18f) / 2.4f, 2f));
         float leisure = Mathf.Exp(-Mathf.Pow((hour - 14f) / 4f, 2f));
-        return StationBaselineDemand(i) * (0.72f + 0.30f * morning + 0.30f * evening + 0.14f * leisure) * TrafficEventFactors[s.trafficEvent] * ResearchFactor(ResearchEffect.Demand);
+        float policyDemandMult = (companyPolicy == 1 ? 1.12f : 1f) * (companyPolicy == 3 && StationHasScenery(i) ? 1.35f : 1f);
+        return StationBaselineDemand(i) * (0.72f + 0.30f * morning + 0.30f * evening + 0.14f * leisure) * TrafficEventFactors[s.trafficEvent] * ResearchFactor(ResearchEffect.Demand) * policyDemandMult;
     }
     int StationKind(int i)
     {
@@ -125,7 +126,7 @@ public partial class DemoBootstrap
             total += trait == 0 ? FleetMaintenanceTraits[v.node] : trait == 1 ? FleetCapacityTraits[v.node] : FleetSpeedTraits[v.node]; count++;
         }
         while (count < needed) { total += 1f; count++; }
-        float speedMult = trait == 2 ? ResearchFactor(ResearchEffect.Speed) * (SkinCategory(GetLineSkin(line)) == 1 ? 1.08f : 1f) : 1f;
+        float speedMult = trait == 2 ? ResearchFactor(ResearchEffect.Speed) * (SkinCategory(GetLineSkin(line)) == 1 ? 1.08f : 1f) * (companyPolicy == 2 ? 1.10f : 1f) : 1f;
         return total / needed * speedMult;
     }
     void SettleRemovedLineTax(Line line)
@@ -356,7 +357,7 @@ public partial class DemoBootstrap
             float distance=0;foreach(float d in trip.lineDistance.Values)distance+=d;
             float revenue=served*trip.fare/10f*trip.bonus*revenueMultiplier;
             float tripTotalRev=0f;
-            foreach(var part in trip.lineDistance){var line=serviceLines[part.Key];float partRev=revenue*part.Value/distance*(SkinCategory(GetLineSkin(line))==0?1.06f:1f);result.lineServed[line]+=served;result.lineRevenue[line]+=partRev;tripTotalRev+=partRev;}
+            foreach(var part in trip.lineDistance){var line=serviceLines[part.Key];float policyRevMult=companyPolicy==1?0.95f:(companyPolicy==3&&LineHasSceneryStation(line)?1.10f:1f);float partRev=revenue*part.Value/distance*(SkinCategory(GetLineSkin(line))==0?1.06f:1f)*policyRevMult;result.lineServed[line]+=served;result.lineRevenue[line]+=partRev;tripTotalRev+=partRev;}
             result.totalPassengers+=served;result.totalRevenue+=tripTotalRev;
         }
         MergeFrozenTraffic(result, serviceLines);
@@ -374,7 +375,7 @@ public partial class DemoBootstrap
     int ForecastSignature()
     {
         unchecked {
-            int hash = 17; hash = hash * 31 + currentRegion.GetHashCode();
+            int hash = 17; hash = hash * 31 + currentRegion.GetHashCode(); hash = hash * 31 + companyPolicy;
             foreach (var line in lines) {
                 hash=hash*31+line.GetHashCode(); hash=hash*31+line.trains; hash=hash*31+line.fare.GetHashCode(); hash=hash*31+GetLineSkin(line);
                 foreach (int v in line.st) hash=hash*31+v;
@@ -419,12 +420,14 @@ public partial class DemoBootstrap
     }
     float VehicleMaintenance(Line line) {
         float skinMult = SkinCategory(GetLineSkin(line)) == 3 ? (DispatchSlot() == 3 ? 0.81f : 0.90f) : 1f;
-        return (line.trains * 4f + RunningTrains(line) * 24f) * FleetTrait(line, 0, false) * ResearchCostFactor(ResearchEffect.Vehicle) * skinMult;
+        float policyMult = companyPolicy == 2 ? 0.88f : 1f;
+        return (line.trains * 4f + RunningTrains(line) * 24f) * FleetTrait(line, 0, false) * ResearchCostFactor(ResearchEffect.Vehicle) * skinMult * policyMult;
     }
     float TrackMaintenance(Line line) {
         int cat = SkinCategory(GetLineSkin(line));
         float skinMult = cat == 2 ? 0.88f : cat == 1 ? 1.04f : 1f;
-        return (40f + EconomicPathLength(line.st) * 0.25f + UniqueCount(line.st) * 5f) * ResearchCostFactor(ResearchEffect.Track) * skinMult;
+        float policyMult = companyPolicy == 2 ? 0.88f : 1f;
+        return (40f + EconomicPathLength(line.st) * 0.25f + UniqueCount(line.st) * 5f) * ResearchCostFactor(ResearchEffect.Track) * skinMult * policyMult;
     }
     float LineProfitRate(Line line, TrafficResult result)
     {

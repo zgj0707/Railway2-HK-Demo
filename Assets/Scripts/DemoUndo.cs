@@ -15,7 +15,8 @@ public partial class DemoBootstrap
         public string label, region; public float coinsBefore, diamondsBefore, rpBefore, coinsDelta, diamondsDelta, rpDelta;
         public int nextId, speed; public bool macau, guangdong, loanOutstanding;
         public List<UndoLine> lines = new List<UndoLine>();
-        public int[] levels; public bool[] built, closed, sceneryUnlocked, sceneryFound;
+        public int companyPolicy, bondDaysLeft, lastPolicyDay;
+        public int[] levels, facLevels; public float[] riderBonuses; public bool[] built, closed, sceneryUnlocked, sceneryFound;
         public List<int> ownedSkins; public List<string> technologies; public List<UndoVehicle> vehicles = new List<UndoVehicle>();
         public Dictionary<Line, FrozenLineTraffic> frozen = new Dictionary<Line, FrozenLineTraffic>();
     }
@@ -35,10 +36,13 @@ public partial class DemoBootstrap
     {
         var state = new UndoState { label=label, region=currentRegion, coinsBefore=coins, diamondsBefore=diamonds, rpBefore=rp, nextId=nextLineId,
             macau=macauUnlocked, guangdong=guangdongUnlocked, loanOutstanding=loanOutstanding, ownedSkins=new List<int>(ownedLineSkins), speed=timeSpeed, levels=new int[stations.Count], built=new bool[stations.Count], closed=new bool[stations.Count],
+            companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, lastPolicyDay=lastPolicyDay,
+            facLevels=new int[stations.Count], riderBonuses=new float[stations.Count],
             sceneryUnlocked=new bool[sceneries.Count], sceneryFound=new bool[sceneries.Count], technologies=new List<string>(techDone) };
         foreach (var line in lines) state.lines.Add(new UndoLine { line=line, name=line.name, color=line.color, skin=line.skin, path=new List<int>(line.st), dispatch=(int[])line.dispatch.Clone(), trains=line.trains, fare=line.fare });
         for (int i=0;i<stations.Count;i++) { state.levels[i]=stations[i].level; state.built[i]=stations[i].built; state.closed[i]=stations[i].closed; }
         for (int i=0;i<sceneries.Count;i++) { state.sceneryUnlocked[i]=sceneries[i].unlocked; state.sceneryFound[i]=sceneries[i].found; }
+        for (int i=0;i<stations.Count;i++) { state.facLevels[i]=stations[i].facLevel; state.riderBonuses[i]=stations[i].riderBonus; }
         foreach (var item in researchVehicles) state.vehicles.Add(new UndoVehicle { vehicle=item, lineId=item.lineId });
         foreach (var item in frozenTraffic) state.frozen[item.Key] = item.Value.Copy();
         pendingUndo=state;
@@ -60,6 +64,9 @@ public partial class DemoBootstrap
         { record.line.name=record.name; record.line.color=record.color; record.line.skin=record.skin; record.line.st=new List<int>(record.path); record.line.dispatch=(int[])record.dispatch.Clone(); record.line.trains=record.trains; record.line.fare=record.fare; lines.Add(record.line); }
         for (int i=0;i<stations.Count;i++) { stations[i].level=state.levels[i]; stations[i].built=state.built[i]; stations[i].closed=state.closed[i]; }
         for (int i=0;i<sceneries.Count;i++) { sceneries[i].unlocked=state.sceneryUnlocked[i]; sceneries[i].found=state.sceneryFound[i]; }
+        if (state.facLevels != null && state.riderBonuses != null)
+            for (int i=0;i<stations.Count && i<state.facLevels.Length && i<state.riderBonuses.Length;i++) { stations[i].facLevel=state.facLevels[i]; stations[i].riderBonus=state.riderBonuses[i]; }
+        companyPolicy=state.companyPolicy; bondDaysLeft=state.bondDaysLeft; lastPolicyDay=state.lastPolicyDay;
         techDone.Clear(); techDone.AddRange(state.technologies);
         frozenTraffic.Clear(); foreach (var item in state.frozen) frozenTraffic[item.Key] = item.Value.Copy();
         researchVehicles.Clear(); foreach (var item in state.vehicles) { item.vehicle.lineId=item.lineId; researchVehicles.Add(item.vehicle); }

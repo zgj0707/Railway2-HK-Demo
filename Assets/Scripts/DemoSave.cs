@@ -18,6 +18,8 @@ public partial class DemoBootstrap
         public List<int> themes = new List<int>();
         public List<string> adKeys = new List<string>(); public List<int> adCounts = new List<int>();
         public List<int> trialThemes = new List<int>(); public List<long> trialEnds = new List<long>();
+        public string companyName = "湾区铁道社";
+        public int companySeal, companyPolicy, bondDaysLeft, lastPolicyDay = -1, lastAdSubsidyDay = -1, dailyTaskClaimedDay = -1;
     }
     bool saveReady, saveBlocked; float autosaveTimer;
     string StationSaveKey(Station station) { return station.region + ":" + station.name; }
@@ -69,6 +71,11 @@ public partial class DemoBootstrap
             if (!IsThemeAvailable(currentTheme)) currentTheme = 0;
             coins=data.coins; diamonds=data.diamonds; rp=data.rp; day=Mathf.Max(1,data.day); dayClock=data.clock; researchClock=data.researchClock; timeSpeed=data.speed;
             nextLineId=data.nextId; dailyStationBaseline=data.dailyBaseline; macauUnlocked=data.macau; guangdongUnlocked=data.guangdong; loanOutstanding=data.loan; musicEnabled=data.music;
+            companyName = string.IsNullOrWhiteSpace(data.companyName) ? "湾区铁道社" : data.companyName.Trim();
+            companySeal = Mathf.Clamp(data.companySeal, 0, CompanySealChars.Length - 1);
+            companyPolicy = Mathf.Clamp(data.companyPolicy, 0, CompanyPolicyNames.Length - 1);
+            bondDaysLeft = Mathf.Max(0, data.bondDaysLeft);
+            lastPolicyDay = data.lastPolicyDay; lastAdSubsidyDay = data.lastAdSubsidyDay; dailyTaskClaimedDay = data.dailyTaskClaimedDay;
             savedRegion=data.region;
             saveBlocked = false;
             saveReady = true;
@@ -92,7 +99,7 @@ public partial class DemoBootstrap
             } catch {}
         }
         try {
-            var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=currentTheme };
+            var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=currentTheme, companyName=companyName, companySeal=companySeal, companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, lastPolicyDay=lastPolicyDay, lastAdSubsidyDay=lastAdSubsidyDay, dailyTaskClaimedDay=dailyTaskClaimedDay };
             foreach(var s in stations) data.stations.Add(new SavedStation { key=StationSaveKey(s), level=s.level, trafficEvent=s.trafficEvent, built=s.built, closed=s.closed, riderBonus=s.riderBonus, facLevel=s.facLevel });
             foreach(var s in sceneries) data.scenery.Add(new SavedScenery { key=ScenerySaveKey(s), found=s.found, unlocked=s.unlocked });
             foreach(var l in lines) { var record=new SavedLine { id=l.id, name=l.name, color=l.color, skin=l.skin, trains=l.trains, dispatch=(int[])l.dispatch.Clone(), fare=l.fare, todayGross=l.todayGross, todayMaintenance=l.todayMaintenance, todayTrack=l.todayTrack, todayRevenue=l.todayRevenue, recent=new List<int>(l.recent), stations=new List<string>() }; foreach(int i in l.st) record.stations.Add(StationSaveKey(stations[i])); data.lines.Add(record); }
