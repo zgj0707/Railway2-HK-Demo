@@ -442,8 +442,8 @@ public partial class DemoBootstrap
             Img(circle, new Color(0.58f, 0.45f, 0.30f, 0.20f), historyCircleOutline).raycastTarget = false;
             var outerHair = Rect("EraCircleHair" + i, content.transform, 4000 - (radius + 6), 4000 - (radius + 6), (radius + 6) * 2, (radius + 6) * 2);
             Img(outerHair, new Color(0.58f, 0.45f, 0.30f, 0.08f), historyCircleOutline).raycastTarget = false;
-            var eraLbl = Txt(content.transform, "◆  " + eras[i], 24, new Color(0.45f, 0.36f, 0.26f, 0.88f), 4012, 4000 + radius + 12, 340, 36, TextAnchor.MiddleLeft);
-            eraLbl.fontStyle = FontStyle.BoldAndItalic; eraLbl.raycastTarget = false;
+            var eraLbl = Txt(content.transform, "◆  " + eras[i], 25, new Color(0.42f, 0.33f, 0.23f, 0.92f), 4012, 4000 + radius + 12, 360, 38, TextAnchor.MiddleLeft);
+            eraLbl.fontStyle = FontStyle.Normal; eraLbl.raycastTarget = false;
         }
         var edgeGo = Rect("HistoryEdges", content.transform, 0, 0, cw, ch);
         var edges = edgeGo.AddComponent<HistoryGraphEdges>(); edges.lineSprite = spriteWhite;
@@ -474,18 +474,18 @@ public partial class DemoBootstrap
             var innerDisc = Rect("HubInner", hubGo.transform, 18, 18, hubSize - 36, hubSize - 36);
             Img(innerDisc, new Color(0.985f, 0.968f, 0.928f), historyHubDiscSprite).raycastTarget = true;
 
-            var hubSub = Txt(hubGo.transform, "— XIX CENTURY —", 17, new Color(0.60f, 0.45f, 0.24f), 24, 260, hubSize - 48, 28, TextAnchor.MiddleCenter);
-            hubSub.fontStyle = FontStyle.BoldAndItalic; hubSub.raycastTarget = false;
-            var hubTitle = Txt(hubGo.transform, "已研典藏图谱", 31, Ink, 24, 210, hubSize - 48, 44, TextAnchor.MiddleCenter);
-            hubTitle.fontStyle = FontStyle.Bold; hubTitle.raycastTarget = false;
-            var hubCount = Txt(hubGo.transform, techDone.Count + " / " + historyNodes.Count, 46, new Color(0.74f, 0.48f, 0.16f), 24, 138, hubSize - 48, 62, TextAnchor.MiddleCenter);
-            hubCount.fontStyle = FontStyle.Bold; hubCount.raycastTarget = false;
+            var hubSub = Txt(hubGo.transform, "— XIX CENTURY —", 17, new Color(0.56f, 0.42f, 0.22f), 24, 260, hubSize - 48, 28, TextAnchor.MiddleCenter);
+            hubSub.fontStyle = FontStyle.Normal; hubSub.raycastTarget = false;
+            var hubTitle = Txt(hubGo.transform, "已研典藏图谱", 32, Ink, 24, 208, hubSize - 48, 46, TextAnchor.MiddleCenter);
+            hubTitle.fontStyle = FontStyle.Normal; hubTitle.raycastTarget = false;
+            var hubCount = Txt(hubGo.transform, techDone.Count + " / " + historyNodes.Count, 48, new Color(0.74f, 0.48f, 0.16f), 24, 136, hubSize - 48, 64, TextAnchor.MiddleCenter);
+            hubCount.fontStyle = FontStyle.Normal; hubCount.raycastTarget = false;
             bool allDone = techDone.Count >= historyNodes.Count;
-            var hubHintBg = Rect("HubHintChip", hubGo.transform, 72, 64, hubSize - 144, 44);
+            var hubHintBg = Rect("HubHintChip", hubGo.transform, 68, 64, hubSize - 136, 44);
             Rounded(hubHintBg, new Color(0.24f, 0.34f, 0.48f, 0.12f));
             hubHintBg.GetComponent<Image>().raycastTarget = false;
-            var hubHint = Txt(hubHintBg.transform, allDone ? "全卷圆满 · 点击检视" : "点击展开全部节点 ▸", 19, Indigo, 6, 0, hubSize - 156, 44, TextAnchor.MiddleCenter);
-            hubHint.fontStyle = FontStyle.Bold; hubHint.raycastTarget = false;
+            var hubHint = Txt(hubHintBg.transform, allDone ? "全卷圆满 · 点击检视" : "点击展开全部节点 ▸", 20, Indigo, 6, 0, hubSize - 148, 44, TextAnchor.MiddleCenter);
+            hubHint.fontStyle = FontStyle.Normal; hubHint.raycastTarget = false;
 
             var hubBtn = hubGo.AddComponent<Button>();
             hubBtn.targetGraphic = innerDisc.GetComponent<Image>();
@@ -538,11 +538,12 @@ public partial class DemoBootstrap
             Color dotColor = locked ? new Color(categoryColor.r, categoryColor.g, categoryColor.b, 0.35f) : categoryColor;
             Img(marker, dotColor, spriteCircle).raycastTarget = false;
 
-            // 标题文字：前置不足半透明，其余恢复 Ink 纯黑墨色
-            Color nameColor = locked ? new Color(Ink.r, Ink.g, Ink.b, 0.45f) : Ink;
-            var name = Txt(card.transform, node.name, 24, nameColor, 6, node.loco >= 0 ? 83 : 62, 188, node.loco >= 0 ? 32 : 48, TextAnchor.MiddleCenter);
-            name.fontStyle = ready ? FontStyle.Bold : FontStyle.Normal;
-            name.resizeTextForBestFit = true; name.resizeTextMinSize = 17; name.resizeTextMaxSize = 24;
+            // 标题文字：单一字重下使用 FontStyle.Normal 避免伪粗体发糊，改以字号与墨色深浅区分层级
+            Color nameColor = locked ? new Color(Ink.r, Ink.g, Ink.b, 0.48f) : Ink;
+            int nameMaxSize = ready ? 25 : 23;
+            var name = Txt(card.transform, node.name, nameMaxSize, nameColor, 6, node.loco >= 0 ? 83 : 62, 188, node.loco >= 0 ? 32 : 48, TextAnchor.MiddleCenter);
+            name.fontStyle = FontStyle.Normal;
+            name.resizeTextForBestFit = true; name.resizeTextMinSize = 18; name.resizeTextMaxSize = nameMaxSize;
 
             if (node.loco >= 0)
             {
@@ -636,12 +637,12 @@ public partial class DemoBootstrap
         SoftShadow(titleCard);
         var titleRt = titleCard.GetComponent<RectTransform>(); titleRt.anchorMin = titleRt.anchorMax = new Vector2(0,1); titleRt.pivot = new Vector2(0,1); titleRt.anchoredPosition = new Vector2(254,-45);
         var title = Txt(titleCard.transform, "铁路典籍 · 科技树", 34, Ink, 0, 0, 0, 0, TextAnchor.MiddleLeft);
-        title.fontStyle = FontStyle.Bold; title.raycastTarget = false;
+        title.fontStyle = FontStyle.Normal; title.raycastTarget = false;
         title.resizeTextForBestFit = true; title.resizeTextMinSize = 20; title.resizeTextMaxSize = 34;
         var titleTextRt = title.rectTransform; titleTextRt.anchorMin = Vector2.zero; titleTextRt.anchorMax = Vector2.one;
         titleTextRt.offsetMin = new Vector2(20, 4); titleTextRt.offsetMax = new Vector2(-148, -4);
         var titleSub = Txt(titleCard.transform, "XIX · ARCHIVE", 15, new Color(0.58f, 0.45f, 0.28f, 0.85f), 0, 0, 0, 0, TextAnchor.MiddleRight);
-        titleSub.fontStyle = FontStyle.BoldAndItalic; titleSub.raycastTarget = false;
+        titleSub.fontStyle = FontStyle.Normal; titleSub.raycastTarget = false;
         var titleSubRt = titleSub.rectTransform; titleSubRt.anchorMin = Vector2.zero; titleSubRt.anchorMax = Vector2.one;
         titleSubRt.offsetMin = new Vector2(16, 4); titleSubRt.offsetMax = new Vector2(-18, -4);
         backRt.anchorMin = backRt.anchorMax = Vector2.zero;
@@ -695,8 +696,8 @@ public partial class DemoBootstrap
         rpTouch.onRelease = HideHistoryInfo;
         rpTouch.onTap = () => Toast("长按科研点徽章查看获取规则（当前日产 " + EstimatedDailyRpRate().ToString("0.0") + " RP）");
 
-        var eraBadge = Btn(historyControls.transform, "EraRoadmapBadge", "19世纪 · 蒸汽与轨交  ▾", 21, 24, 0, 298, 44, new Color(1f, 0.99f, 0.96f, 0.99f), () => OpenEraJournalModal(page.transform));
-        eraBadge.GetComponentInChildren<Text>().fontStyle = FontStyle.Bold;
+        var eraBadge = Btn(historyControls.transform, "EraRoadmapBadge", "19世纪 · 蒸汽与轨交  ▾", 22, 24, 0, 298, 44, new Color(1f, 0.99f, 0.96f, 0.99f), () => OpenEraJournalModal(page.transform));
+        eraBadge.GetComponentInChildren<Text>().fontStyle = FontStyle.Normal;
         TInk(eraBadge, new Color(0.45f, 0.31f, 0.16f));
         SoftShadow(eraBadge.gameObject);
         Img(Rect("EraAccent", eraBadge.transform, 0, 8, 6, 28), Gold, spriteRound).raycastTarget = false;
@@ -734,7 +735,7 @@ public partial class DemoBootstrap
         historyTooltipFollow = info.AddComponent<HistoryTooltipFollow>(); historyTooltipFollow.page = pageRt;
         historyInfoPanel = info;
         historyHeading = Txt(info.transform, "", 32, Ink, 28, 0, 844, 46, TextAnchor.MiddleLeft);
-        historyHeading.fontStyle = FontStyle.Bold;
+        historyHeading.fontStyle = FontStyle.Normal;
         var hrt = historyHeading.rectTransform; hrt.anchorMin = new Vector2(0, 1); hrt.anchorMax = new Vector2(1, 1); hrt.pivot = new Vector2(0.5f, 1); hrt.offsetMin = new Vector2(28, -62); hrt.offsetMax = new Vector2(-28, -16);
         historyInfo = Txt(info.transform, "", 24, InkSoft, 28, 24, 844, 210, TextAnchor.UpperLeft);
         var infoBodyRt = historyInfo.rectTransform; infoBodyRt.anchorMin = Vector2.zero; infoBodyRt.anchorMax = Vector2.one; infoBodyRt.offsetMin = new Vector2(28, 20); infoBodyRt.offsetMax = new Vector2(-28, -68);
@@ -769,9 +770,9 @@ public partial class DemoBootstrap
         JournalTape(sheet.transform, cardW * 0.5f - 95f, cardH - 18f, 190f);
 
         var enHeader = Txt(sheet.transform, "CHRONICLES OF RAILWAY  ·  XIX — XXI CENTURY", 19, new Color(0.55f, 0.42f, 0.25f), 44, cardH - 86, cardW - 88, 28, TextAnchor.MiddleCenter);
-        enHeader.fontStyle = FontStyle.BoldAndItalic;
+        enHeader.fontStyle = FontStyle.Normal;
         var cnHeader = Txt(sheet.transform, "— ◆ 铁道百年 · 时代手帐 ◆ —", 38, Ink, 44, cardH - 144, cardW - 88, 52, TextAnchor.MiddleCenter);
-        cnHeader.fontStyle = FontStyle.Bold;
+        cnHeader.fontStyle = FontStyle.Normal;
         var subHeader = Txt(sheet.transform, "翻阅不同纪元的蒸汽、电气与高速轨交图谱", 22, InkSoft, 44, cardH - 184, cardW - 88, 32, TextAnchor.MiddleCenter);
 
         var xClose = Btn(sheet.transform, "CloseJournal", "×", 34, cardW - 96, cardH - 96, 62, 62, new Color(0.92f, 0.87f, 0.78f), () => {
@@ -818,11 +819,11 @@ public partial class DemoBootstrap
                 raw.rectTransform.anchoredPosition = new Vector2(18f + (216f - iw) * 0.5f, 34 + (154f - ih) * 0.5f);
             }
             var volTag = Txt(artFrame.transform, volNums[i] + "  ·  " + volYears[i], 16, new Color(0.92f, 0.85f, 0.72f), 6, 6, 208, 24, TextAnchor.MiddleCenter);
-            volTag.fontStyle = FontStyle.BoldAndItalic; volTag.raycastTarget = false;
+            volTag.fontStyle = FontStyle.Normal; volTag.raycastTarget = false;
 
             // 右侧排版（留足右侧邮戳空间，防止正文斜碰印章）
             var vTitle = Txt(vol.transform, volTitles[i], 30, Ink, 268, 178, 376, 44, TextAnchor.MiddleLeft);
-            vTitle.fontStyle = FontStyle.Bold;
+            vTitle.fontStyle = FontStyle.Normal;
             var vDesc = Txt(vol.transform, volDescs[i], 21, InkSoft, 268, 76, 396, 94, TextAnchor.UpperLeft);
 
             // 右上斜盖火漆印章
@@ -830,7 +831,7 @@ public partial class DemoBootstrap
             stampGo.transform.localRotation = Quaternion.Euler(0, 0, i % 2 == 0 ? 8f : -7f);
             Rounded(stampGo, new Color(stampCols[i].r, stampCols[i].g, stampCols[i].b, activeEra ? 0.14f : 0.10f));
             var stampTxt = Txt(stampGo.transform, stampTexts[i], 21, stampCols[i], 4, 4, 110, 70, TextAnchor.MiddleCenter);
-            stampTxt.fontStyle = FontStyle.Bold; stampTxt.raycastTarget = false;
+            stampTxt.fontStyle = FontStyle.Normal; stampTxt.raycastTarget = false;
 
             var enterBtn = Btn(vol.transform, "SelectEra" + i, activeEra ? "当前研习此卷 ›" : "敬请期待", 21, 268, 22, 236, 48,
                 activeEra ? Matcha : new Color(0.84f, 0.80f, 0.73f), () => {

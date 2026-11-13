@@ -82,7 +82,8 @@ public partial class DemoBootstrap : MonoBehaviour
     GameObject sceneryBadge;
 
     // 主题与 IAA 激励状态
-    GameObject paperBgGo, topBarGo, stationFilterGo, speedBoardGo;
+    GameObject paperBgGo, topBarGo, stationFilterGo, speedBoardGo, noticeBoardGo, noticeUnreadDot;
+    bool noticeReadThisSession;
     RawImage hkMapRaw, macauMapRaw, guangdongMapRaw, topFadeImg, botFadeImg;
     MapBackdropGraphic backdropGraphic;
     readonly List<GameObject> leftRailGos = new List<GameObject>();
@@ -915,6 +916,23 @@ public partial class DemoBootstrap : MonoBehaviour
         speedTxt = Txt(inner.transform, timeSpeed == 0 ? "暂停" : timeSpeed + "×", 32, Ink, 0, 6, 80, 60, TextAnchor.MiddleCenter);
         lastDisplayedSpeed = -1;
         var btn = go.AddComponent<Button>(); btn.targetGraphic = shell; btn.onClick.AddListener(CycleSpeed);
+
+        // 右侧公告入口：与倍速卡右对齐且留足呼吸间距，镜像呼应左侧栏书签丝带样式
+        var noticeGo = Rect("NoticeBoard", root, 986, 1054, 86, 88);
+        noticeBoardGo = noticeGo;
+        Rounded(noticeGo, CardBg); SoftShadow(noticeGo);
+        var noticeRibbon = Rect("Ribbon", noticeGo.transform, 81, 0, 5, 88);
+        Img(noticeRibbon, Vermilion, spriteWhite).raycastTarget = false;
+        Txt(noticeGo.transform, "公告", 22, Ink, 2, 44, 78, 36, TextAnchor.MiddleCenter);
+        var noticeTag = Rect("Tag", noticeGo.transform, 12, 10, 60, 26);
+        Rounded(noticeTag, new Color(Paper2.r, Paper2.g, Paper2.b, 0.72f));
+        Txt(noticeTag.transform, "驿报", 15, InkSoft, 0, 0, 60, 26, TextAnchor.MiddleCenter);
+        Img(Rect("BadgeRing", noticeGo.transform, 2, 62, 20, 20), CardBg, spriteCircle).raycastTarget = false;
+        noticeUnreadDot = Rect("Badge", noticeGo.transform, 4, 64, 16, 16);
+        Img(noticeUnreadDot, Vermilion, spriteCircle).raycastTarget = false;
+        noticeUnreadDot.SetActive(!noticeReadThisSession);
+        var noticeBtn = noticeGo.AddComponent<Button>(); noticeBtn.targetGraphic = noticeGo.GetComponent<Image>();
+        noticeBtn.onClick.AddListener(() => { if (!dragging) OpenNoticeBoard(); });
     }
 
     void BuildBottomNav()
@@ -2196,6 +2214,7 @@ public partial class DemoBootstrap : MonoBehaviour
         leftRailGos.Clear();
         if (stationFilterGo) Destroy(stationFilterGo);
         if (speedBoardGo) Destroy(speedBoardGo);
+        if (noticeBoardGo) Destroy(noticeBoardGo);
         if (dock) Destroy(dock);
         if (undoButton) Destroy(undoButton.gameObject);
         BuildTopBar();

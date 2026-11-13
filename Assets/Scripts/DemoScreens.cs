@@ -858,6 +858,145 @@ public partial class DemoBootstrap
         Txt(note.transform, "全网榜单筹备中，每一次扩线与日利润增长都会记入公司史册。", 26, InkSoft, 42, 150, 880, 42, TextAnchor.MiddleLeft);
         Txt(note.transform, "当前版图  " + currentRegion + "   ·   已连通  " + DailyConnectedCount() + " 站   ·   预期日利  ¥" + Mathf.RoundToInt(income), 26, Matcha, 42, 72, 900, 42, TextAnchor.MiddleLeft);
     }
+
+    struct NoticeEntry
+    {
+        public string title;
+        public string body;
+        public string date;
+    }
+
+    // 公告数据列表（约定最新公告置于索引 0，打开时默认仅展开索引 0 且全局互斥同时只开一条）
+    static readonly NoticeEntry[] Announcements =
+    {
+        new NoticeEntry
+        {
+            title = "1号公告",
+            date = "2026年11月13日",
+            body = "暂无公告\n特此公告\n2026年11月13日"
+        }
+    };
+
+    void OpenNoticeBoard()
+    {
+        noticeReadThisSession = true;
+        if (noticeUnreadDot) noticeUnreadDot.SetActive(false);
+
+        const float popupW = 860f;
+        const float popupH = 920f;
+        var panel = OpenPopup("公司公告", popupH, popupW);
+        int total = Announcements != null ? Announcements.Length : 0;
+        Txt(panel.transform, "铁路运营部告示 · 共 " + total + " 则", 22, InkSoft, 28, popupH - 108, popupW - 56, 30, TextAnchor.MiddleLeft);
+        Img(Rect("NoticeHeaderLine", panel.transform, 28, popupH - 118, popupW - 56, 2), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f)).raycastTarget = false;
+
+        float viewW = popupW - 56f;
+        float viewH = popupH - 148f;
+        var view = Rect("NoticeScrollView", panel.transform, 28, 22, viewW, viewH);
+        Img(view, new Color(1, 1, 1, 0)).raycastTarget = true;
+        view.AddComponent<RectMask2D>();
+        var content = Rect("NoticeListContent", view.transform, 0, 0, viewW, viewH);
+        var contentRt = content.GetComponent<RectTransform>();
+        contentRt.anchorMin = new Vector2(0, 1); contentRt.anchorMax = new Vector2(0, 1);
+        contentRt.pivot = new Vector2(0, 1); contentRt.anchoredPosition = Vector2.zero;
+        var scroll = view.AddComponent<ScrollRect>();
+        scroll.viewport = view.GetComponent<RectTransform>();
+        scroll.content = contentRt;
+        scroll.horizontal = false; scroll.vertical = true;
+        scroll.scrollSensitivity = 90f; scroll.movementType = ScrollRect.MovementType.Elastic;
+
+        int expandedIndex = total > 0 ? 0 : -1;
+
+        void RebuildNoticeList()
+        {
+            for (int c = content.transform.childCount - 1; c >= 0; c--)
+                Destroy(content.transform.GetChild(c).gameObject);
+
+            if (total == 0)
+            {
+                var emptyCard = Rect("NoticeEmpty", content.transform, 0, -140, viewW, 140);
+                Rounded(emptyCard, new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f));
+                Txt(emptyCard.transform, "当前暂无公司公告", 26, InkSoft, 24, 0, viewW - 48, 140, TextAnchor.MiddleCenter);
+                contentRt.sizeDelta = new Vector2(viewW, viewH);
+                return;
+            }
+
+            const float headerH = 88f;
+            const float gap = 16f;
+            float cursorY = 8f;
+
+            for (int i = 0; i < total; i++)
+            {
+                int idx = i;
+                var item = Announcements[i];
+                bool isExpanded = idx == expandedIndex;
+                float bodyTextW = viewW - 84f;
+                float bodyH = 0f;
+                if (isExpanded)
+                {
+                    float rawH = MeasureTextHeight(item.body, 26, bodyTextW) * 1.32f + 28f;
+                    bodyH = Mathf.Max(136f, rawH);
+                }
+                float cardH = headerH + (isExpanded ? bodyH + 28f : 0f);
+                cursorY += cardH;
+
+                var card = Rect("NoticeItem_" + idx, content.transform, 0, -cursorY, viewW, cardH);
+                var cardRt = card.GetComponent<RectTransform>();
+                cardRt.anchorMin = new Vector2(0, 1); cardRt.anchorMax = new Vector2(0, 1);
+                cardRt.pivot = new Vector2(0, 0);
+                Rounded(card, isExpanded ? new Color(1f, 0.995f, 0.97f, 0.99f) : new Color(Paper2.r, Paper2.g, Paper2.b, 0.72f));
+                if (isExpanded) SoftShadow(card);
+
+                var accentCol = idx == 0 ? Vermilion : (isExpanded ? Indigo : InkSoft);
+                var ribbon = Rect("Ribbon", card.transform, 0, 8, 6, cardH - 16);
+                Img(ribbon, accentCol, spriteRound).raycastTarget = false;
+
+                var headerGo = Rect("Header", card.transform, 0, cardH - headerH, viewW, headerH);
+                var headerBg = Img(headerGo, new Color(1, 1, 1, 0));
+                var headerBtn = headerGo.AddComponent<Button>();
+                headerBtn.targetGraphic = headerBg;
+                headerBtn.onClick.AddListener(() => {
+                    expandedIndex = (expandedIndex == idx) ? -1 : idx;
+                    RebuildNoticeList();
+                });
+
+                float titleX = 28f;
+                if (idx == 0)
+                {
+                    var latestPill = Rect("LatestTag", headerGo.transform, titleX, (headerH - 34f) * 0.5f, 70f, 34f);
+                    Rounded(latestPill, new Color(Vermilion.r, Vermilion.g, Vermilion.b, 0.14f));
+                    var latestTxt = Txt(latestPill.transform, "最新", 18, Vermilion, 0, 0, 70f, 34f, TextAnchor.MiddleCenter);
+                    latestTxt.fontStyle = FontStyle.Normal;
+                    titleX += 84f;
+                }
+
+                var titleTxt = Txt(headerGo.transform, item.title, 30, Ink, titleX, 0, viewW - titleX - 240f, headerH, TextAnchor.MiddleLeft);
+                titleTxt.fontStyle = FontStyle.Normal;
+                FitSingleLine(titleTxt, 30);
+
+                if (!string.IsNullOrEmpty(item.date))
+                {
+                    Txt(headerGo.transform, item.date, 20, InkSoft, viewW - 235f, 0, 175f, headerH, TextAnchor.MiddleRight);
+                }
+                Txt(headerGo.transform, isExpanded ? "▾" : "▸", 26, isExpanded ? Ink : InkSoft, viewW - 56f, 0, 36f, headerH, TextAnchor.MiddleCenter);
+
+                if (isExpanded)
+                {
+                    Img(Rect("Sep", card.transform, 28, cardH - headerH - 2f, viewW - 56f, 2f), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.14f)).raycastTarget = false;
+                    var bodyBg = Rect("BodyPaper", card.transform, 24, 16, viewW - 48f, bodyH);
+                    Rounded(bodyBg, new Color(0.965f, 0.945f, 0.905f, 0.72f));
+                    bodyBg.GetComponent<Image>().raycastTarget = false;
+                    var bodyTxt = Txt(bodyBg.transform, item.body, 26, Ink, 20, 10, bodyTextW, bodyH - 20f, TextAnchor.UpperLeft);
+                    bodyTxt.lineSpacing = 1.32f;
+                }
+
+                cursorY += gap;
+            }
+
+            contentRt.sizeDelta = new Vector2(viewW, Mathf.Max(viewH, cursorY + 8f));
+        }
+
+        RebuildNoticeList();
+    }
     void OpenVehicleDetails(int index)
     {
         if (index < 0 || index >= LocoNames.Length) return;
