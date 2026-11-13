@@ -156,12 +156,23 @@ public partial class DemoBootstrap
             TInk(tb, active ? Color.white : Ink);
         }
 
-        var toggle = Btn(bubble.transform, "MusicToggle", musicEnabled ? "背景音乐：开" : "背景音乐：关", 30, 34, 42, 612, 88, Matcha, () => {
+        bool hasTestSave = HasBundledTestSave();
+        float musicW = hasTestSave ? 344f : 612f;
+        var toggle = Btn(bubble.transform, "MusicToggle", musicEnabled ? "背景音乐：开" : "背景音乐：关", 28, 34, 42, musicW, 88, Matcha, () => {
             musicEnabled = !musicEnabled;
             if (music) { if (musicEnabled && music.clip) music.Play(); else music.Stop(); }
             ClosePanel(); Toast(musicEnabled ? "背景音乐已开启" : "背景音乐已关闭");
         });
         TInk(toggle, Color.white);
+        if (hasTestSave)
+        {
+            var testBtn = Btn(bubble.transform, "LoadTestSave", "载入测试存档", 24, 34 + musicW + 16f, 42, 612f - musicW - 16f, 88, Gold, () => {
+                Confirm("载入测试存档", "将覆盖当前本地进度，恢复至预置的第 79 日南粤全域测试存档（7 条线路 · 88 项科技 · 29.8 万资金）。是否继续？", () => {
+                    LoadBundledTestSave();
+                });
+            });
+            TInk(testBtn, Color.white);
+        }
     }
 
     AudioClip MakeTone(float freq, float dur)

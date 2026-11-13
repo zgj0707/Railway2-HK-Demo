@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public partial class DemoBootstrap
 {
     const string SaveKey = "railway2_local_v1";
+    const string BundledTestSaveResource = "TestSaves/railway2_local_v1";
     [Serializable] sealed class SavedStation { public string key; public int level, trafficEvent; public bool built, closed; public float riderBonus; public int facLevel; }
     [Serializable] sealed class SavedScenery { public string key; public bool found, unlocked; }
     [Serializable] sealed class SavedLine { public int id, trains, todayRevenue; public int skin = -1; public string name; public Color color; public List<string> stations; public int[] dispatch; public float fare, todayGross, todayMaintenance, todayTrack; public List<int> recent; }
@@ -138,6 +140,82 @@ public partial class DemoBootstrap
         } catch(Exception e) { Debug.LogError("本地存档保存失败：" + e.Message); }
     }
     void TickAutosave() { autosaveTimer += Time.unscaledDeltaTime; if (autosaveTimer >= 5f) { autosaveTimer=0; SaveGame(); } }
+    bool HasBundledTestSave() { return Resources.Load<TextAsset>(BundledTestSaveResource) != null; }
+    bool LoadBundledTestSave()
+    {
+        var asset = Resources.Load<TextAsset>(BundledTestSaveResource);
+        if (!asset || string.IsNullOrEmpty(asset.text)) { Toast("未找到内置测试存档"); return false; }
+        try {
+            var check = JsonUtility.FromJson<SaveData>(asset.text);
+            if (check == null || check.version != 1 || check.lines == null || check.stations == null)
+            {
+                Toast("内置测试存档格式校验失败");
+                return false;
+            }
+        } catch (Exception e) {
+            Toast("内置测试存档解析失败：" + e.Message);
+            return false;
+        }
+
+        ClosePanel(true); CloseLineBubble(); ClosePage(); CancelDraft(); ClearFloaters();
+        EndThemePreview(false);
+        pendingUndo = null; lastUndo = null;
+        techCollapseDone = true; techSessionUnlocked.Clear();
+        lines.Clear();
+        BuildData();
+        PlayerPrefs.SetString(SaveKey, asset.text);
+        PlayerPrefs.Save();
+        saveBlocked = false;
+        saveReady = false;
+        if (!RestoreGame()) { Toast("测试存档载入失败"); return false; }
+
+        EnsureCompanyInitialized();
+        if (!IsThemeAvailable(currentTheme)) currentTheme = 0;
+        string dest = (!string.IsNullOrEmpty(savedRegion) && RegionUnlocked(savedRegion)) ? savedRegion : "香港";
+        FreezeRegionTraffic();
+        currentRegion = dest;
+        if (hkMapArt) hkMapArt.SetActive(currentRegion == "香港");
+        if (macauMapArt) macauMapArt.SetActive(currentRegion == "澳门");
+        if (guangdongMapArt) guangdongMapArt.SetActive(currentRegion == "广东");
+        if (mapRect)
+        {
+            mapRect.localScale = Vector3.one;
+            mapRect.anchoredPosition = mapWheelZoom ? mapWheelZoom.CenterPosition(1f) : Vector2.zero;
+        }
+        foreach (var kv in stationImgs)
+        {
+            int i = kv.Key; var marker = kv.Value.transform.parent;
+            marker.gameObject.SetActive(StationInRegion(i, currentRegion));
+            marker.localScale = Vector3.one;
+            marker.GetComponent<RectTransform>().anchoredPosition = Pos(i);
+            if (stationLabels.TryGetValue(i, out var nameLabel) && nameLabel) nameLabel.text = StationDisplayName(i, currentRegion);
+            if (stations[i].portal)
+            {
+                var texts = marker.GetComponentsInChildren<Text>(true);
+                if (texts.Length > 1) texts[1].text = DisplayPlaceAliases(PortalSubtitle(stations[i], currentRegion));
+            }
+        }
+        if (regionTitle) regionTitle.text = DisplayPlaceAliases(currentRegion == "香港" ? "香 港" : currentRegion == "澳门" ? "澳 门" : "广 东");
+        RefreshSceneryViews();
+        UpdateStationLabelSizes(1f);
+        LayoutStationLabels();
+        ApplyTheme(currentTheme, false);
+        CreateLineVisuals();
+        RefreshAllLines();
+        RefreshStationDots();
+        CheckSceneryOnLine(null);
+        RecalcIncome();
+        UpdateRegionalMarkers(true);
+        UpdateTimeText();
+        RefreshHUD();
+        RefreshPendingBadge();
+        RefreshUndoButton();
+        if (music) { if (musicEnabled && music.clip) { if (!music.isPlaying) music.Play(); } else music.Stop(); }
+        saveReady = true;
+        SaveGame();
+        Toast("已载入测试存档：第 " + day + " 日 · " + DisplayPlaceAliases(currentRegion));
+        return true;
+    }
     void OnApplicationPause(bool paused) { if(paused) SaveGame(); }
     void OnApplicationFocus(bool focused) { if (!focused) { if (lineInsertActive) CancelLineInsert(); SaveGame(); } }
     void OnApplicationQuit() { SaveGame(); }
