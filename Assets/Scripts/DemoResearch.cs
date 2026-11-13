@@ -752,33 +752,6 @@ public partial class DemoBootstrap
         historyInfoPanel.SetActive(false);
     }
 
-    struct EraThemeSpec
-    {
-        public string bigNum, volRoman, yearSpan, title, desc, stampText;
-        public Color windowColor, neonColor, antiColor, buttonColor;
-    }
-
-    // 伪立体色彩视差纯文字叠层：外加偏移重影，前景字保持 FontStyle.Normal 锐利清晰
-    void AddChromaticDepthText(Transform parent, string label, int fontSize, float x, float y, float w, float h, TextAnchor align, Color mainCol, Color neonCol, Color antiCol, float shiftX, float shiftY)
-    {
-        var anti = Txt(parent, label, fontSize, antiCol, x + shiftX, y - shiftY, w, h, align);
-        anti.fontStyle = FontStyle.Normal; anti.raycastTarget = false;
-        var mid = Txt(parent, label, fontSize, neonCol, x - shiftX * 0.7f, y + shiftY * 0.7f, w, h, align);
-        mid.fontStyle = FontStyle.Normal; mid.raycastTarget = false;
-        var main = Txt(parent, label, fontSize, mainCol, x, y, w, h, align);
-        main.fontStyle = FontStyle.Normal; main.raycastTarget = false;
-    }
-
-    // 空心霓虹几何边框（由四条细线构成，用于穿透画框边界形成前后景深）
-    void AddNeonOutline(Transform parent, float x, float y, float w, float h, float thickness, Color color)
-    {
-        var box = Rect("NeonBox", parent, x, y, w, h);
-        Img(Rect("Top", box.transform, 0, h - thickness, w, thickness), color).raycastTarget = false;
-        Img(Rect("Bot", box.transform, 0, 0, w, thickness), color).raycastTarget = false;
-        Img(Rect("Left", box.transform, 0, 0, thickness, h), color).raycastTarget = false;
-        Img(Rect("Right", box.transform, w - thickness, 0, thickness, h), color).raycastTarget = false;
-    }
-
     void OpenEraJournalModal(Transform parent)
     {
         if (eraJournalModal) Destroy(eraJournalModal);
@@ -786,7 +759,7 @@ public partial class DemoBootstrap
         var mrt = modal.GetComponent<RectTransform>(); mrt.anchorMin = Vector2.zero; mrt.anchorMax = Vector2.one; mrt.offsetMin = mrt.offsetMax = Vector2.zero;
         eraJournalModal = modal;
 
-        var scrimBg = Img(modal, new Color(0.08f, 0.09f, 0.13f, 0.62f));
+        var scrimBg = Img(modal, new Color(0.06f, 0.07f, 0.11f, 0.68f));
         var closeBtn = modal.AddComponent<Button>(); closeBtn.targetGraphic = scrimBg; closeBtn.transition = Selectable.Transition.None;
         closeBtn.onClick.AddListener(() => { if (eraJournalModal) Destroy(eraJournalModal); eraJournalModal = null; });
 
@@ -796,7 +769,6 @@ public partial class DemoBootstrap
         Rounded(sheet, new Color(0.972f, 0.948f, 0.895f, 0.99f));
         SoftShadow(sheet);
 
-        // 古典外框 + 顶部手帐胶带
         var frameOuter = Rect("JournalFrame", sheet.transform, 18, 18, cardW - 36, cardH - 36);
         Rounded(frameOuter, new Color(0.65f, 0.50f, 0.28f, 0.14f));
         frameOuter.GetComponent<Image>().raycastTarget = false;
@@ -809,135 +781,58 @@ public partial class DemoBootstrap
         enHeader.fontStyle = FontStyle.Normal;
         var cnHeader = Txt(sheet.transform, "— ◆ 铁道百年 · 时代手帐 ◆ —", 38, Ink, 44, cardH - 144, cardW - 88, 52, TextAnchor.MiddleCenter);
         cnHeader.fontStyle = FontStyle.Normal;
-        var subHeader = Txt(sheet.transform, "色彩视差纯文字手帐 · 点击查阅各纪元脉络", 22, InkSoft, 44, cardH - 184, cardW - 88, 32, TextAnchor.MiddleCenter);
+        var subHeader = Txt(sheet.transform, "手绘霓虹色彩视差纪元卷册 · 点击进入或查阅详情", 22, InkSoft, 44, cardH - 184, cardW - 88, 32, TextAnchor.MiddleCenter);
 
         var xClose = Btn(sheet.transform, "CloseJournal", "×", 34, cardW - 96, cardH - 96, 62, 62, new Color(0.92f, 0.87f, 0.78f), () => {
             if (eraJournalModal) Destroy(eraJournalModal); eraJournalModal = null;
         });
         TInk(xClose, Ink);
 
-        // 三张不同色彩主题的裸眼 3D 伪立体纯文字卡片（红蓝电光 / 绛紫荧光青 / 幽翠朱橙）
-        EraThemeSpec[] eras =
-        {
-            new EraThemeSpec {
-                bigNum = "19", volRoman = "XIX CENTURY", yearSpan = "1800 — 1899",
-                title = "十九世纪 · 蒸汽奠基",
-                desc = "高压蒸汽、齿轨试行至连续制动；已收编 " + historyNodes.Count + " 项典籍（已完成 " + techDone.Count + " 项）。",
-                stampText = "现行编纂",
-                windowColor = new Color(0.04f, 0.11f, 0.78f),
-                neonColor = new Color(1.00f, 0.14f, 0.56f),
-                antiColor = new Color(0.05f, 0.88f, 1.00f),
-                buttonColor = new Color(0.90f, 0.14f, 0.50f)
-            },
-            new EraThemeSpec {
-                bigNum = "20", volRoman = "XX CENTURY", yearSpan = "1900 — 1999",
-                title = "二十世纪 · 内燃电气",
-                desc = "大功率蒸汽干线、内燃与接触网电气化、流线型城际快车相继登场。",
-                stampText = "待启卷册",
-                windowColor = new Color(0.24f, 0.05f, 0.43f),
-                neonColor = new Color(0.08f, 0.94f, 0.82f),
-                antiColor = new Color(1.00f, 0.24f, 0.62f),
-                buttonColor = new Color(0.38f, 0.20f, 0.58f)
-            },
-            new EraThemeSpec {
-                bigNum = "21", volRoman = "XXI CENTURY", yearSpan = "2000 — 以降",
-                title = "二十一世纪 · 高速智行",
-                desc = "高速动车组、智能联锁全网调度与磁浮新制式，开启当代轨交新纪元。",
-                stampText = "远景档案",
-                windowColor = new Color(0.02f, 0.24f, 0.23f),
-                neonColor = new Color(1.00f, 0.36f, 0.12f),
-                antiColor = new Color(0.32f, 0.86f, 1.00f),
-                buttonColor = new Color(0.12f, 0.38f, 0.36f)
-            }
+        string[] titles = { "十九世纪 · 蒸汽奠基", "二十世纪 · 内燃电气", "二十一世纪 · 高速智行" };
+        string[] subStatus = {
+            "现行研习 · 已收编 " + techDone.Count + " / " + historyNodes.Count + " 项典籍  ›",
+            "待启卷册 · 敬请期待",
+            "远景档案 · 敬请期待"
+        };
+        Color[] accentColors = {
+            new Color(1.00f, 0.34f, 0.72f),
+            new Color(0.24f, 0.96f, 0.88f),
+            new Color(1.00f, 0.52f, 0.26f)
         };
 
         float itemW = cardW - 92f;
-        const float itemH = 260f;
-        for (int i = 0; i < eras.Length; i++)
+        const float itemH = 266f;
+        for (int i = 0; i < 3; i++)
         {
             int idx = i;
-            var spec = eras[i];
             bool activeEra = i == 0;
-            float cy = cardH - 476f - i * 284f;
+            float cy = cardH - 480f - i * 286f;
 
-            // 外层深黑景深画框：上下黑边配合内嵌鲜艳色窗，打造强对比裸眼 3D 视窗
+            // 外层极黑影院遮幅画框：复刻参考图纯黑上下边衬托中心炽烈彩色霓虹海报
             var vol = Rect("EraVolume_" + i, sheet.transform, 46, cy, itemW, itemH);
-            Rounded(vol, new Color(0.04f, 0.05f, 0.08f, 0.98f));
+            Rounded(vol, new Color(0.015f, 0.015f, 0.025f, 1f));
             SoftShadow(vol);
 
-            // 中层高饱和色场窗（上下各留 14px 黑曜画框形成深邃窗格）
-            var colorWin = Rect("ColorWindow", vol.transform, 10, 14, itemW - 20f, itemH - 28f);
-            Img(colorWin, spec.windowColor).raycastTarget = false;
+            // 中间铺满程序化矢量手绘「19Century / 20Century / 21Century」海报贴图（上黑边 12px，下黑边 38px）
+            var posterGo = Rect("NeonPoster", vol.transform, 10, 38, itemW - 20f, itemH - 50f);
+            var posterRaw = posterGo.AddComponent<RawImage>();
+            posterRaw.texture = EraPosterGenerator.GetPoster(i);
+            posterRaw.raycastTarget = false;
 
-            // 装饰几何霓虹星点与双层细线框（故意越出内色窗上下边压在黑框上，营造跃屏破框感）
-            var gridCross = Rect("HoloLine", colorWin.transform, 248, 22, 2, itemH - 72f);
-            Img(gridCross, new Color(spec.antiColor.r, spec.antiColor.g, spec.antiColor.b, 0.38f)).raycastTarget = false;
-            AddNeonOutline(vol.transform, 22, 6, 214, itemH - 12f, 2.5f, new Color(spec.neonColor.r, spec.neonColor.g, spec.neonColor.b, 0.85f));
-            AddNeonOutline(vol.transform, 28, 12, 214, itemH - 12f, 1.5f, new Color(spec.antiColor.r, spec.antiColor.g, spec.antiColor.b, 0.45f));
-
-            // 几枚简洁霓虹微尘圆环点缀，呼应霓虹手绘质感
-            float[] sparkX = { 36, 198, 216, 48 };
-            float[] sparkY = { 206, 216, 46, 38 };
-            for (int s = 0; s < sparkX.Length; s++)
-            {
-                var dot = Rect("Spark_" + s, vol.transform, sparkX[s], sparkY[s], s % 2 == 0 ? 10 : 7, s % 2 == 0 ? 10 : 7);
-                Img(dot, s % 2 == 0 ? spec.neonColor : spec.antiColor, spriteCircle).raycastTarget = false;
-            }
-
-            // 左侧超大伪立体数字与世纪纯文字（错位色差叠层）
-            AddChromaticDepthText(
-                vol.transform, spec.bigNum, 108,
-                18, 66, 222, 138, TextAnchor.MiddleCenter,
-                Color.Lerp(spec.neonColor, Color.white, 0.25f),
-                spec.neonColor,
-                spec.antiColor,
-                5f, 4f
-            );
-            var romanShadow = Txt(vol.transform, spec.volRoman, 16, spec.antiColor, 26, 42, 210, 26, TextAnchor.MiddleCenter);
-            romanShadow.raycastTarget = false;
-            var romanTxt = Txt(vol.transform, spec.volRoman, 16, new Color(1f, 0.98f, 0.96f), 24, 44, 210, 26, TextAnchor.MiddleCenter);
-            romanTxt.raycastTarget = false;
-            var yearTxt = Txt(vol.transform, spec.yearSpan, 17, new Color(0.88f, 0.94f, 1f, 0.85f), 24, 18, 210, 26, TextAnchor.MiddleCenter);
-            yearTxt.raycastTarget = false;
-
-            // 右侧主标题（轻微单向霓虹色差浮影，保留清晰笔画）+ 高对比净白正文
-            var titleGhost = Txt(vol.transform, spec.title, 31, spec.neonColor, 275, 174, 380, 44, TextAnchor.MiddleLeft);
-            titleGhost.raycastTarget = false;
-            var vTitle = Txt(vol.transform, spec.title, 31, Color.white, 272, 177, 380, 44, TextAnchor.MiddleLeft);
-            vTitle.raycastTarget = false;
-
-            var vDesc = Txt(vol.transform, spec.desc, 21, new Color(0.94f, 0.96f, 0.99f, 0.90f), 272, 76, 488, 92, TextAnchor.UpperLeft);
-            vDesc.lineSpacing = 1.26f; vDesc.raycastTarget = false;
-
-            // 右上破框立体标牌（外压深色边框，带错位反色底托）
-            var stampShadow = Rect("StampDepth", vol.transform, itemW - 134f, itemH - 64f, 122, 46);
-            Rounded(stampShadow, new Color(spec.antiColor.r, spec.antiColor.g, spec.antiColor.b, 0.72f));
-            stampShadow.GetComponent<Image>().raycastTarget = false;
-            var stampGo = Rect("Stamp", vol.transform, itemW - 140f, itemH - 58f, 122, 46);
-            Rounded(stampGo, new Color(0.05f, 0.06f, 0.10f, 0.96f));
-            stampGo.GetComponent<Image>().raycastTarget = false;
-            var stampTxt = Txt(stampGo.transform, spec.stampText, 20, spec.neonColor, 0, 0, 122, 46, TextAnchor.MiddleCenter);
-            stampTxt.raycastTarget = false;
-
-            var enterBtn = Btn(vol.transform, "SelectEra" + i, activeEra ? "当前研习此卷 ›" : "敬请期待", 21, 272, 24, 236, 46,
-                spec.buttonColor, () => {
-                    if (idx == 0) {
-                        if (eraJournalModal) Destroy(eraJournalModal);
-                        eraJournalModal = null;
-                    } else {
-                        Toast("「" + eras[idx].title + "」典籍尚在编纂整理中");
-                    }
-                });
-            TInk(enterBtn, activeEra ? Color.white : new Color(0.86f, 0.90f, 0.94f));
+            // 下黑边安静承接时代中文卷名与当前状态，绝不破坏画面主体霓虹艺术纯文字
+            var leftLabel = Txt(vol.transform, titles[i], 19, new Color(0.92f, 0.94f, 0.98f, 0.92f), 20, 4, 420, 32, TextAnchor.MiddleLeft);
+            leftLabel.raycastTarget = false;
+            var rightLabel = Txt(vol.transform, subStatus[i], 18, accentColors[i], itemW - 440f, 4, 420, 32, TextAnchor.MiddleRight);
+            rightLabel.raycastTarget = false;
 
             var cardTap = vol.AddComponent<Button>();
             cardTap.targetGraphic = vol.GetComponent<Image>();
             cardTap.onClick.AddListener(() => {
-                if (idx == 0) {
+                if (activeEra) {
                     if (eraJournalModal) Destroy(eraJournalModal);
                     eraJournalModal = null;
                 } else {
-                    Toast("「" + eras[idx].title + "」典籍尚在编纂整理中");
+                    Toast("「" + titles[idx] + "」典籍尚在编纂整理中");
                 }
             });
         }
