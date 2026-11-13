@@ -406,6 +406,15 @@ public partial class DemoBootstrap
         forecastSignature=signature; hasForecastSignature=true;
     }
     LineForecastData ForecastFor(Line line) { return lineForecasts.TryGetValue(line,out var f) ? f : new LineForecastData(); }
+    struct OperatingRates { public float gross, vehicle, track; }
+    readonly Dictionary<Line, OperatingRates> operatingRates = new Dictionary<Line, OperatingRates>();
+    void RebuildOperatingRates()
+    {
+        operatingRates.Clear();
+        foreach (var line in lines) operatingRates[line] = new OperatingRates {
+            gross = TrafficRevenue(line, traffic), vehicle = VehicleMaintenance(line), track = TrackMaintenance(line)
+        };
+    }
     float VehicleMaintenance(Line line) { return (line.trains * 4f + RunningTrains(line) * 24f) * FleetTrait(line, 0, false) * ResearchCostFactor(ResearchEffect.Vehicle); }
     float TrackMaintenance(Line line) { return (40f + EconomicPathLength(line.st) * 0.25f + UniqueCount(line.st) * 5f) * ResearchCostFactor(ResearchEffect.Track); }
     float LineProfitRate(Line line, TrafficResult result)

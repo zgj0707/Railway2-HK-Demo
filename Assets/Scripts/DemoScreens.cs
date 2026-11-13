@@ -65,9 +65,9 @@ public partial class DemoBootstrap
 
     void HelpPopup(string text)
     {
-        var p = OpenBubble("说明", 560, 640, new Vector2(130, H - 240));
-        var body = Txt(p.transform, text, 27, InkSoft, 34, 104, 572, 300, TextAnchor.UpperLeft);
-        body.resizeTextForBestFit = true; body.resizeTextMinSize = 21; body.resizeTextMaxSize = 27;
+        float bodyHeight = Mathf.Clamp(MeasureTextHeight(text, 27, 572) + 10, 50, H - 420);
+        var p = OpenBubble("说明", bodyHeight + 220, 640, new Vector2(130, H - 240));
+        ScrollableText(p.transform, text, 27, InkSoft, 34, 128, 572, bodyHeight);
         var ok = Btn(p.transform, "Ok", "知道了", 30, 34, 28, 572, 80, new Color(0.92f,0.89f,0.83f), ClosePanel);
         TInk(ok, Ink);
     }
@@ -566,16 +566,17 @@ public partial class DemoBootstrap
     {
         if (index < 0 || index >= LocoNames.Length) return;
         InitHistoryTree();
-        var panel = OpenPopup(LocoNames[index] + " · " + LocoYears[index], 1120, 960);
-        var backdrop = Rect("VehicleArtFrame", panel.transform, 30, 520, 900, 490);
+        string intro = historyByKey.TryGetValue(LocoKey(index), out var node) ? node.description : "暂无车型简介。";
+        float bodyHeight = Mathf.Clamp(MeasureTextHeight(intro, 25, 888) + 10, 54, H - 1100);
+        float artY = 340 + bodyHeight;
+        var panel = OpenPopup(LocoNames[index] + " · " + LocoYears[index], artY + 580, 960);
+        var backdrop = Rect("VehicleArtFrame", panel.transform, 30, artY, 900, 490);
         Rounded(backdrop, new Color(0.93f,0.92f,0.85f,0.75f));
         var art = Rect("VehicleArt", backdrop.transform, 40, 40, 820, 410).AddComponent<RawImage>();
         art.texture = Resources.Load<Texture2D>("Research/Train/" + LocoArt[index]); art.raycastTarget = false;
         FitVehicleImage(art, 820, 410);
-        string intro = historyByKey.TryGetValue(LocoKey(index), out var node) ? node.description : "暂无车型简介。";
-        Txt(panel.transform, "车型简介", 31, Ink, 36, 440, 860, 44, TextAnchor.MiddleLeft);
-        var body = Txt(panel.transform, intro, 25, InkSoft, 36, 300, 888, 130, TextAnchor.UpperLeft);
-        body.resizeTextForBestFit = true; body.resizeTextMinSize = 20; body.resizeTextMaxSize = 25;
+        Txt(panel.transform, "车型简介", 31, Ink, 36, 290 + bodyHeight, 860, 44, TextAnchor.MiddleLeft);
+        ScrollableText(panel.transform, intro, 25, InkSoft, 36, 280, 888, bodyHeight);
         Txt(panel.transform, "运力 " + Mathf.RoundToInt(FleetCapacityTraits[index] * 100) + "%    维护 " + Mathf.RoundToInt(FleetMaintenanceTraits[index] * 100) + "%    速度 " + Mathf.RoundToInt(FleetSpeedTraits[index] * 100) + "%", 24, InkSoft, 36, 230, 888, 42, TextAnchor.MiddleLeft);
         var fullscreen = Btn(panel.transform, "Fullscreen", "横屏查看大图", 30, 36, 46, 888, 90, Indigo, () => OpenVehicleImage(index)); TInk(fullscreen, Color.white);
     }

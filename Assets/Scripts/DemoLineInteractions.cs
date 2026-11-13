@@ -184,7 +184,10 @@ public partial class DemoBootstrap
     {
         if (line == null || !lines.Contains(line)) return;
         CloseLineBubble();
-        float h = 1180f;
+        string pathText = "沿线 " + UniquePathText(line.st);
+        float pathHeight = Mathf.Clamp(MeasureTextHeight(pathText, 19, 860) + 6, 48, 280);
+        float extra = pathHeight - 48;
+        float h = 1180f + extra;
         var p = OpenPopup("", h, 960);
         BuildLineNameEditor(p.transform, line, h);
         Img(Rect("LineColor", p.transform, 36, h - 124, 888, 8), line.color, spriteRound).raycastTarget = false;
@@ -199,42 +202,42 @@ public partial class DemoBootstrap
         StatBox(p.transform, "客 流", Mathf.RoundToInt(LinePassengerFlow(line)) + "", 34, h - 470, 430, 150, Indigo);
         StatBox(p.transform, "单向区段运力", Mathf.RoundToInt(LineCapacity(line)) + " 人次/日", 496, h - 470, 430, 150, Sakura);
 
-        Txt(p.transform, "近 7 日净利润", 24, Ink, 36, 675, 420, 34, TextAnchor.MiddleLeft);
+        Txt(p.transform, "近 7 日净利润", 24, Ink, 36, 675 + extra, 420, 34, TextAnchor.MiddleLeft);
         if (line.recent.Count == 0)
         {
             for (int i = 0; i < 7; i++)
             {
-                var ghost = Rect("GhostBar", p.transform, 60 + i * 120, 505, 64, 135);
+                var ghost = Rect("GhostBar", p.transform, 60 + i * 120, 505 + extra, 64, 135);
                 Img(ghost, new Color(0.90f, 0.87f, 0.81f, 0.42f), spriteRound).raycastTarget = false;
             }
-            Img(Rect("ChartBase", p.transform, 36, 500, 888, 2), new Color(0.55f,0.50f,0.42f,0.28f)).raycastTarget = false;
-            Txt(p.transform, "首日运营中 · 今日收入 ¥" + line.todayRevenue + "\n日结后生成近 7 日利润曲线", 21, InkSoft, 36, 545, 860, 70, TextAnchor.UpperLeft);
+            Img(Rect("ChartBase", p.transform, 36, 500 + extra, 888, 2), new Color(0.55f,0.50f,0.42f,0.28f)).raycastTarget = false;
+            Txt(p.transform, "首日运营中 · 今日收入 ¥" + line.todayRevenue + "\n日结后生成近 7 日利润曲线", 21, InkSoft, 36, 545 + extra, 860, 70, TextAnchor.UpperLeft);
         }
         else
         {
-            Txt(p.transform, "已结算 " + line.recent.Count + " 日 · 日均 ¥" + (recentSum / line.recent.Count), 19, InkSoft, 480, 678, 430, 30, TextAnchor.MiddleRight);
+            Txt(p.transform, "已结算 " + line.recent.Count + " 日 · 日均 ¥" + (recentSum / line.recent.Count), 19, InkSoft, 480, 678 + extra, 430, 30, TextAnchor.MiddleRight);
             int max = 1;
             foreach (int v in line.recent) if (Mathf.Abs(v) > max) max = Mathf.Abs(v);
             int start = 7 - line.recent.Count;
             for (int i = 0; i < 7; i++)
             {
                 float bx = 60 + i * 120;
-                Img(Rect("BarBg", p.transform, bx, 505, 64, 135), new Color(0.90f, 0.87f, 0.81f, 0.55f), spriteRound).raycastTarget = false;
+                Img(Rect("BarBg", p.transform, bx, 505 + extra, 64, 135), new Color(0.90f, 0.87f, 0.81f, 0.55f), spriteRound).raycastTarget = false;
                 if (i >= start)
                 {
                     int v = line.recent[i - start];
                     float bh = Mathf.Max(3f, 67f * Mathf.Abs(v) / max);
-                    Img(Rect("Bar", p.transform, bx, v >= 0 ? 572 : 572-bh, 64, bh), v >= 0 ? line.color : Vermilion, spriteRound).raycastTarget = false;
+                    Img(Rect("Bar", p.transform, bx, (v >= 0 ? 572 : 572-bh) + extra, 64, bh), v >= 0 ? line.color : Vermilion, spriteRound).raycastTarget = false;
                 }
             }
         }
 
-        Txt(p.transform, "运 营", 24, Ink, 36, 470, 300, 34, TextAnchor.MiddleLeft);
-        Txt(p.transform, "车站 " + unique + " · 列车 " + line.trains + "/8 · 线路长度 " + Mathf.RoundToInt(EconomicPathLength(line.st)) + " 地图单位", 21, Ink, 36, 420, 860, 34, TextAnchor.MiddleLeft);
-        Txt(p.transform, "最高区段需求 " + Mathf.RoundToInt(LinePeakSectionDemand(line)) + " 人次/日 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line, 2)*100) + "%", 21, InkSoft, 36, 384, 860, 30, TextAnchor.MiddleLeft);
+        Txt(p.transform, "运 营", 24, Ink, 36, 470 + extra, 300, 34, TextAnchor.MiddleLeft);
+        Txt(p.transform, "车站 " + unique + " · 列车 " + line.trains + "/8 · 线路长度 " + Mathf.RoundToInt(EconomicPathLength(line.st)) + " 地图单位", 21, Ink, 36, 420 + extra, 860, 34, TextAnchor.MiddleLeft);
+        Txt(p.transform, "最高区段需求 " + Mathf.RoundToInt(LinePeakSectionDemand(line)) + " 人次/日 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line, 2)*100) + "%", 21, InkSoft, 36, 384 + extra, 860, 30, TextAnchor.MiddleLeft);
         if (seg >= 0 && seg < line.st.Count - 1)
-            Txt(p.transform, "选中段：" + stations[line.st[seg]].name + " ⇄ " + stations[line.st[seg + 1]].name, 19, line.color, 36, 344, 860, 30, TextAnchor.MiddleLeft);
-        Txt(p.transform, "沿线 " + UniquePathText(line.st), 19, InkSoft, 36, 296, 860, 48, TextAnchor.UpperLeft);
+            Txt(p.transform, "选中段：" + stations[line.st[seg]].name + " ⇄ " + stations[line.st[seg + 1]].name, 19, line.color, 36, 344 + extra, 860, 30, TextAnchor.MiddleLeft);
+        ScrollableText(p.transform, pathText, 19, InkSoft, 36, 296, 860, pathHeight);
 
         Txt(p.transform, "预计成本：车辆 ¥" + Mathf.RoundToInt(forecast.vehicle) + " · 线路 ¥" + Mathf.RoundToInt(forecast.track) + " · 税 ¥" + Mathf.RoundToInt(forecast.tax), 20, InkSoft, 36, 246, 860, 34, TextAnchor.MiddleLeft);
         var planning = Btn(p.transform, "Operations", "票价与调度", 25, 34, 132, 892, 70, Indigo, () => { ClosePanel(true); OpenLineOperations(line); }); TInk(planning, Color.white);
@@ -304,6 +307,188 @@ public partial class DemoBootstrap
         return total;
     }
 
+    bool lineInsertActive;
+    Line insertingLine;
+    int insertingSegment = -1, insertTarget = -1;
+    Image insertPreviewA, insertPreviewB;
+    GameObject insertBadge;
+    Text insertBadgeText;
+
+    public bool BeginLineInsert(int lineId, int segment, Vector2 screen)
+    {
+        if (dragging || lineInsertActive || pageRoot || activePanel || sceneryViewer) return false;
+        var line = lines.Find(item => item.id == lineId);
+        if (line == null || segment < 0 || segment >= line.st.Count - 1 ||
+            SegmentRegion(line.st[segment], line.st[segment + 1]) != currentRegion) return false;
+        CloseLineBubble();
+        insertingLine = line; insertingSegment = segment; insertTarget = -1; lineInsertActive = true;
+        insertPreviewA = Img(Rect("InsertPreviewA", previewLayer, 0, 0, 1, 10), line.color, spriteRound);
+        insertPreviewB = Img(Rect("InsertPreviewB", previewLayer, 0, 0, 1, 10), line.color, spriteRound);
+        foreach (var image in new[] { insertPreviewA, insertPreviewB }) {
+            image.raycastTarget = false; image.rectTransform.pivot = new Vector2(0, 0.5f);
+        }
+        insertBadge = Rect("InsertCostBadge", root, 0, 0, 330, 62);
+        Rounded(insertBadge, new Color(1f, 0.98f, 0.92f, 0.96f));
+        insertBadge.GetComponent<Image>().raycastTarget = false;
+        insertBadgeText = Txt(insertBadge.transform, "拖至新站点", 23, Ink, 12, 5, 306, 52, TextAnchor.MiddleCenter);
+        Haptic.Vibrate(22); PlayTone(false); UpdateLineInsert(screen);
+        return true;
+    }
+    bool CanInsertStation(Line line, int segment, int target)
+    {
+        if (line == null || !lines.Contains(line) || segment < 0 || segment >= line.st.Count - 1 ||
+            target < 0 || target >= stations.Count || line.st.Contains(target) || stations[target].portal) return false;
+        int a = line.st[segment], b = line.st[segment + 1];
+        return StationInRegion(target, currentRegion) && SegmentRegion(a, b) == currentRegion &&
+            SegmentRegion(a, target) == currentRegion && SegmentRegion(target, b) == currentRegion;
+    }
+    int InsertStationCost(Line line, int segment, int target)
+    {
+        int a = line.st[segment], b = line.st[segment + 1];
+        int before = Mathf.RoundToInt(30f + Vector2.Distance(Pos(a), Pos(b)) * 0.75f);
+        int after = Mathf.RoundToInt(30f + Vector2.Distance(Pos(a), Pos(target)) * 0.75f)
+            + Mathf.RoundToInt(30f + Vector2.Distance(Pos(target), Pos(b)) * 0.75f);
+        return Mathf.Max(0, after - before) + StationOpeningCost(target);
+    }
+    void SetInsertPreview(Image image, Vector2 a, Vector2 b)
+    {
+        if (!image) return;
+        Vector2 delta = b - a; var rt = image.rectTransform;
+        rt.anchoredPosition = a; rt.sizeDelta = new Vector2(Mathf.Max(1f, delta.magnitude), 10f * overlayZoom);
+        rt.localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
+    }
+    public void UpdateLineInsert(Vector2 screen)
+    {
+        if (!lineInsertActive || insertingLine == null || !lines.Contains(insertingLine) ||
+            insertingSegment < 0 || insertingSegment >= insertingLine.st.Count - 1) return;
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(mapRect, screen, null, out var local)) return;
+        float snap = 44f / Mathf.Max(1f, mapRect.localScale.x);
+        int near = NearestStationAny(local, snap);
+        insertTarget = CanInsertStation(insertingLine, insertingSegment, near) ? near : -1;
+        Vector2 point = insertTarget >= 0 ? Pos(insertTarget) : local;
+        SetInsertPreview(insertPreviewA, Pos(insertingLine.st[insertingSegment]), point);
+        SetInsertPreview(insertPreviewB, point, Pos(insertingLine.st[insertingSegment + 1]));
+        if (insertBadgeText) insertBadgeText.text = insertTarget >= 0
+            ? "插入造价 ¥" + InsertStationCost(insertingLine, insertingSegment, insertTarget) : "拖至可插入的新站点";
+        if (insertBadge && RectTransformUtility.ScreenPointToLocalPointInRectangle(root, screen, null, out var badgePoint)) {
+            var rect = insertBadge.GetComponent<RectTransform>();
+            badgePoint -= root.rect.min;
+            rect.anchoredPosition = new Vector2(Mathf.Clamp(badgePoint.x - 165f, 12f, W - 342f), Mathf.Clamp(badgePoint.y + 55f, 190f, H - 290f));
+        }
+    }
+    public void EndLineInsert(Vector2 screen)
+    {
+        if (!lineInsertActive) return;
+        UpdateLineInsert(screen);
+        var line = insertingLine; int segment = insertingSegment, target = insertTarget;
+        CancelLineInsert();
+        if (!CanInsertStation(line, segment, target)) { Toast("请拖到本区域内未经过的普通站点"); return; }
+        int cost = InsertStationCost(line, segment, target);
+        string details = line.name + " · " + StationDisplayName(target, currentRegion) + "\n造价 ¥" + cost + "（含必要开站费用）";
+        float detailsHeight = Mathf.Clamp(MeasureTextHeight(details, 25, 620) + 8, 54, H - 410);
+        var p = OpenBubble("插入途经站", detailsHeight + 200, 680, new Vector2(W / 2, H / 2));
+        ScrollableText(p.transform, details, 25, InkSoft, 28, 102, 620, detailsHeight);
+        var confirm = Btn(p.transform, "ConfirmInsert", "确认 ¥" + cost, 25, 28, 20, 300, 66, Matcha, () => CommitLineInsertion(line, segment, target)); TInk(confirm, Color.white);
+        var cancel = Btn(p.transform, "CancelInsert", "取消", 25, 350, 20, 300, 66, Paper2, ClosePanel); TInk(cancel, Ink);
+    }
+    void CommitLineInsertion(Line line, int segment, int target)
+    {
+        if (!CanInsertStation(line, segment, target)) { ClosePanel(true); Toast("线路或站点已变化，请重新操作"); return; }
+        int cost = InsertStationCost(line, segment, target);
+        if (coins < cost) { Toast("金币不足：还差 ¥" + Mathf.CeilToInt(cost - coins)); return; }
+        BeginUndo("插入途经站"); ClosePanel(true);
+        coins -= cost; line.st.Insert(segment + 1, target); BuildStationsOnPath(new List<int> { target }); stations[target].closed = false;
+        CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); RefreshHUD(); CheckSceneryOnLine(new List<int> { target });
+        EndUndo(); Toast("已插入 " + StationDisplayName(target, currentRegion));
+    }
+    bool TryRemoveWaystation(Line line, int station, out List<int> path, out int previous, out int next, out string reason)
+    {
+        path = null; previous = next = -1; reason = "线路已发生变化，请重新选择";
+        if (line == null || !lines.Contains(line) || station < 0 || station >= stations.Count) return false;
+        bool loop = IsLoop(line.st);
+        int count = line.st.Count - (loop ? 1 : 0), index = -1, occurrences = 0;
+        for (int i = 0; i < count; i++) if (line.st[i] == station) { index = i; occurrences++; }
+        if (occurrences != 1) { reason = "该站在线路中出现多次，暂不能直接移除"; return false; }
+        if (!loop && (index == 0 || index == count - 1)) { reason = "这是线路端点，请使用拆除线路段"; return false; }
+        if (loop && count <= 3) { reason = "环线至少需要保留 3 个站点"; return false; }
+        previous = line.st[(index - 1 + count) % count]; next = line.st[(index + 1) % count];
+        string region = SegmentRegion(previous, station);
+        if (region != currentRegion || SegmentRegion(station, next) != region || SegmentRegion(previous, next) != region) {
+            reason = "移除后无法在当前区域连接前后站点"; return false;
+        }
+        path = line.st.GetRange(0, count); path.RemoveAt(index);
+        if (loop) path.Add(path[0]);
+        if (!PortalEndsAreValid(path)) { path = null; reason = "移除后会破坏交界站的连接"; return false; }
+        return true;
+    }
+    int WaystationChangeCost(int previous, int station, int next)
+    {
+        int first = Mathf.RoundToInt((30f + Vector2.Distance(Pos(previous), Pos(station)) * 0.75f) * 0.6f);
+        int second = Mathf.RoundToInt((30f + Vector2.Distance(Pos(station), Pos(next)) * 0.75f) * 0.6f);
+        int replacement = Mathf.RoundToInt(30f + Vector2.Distance(Pos(previous), Pos(next)) * 0.75f);
+        return replacement - first - second;
+    }
+    void OpenRemoveStationLines(int station, int page)
+    {
+        var options = new List<Line>();
+        foreach (var line in lines) if (line.st.Contains(station) && PathTouchesRegion(line.st, currentRegion)) options.Add(line);
+        if (options.Count == 0) { ClosePanel(true); Toast("该站暂无途经线路"); return; }
+        const int pageSize = 5;
+        int pages = (options.Count + pageSize - 1) / pageSize; page = Mathf.Clamp(page, 0, pages - 1);
+        int count = Mathf.Min(pageSize, options.Count - page * pageSize);
+        float bottom = pages > 1 ? 96 : 24;
+        float h = bottom + count * 74 + 118;
+        var p = OpenBubble("选择要调整的线路", h, 680, new Vector2(W / 2, H / 2));
+        Txt(p.transform, StationDisplayName(station, currentRegion) + " · 仅从所选线路移除", 21, InkSoft, 28, h - 108, 620, 34, TextAnchor.MiddleLeft);
+        for (int i = 0; i < count; i++) {
+            var selected = options[page * pageSize + i];
+            var button = Btn(p.transform, "RemoveFromLine" + selected.id, selected.name, 24, 28, bottom + (count - 1 - i) * 74, 624, 62, Paper2,
+                () => PreviewRemoveWaystation(selected, station));
+            TInk(button, Ink);
+        }
+        if (pages > 1) {
+            int current = page;
+            var before = Btn(p.transform, "PreviousPage", "上一页", 22, 28, 20, 190, 58, Paper2, () => OpenRemoveStationLines(station, current - 1)); TInk(before, Ink);
+            Txt(p.transform, (page + 1) + " / " + pages, 22, InkSoft, 240, 20, 200, 58, TextAnchor.MiddleCenter);
+            var after = Btn(p.transform, "NextPage", "下一页", 22, 462, 20, 190, 58, Paper2, () => OpenRemoveStationLines(station, current + 1)); TInk(after, Ink);
+        }
+    }
+    void PreviewRemoveWaystation(Line line, int station)
+    {
+        if (!TryRemoveWaystation(line, station, out var path, out int previous, out int next, out string reason)) { Toast(reason); return; }
+        int cost = WaystationChangeCost(previous, station, next);
+        var forecast = CalculateTraffic(line, path);
+        float projected = forecast.lineServed.TryGetValue(line, out float served) ? served : 0f;
+        string money = cost > 0 ? "需支付 ¥" + cost : cost < 0 ? "退还 ¥" + (-cost) : "无需费用";
+        string body = line.name + "：" + StationDisplayName(previous, currentRegion) + " → " + StationDisplayName(station, currentRegion) + " → " + StationDisplayName(next, currentRegion)
+            + "\n调整为：" + StationDisplayName(previous, currentRegion) + " → " + StationDisplayName(next, currentRegion)
+            + "\n" + money + "（拆除旧线路并连接新线路）"
+            + "\n当前时段客流：" + Mathf.RoundToInt(LinePassengerFlow(line)) + " → " + Mathf.RoundToInt(projected) + " 人/日"
+            + "\n站点及其他线路保持不变。";
+        Confirm("移除途经站", body, () => CommitRemoveWaystation(line, station, previous, next));
+    }
+    void CommitRemoveWaystation(Line line, int station, int expectedPrevious, int expectedNext)
+    {
+        if (!TryRemoveWaystation(line, station, out var path, out int previous, out int next, out string reason) || previous != expectedPrevious || next != expectedNext) {
+            Toast("线路已发生变化，请重新操作"); return;
+        }
+        int cost = WaystationChangeCost(previous, station, next);
+        if (cost > coins) { Toast("金币不足：还差 ¥" + Mathf.CeilToInt(cost - coins)); return; }
+        BeginUndo("移除途经站"); coins -= cost; line.st = path;
+        CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); RefreshHUD(); EndUndo();
+        Toast("已从 " + line.name + " 移除 " + StationDisplayName(station, currentRegion));
+    }
+    void CancelLineInsert()
+    {
+        lineInsertActive = false; insertingLine = null; insertingSegment = insertTarget = -1;
+        if (insertPreviewA) Destroy(insertPreviewA.gameObject); if (insertPreviewB) Destroy(insertPreviewB.gameObject);
+        if (insertBadge) Destroy(insertBadge);
+        insertPreviewA = insertPreviewB = null; insertBadge = null; insertBadgeText = null;
+    }
+    public void ForwardLinePanStart(PointerEventData e) { if (mapWheelZoom) mapWheelZoom.OnBeginDrag(e); }
+    public void ForwardLinePan(PointerEventData e) { if (mapWheelZoom) mapWheelZoom.OnDrag(e); }
+    public void ForwardLinePanEnd(PointerEventData e) { if (mapWheelZoom) mapWheelZoom.OnEndDrag(e); }
+
     void CloseLineBubble()
     {
         if (lineBubbleRoot) Destroy(lineBubbleRoot);
@@ -312,8 +497,30 @@ public partial class DemoBootstrap
     }
 }
 
-public class LineTapPress : MonoBehaviour, IPointerClickHandler
+public class LineTapPress : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
 {
     public DemoBootstrap boot;
-    public void OnPointerClick(PointerEventData e) { if (boot) boot.OnLineTap(e.position); }
+    public int lineId, segment;
+    bool pressing, inserting, panning, suppressClick;
+    float elapsed;
+    Vector2 start;
+    public void OnPointerDown(PointerEventData e) { pressing = true; inserting = panning = suppressClick = false; elapsed = 0f; start = e.position; }
+    void Update()
+    {
+        if (!pressing || !boot) return;
+        if (Input.touchCount >= 2) { pressing = false; return; }
+        elapsed += Time.unscaledDeltaTime;
+        if (elapsed < 0.42f) return;
+        pressing = false; inserting = boot.BeginLineInsert(lineId, segment, start); suppressClick = inserting;
+    }
+    public void OnBeginDrag(PointerEventData e)
+    {
+        if (inserting) { boot.UpdateLineInsert(e.position); return; }
+        pressing = false; suppressClick = true; panning = true;
+        if (boot) boot.ForwardLinePanStart(e);
+    }
+    public void OnDrag(PointerEventData e) { if (!boot) return; if (inserting) boot.UpdateLineInsert(e.position); else if (panning) boot.ForwardLinePan(e); }
+    public void OnPointerUp(PointerEventData e) { pressing = false; if (inserting && boot) { inserting = false; boot.EndLineInsert(e.position); } }
+    public void OnEndDrag(PointerEventData e) { if (panning && boot) boot.ForwardLinePanEnd(e); panning = false; }
+    public void OnPointerClick(PointerEventData e) { if (!suppressClick && boot) boot.OnLineTap(e.position); suppressClick = false; }
 }

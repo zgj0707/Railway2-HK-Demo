@@ -31,15 +31,23 @@ public partial class DemoBootstrap
     AudioSource sfx, music; AudioClip toneLo, toneHi;
     bool musicEnabled = true;
     int qualityTier = 1;
+    int selectedFrameRate = 60;
+    static readonly int[] FrameRateOptions = { 30, 60, 120 };
+    void ApplyFrameRate()
+    {
+        QualitySettings.vSyncCount = 0;
+        Application.targetFrameRate = selectedFrameRate;
+    }
+    void SetFrameRate(int fps)
+    {
+        if (fps != 30 && fps != 60 && fps != 120) return;
+        selectedFrameRate = fps;
+        PlayerPrefs.SetInt("target_fps", fps); PlayerPrefs.Save();
+        ApplyFrameRate();
+    }
     void ApplyVisualQuality()
     {
-#if UNITY_WEBGL && !UNITY_EDITOR
-        // Web 在常见的 60 Hz 屏幕上使用 60 或 30，避免 45 帧与刷新节拍不匹配。
-        Application.targetFrameRate = qualityTier == 0 ? 30 : 60;
-#else
-        Application.targetFrameRate = qualityTier == 0 ? 30 : qualityTier == 1 ? 45 : 60;
-#endif
-        QualitySettings.vSyncCount = 0;
+        ApplyFrameRate();
         foreach (var shadow in UnityEngine.Object.FindObjectsByType<Shadow>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             if (shadow && shadow.gameObject.scene.IsValid()) shadow.enabled = qualityTier > 0;
     }
@@ -74,16 +82,24 @@ public partial class DemoBootstrap
     }
     void OpenAudioSettings()
     {
-        var bubble = OpenBubble("设置", 440, 680, new Vector2(100, H - 250));
-        Txt(bubble.transform, "画面质量", 27, InkSoft, 34, 280, 550, 44, TextAnchor.MiddleLeft);
+        var bubble = OpenBubble("设置", 680, 680, new Vector2(100, H - 250));
+        Txt(bubble.transform, "画面质量", 27, InkSoft, 34, 515, 550, 44, TextAnchor.MiddleLeft);
         string[] levels = { "低", "中", "高" };
         for (int i = 0; i < levels.Length; i++) {
             int selected = i;
             var quality = Btn(bubble.transform, "Quality" + i, levels[i] + (qualityTier == i ? " · 当前" : ""), 26,
-                34 + i * 205, 183, 190, 82, qualityTier == i ? Indigo : Paper2, () => { SetVisualQuality(selected); OpenAudioSettings(); });
+                34 + i * 205, 420, 190, 78, qualityTier == i ? Indigo : Paper2, () => { SetVisualQuality(selected); OpenAudioSettings(); });
             TInk(quality, qualityTier == i ? Color.white : Ink);
         }
-        var toggle = Btn(bubble.transform, "MusicToggle", musicEnabled ? "背景音乐：开" : "背景音乐：关", 30, 34, 48, 612, 92, Matcha, () => {
+        Txt(bubble.transform, "帧率上限", 27, InkSoft, 34, 350, 550, 44, TextAnchor.MiddleLeft);
+        for (int i = 0; i < FrameRateOptions.Length; i++) {
+            int fps = FrameRateOptions[i];
+            var choice = Btn(bubble.transform, "FrameRate" + fps, fps + " FPS" + (selectedFrameRate == fps ? " · 当前" : ""), 24,
+                34 + i * 205, 260, 190, 78, selectedFrameRate == fps ? Indigo : Paper2, () => { SetFrameRate(fps); OpenAudioSettings(); });
+            TInk(choice, selectedFrameRate == fps ? Color.white : Ink);
+        }
+        Txt(bubble.transform, "实际帧率取决于屏幕刷新率和设备性能", 21, InkSoft, 34, 205, 612, 40, TextAnchor.MiddleLeft);
+        var toggle = Btn(bubble.transform, "MusicToggle", musicEnabled ? "背景音乐：开" : "背景音乐：关", 30, 34, 54, 612, 92, Matcha, () => {
             musicEnabled = !musicEnabled;
             if (music) { if (musicEnabled && music.clip) music.Play(); else music.Stop(); }
             ClosePanel(); Toast(musicEnabled ? "背景音乐已开启" : "背景音乐已关闭");
@@ -122,8 +138,9 @@ public partial class DemoBootstrap
             while (researchClock >= 36f) { researchClock -= 36f; RPTick(); }
             foreach (var line in lines)
             {
-                float gross = TrafficRevenue(line, traffic) * fraction;
-                float vehicle = VehicleMaintenance(line) * fraction, track = TrackMaintenance(line) * fraction;
+                if (!operatingRates.TryGetValue(line, out var rate)) { RebuildOperatingRates(); rate = operatingRates[line]; }
+                float gross = rate.gross * fraction;
+                float vehicle = rate.vehicle * fraction, track = rate.track * fraction;
                 line.todayGross += gross; line.todayMaintenance += vehicle; line.todayTrack += track;
                 coins += gross - vehicle - track;
                 line.todayRevenue = Mathf.RoundToInt(line.todayGross);
@@ -146,14 +163,14 @@ public partial class DemoBootstrap
         }
         UpdateTimeText();
     }
+    int lastDisplayedMinute = -1, lastDisplayedDay = -1, lastDisplayedSpeed = -1;
     void UpdateTimeText()
     {
         if (!timeTxt) return;
         int mins = Mathf.FloorToInt(dayClock / GameDaySeconds * 1440f);
-        int hh = (mins / 60) % 24, mm = mins % 60;
-        timeTxt.text = hh.ToString("00") + ":" + mm.ToString("00");
-        if (dayTxt) dayTxt.text = "第 " + day + " 日";
-        if (speedTxt) speedTxt.text = timeSpeed == 0 ? "暂停" : timeSpeed + "×";
+        if (mins != lastDisplayedMinute) { int hh = (mins / 60) % 24, mm = mins % 60; timeTxt.text = hh.ToString("00") + ":" + mm.ToString("00"); lastDisplayedMinute = mins; }
+        if (dayTxt && day != lastDisplayedDay) { dayTxt.text = "第 " + day + " 日"; lastDisplayedDay = day; }
+        if (speedTxt && timeSpeed != lastDisplayedSpeed) { speedTxt.text = timeSpeed == 0 ? "暂停" : timeSpeed + "×"; lastDisplayedSpeed = timeSpeed; }
     }
     void CycleSpeed()
     {
@@ -182,7 +199,13 @@ public partial class DemoBootstrap
         if (trafficRefresh < 2f) return;
         trafficRefresh = 0f;
         if (stationTrafficPanel && activePanel == stationTrafficPanel && stationTrafficLabel && stationTrafficIndex >= 0)
-            stationTrafficLabel.text = DisplayPlaceAliases(StationTrafficDescription(stationTrafficIndex));
+            {
+            string description = StationTrafficDescription(stationTrafficIndex);
+            stationTrafficLabel.text = DisplayPlaceAliases(description);
+            var content = stationTrafficLabel.transform.parent.GetComponent<RectTransform>();
+            float height = Mathf.Max(content.parent.GetComponent<RectTransform>().rect.height, MeasureTextHeight(description, 28, 884) + 8);
+            content.sizeDelta = new Vector2(884, height); stationTrafficLabel.rectTransform.sizeDelta = new Vector2(884, height);
+        }
         else { stationTrafficPanel = null; stationTrafficLabel = null; stationTrafficIndex = -1; }
     }
     int StationLineCount(int index)
@@ -215,18 +238,73 @@ public partial class DemoBootstrap
         Toast(StationDisplayName(index, currentRegion) + " 已开站" + (cost > 0 ? " · ¥" + cost : ""));
         return true;
     }
+    string StationIntroduction(int index)
+    {
+        var station = stations[index];
+        switch (station.name)
+        {
+            case "广州": return "珠江之畔的商贸名城，街巷烟火与现代都市交融。";
+            case "深圳（西九龙）": return "连接香江与鹏城的跨区域交通节点。";
+            case "珠海（关闸）": return "海岛与海湾相映的滨海城市，邻接濠江。";
+            case "东莞": return "水乡与制造业交织，城镇生活充满活力。";
+            case "惠州": return "山海相依，湖光与海岸风景相伴。";
+            case "佛山": return "岭南水乡与传统手艺相映的城市。";
+            case "中山": return "水网密布的岭南侨乡，延续着香山文脉。";
+            case "韶关": return "山水环绕的粤北门户，丹霞风光闻名。";
+            case "汕头": return "滨海商埠，潮汕风味与侨乡记忆交织。";
+            case "江门": return "五邑侨乡，骑楼与侨居故事相伴。";
+            case "湛江": return "雷州半岛上的滨海港城，面海而兴。";
+            case "茂名": return "粤西滨海城市，海岸与岭南果乡相伴。";
+            case "肇庆": return "西江之畔，山水与端砚文脉相映。";
+            case "梅州": return "山间客家之乡，围屋与乡村风物相连。";
+            case "汕尾": return "依山面海的城市，渔港与海岸风光相伴。";
+            case "河源": return "山水相依的东江上游城市。";
+            case "阳江": return "滨海山城，以海景与传统刀剪闻名。";
+            case "清远": return "北江穿城而过，山水与温泉相伴。";
+            case "潮州": return "韩江之畔的古城，保留着潮州文化风韵。";
+            case "揭阳": return "潮汕平原上的城市，榕江穿城而过。";
+            case "云浮": return "群山之间的石材之乡，依西江而展。";
+            case "罗湖": return "连接两地的口岸站，旅客往来频繁。";
+            case "港珠澳": return "跨越海湾的交通节点，连接三地。";
+            case "中环": return "海港边的商业街区，都市与山景相邻。";
+            case "尖沙咀": return "临海的繁华街区，可远眺维多利亚港。";
+            case "东涌": return "大屿山北岸的社区，邻近山海风景。";
+            case "旺角": return "街市与商铺密集，生活气息浓厚。";
+            case "大三巴": return "老城街巷环绕，留存着历史建筑风貌。";
+            case "氹仔": return "海岛社区与街巷美食交融的区域。";
+            case "路环": return "海岸与山林相伴，保留宁静的岛屿风貌。";
+        }
+        if (!string.IsNullOrEmpty(station.city))
+            return "位于" + station.city + "，连接周边城镇与社区。";
+        if (station.region == "澳门") return "濠江的沿线区域，中西风貌交融。";
+        if (station.region == "香港") return "香江的沿线区域，山海与城市相伴。";
+        return "沿线城镇与社区相连的地区。";
+    }
+
     void ShowStationActions(int index)
     {
         if (index < 0 || index >= stations.Count || pageRoot || sceneryViewer) return;
         var station = stations[index];
         Vector3 world = mapRect.TransformPoint(Pos(index)); Vector2 anchor = root.InverseTransformPoint(world);
-        var p = OpenBubble(StationDisplayName(index, currentRegion), 260, 520, anchor);
         string status = "预估客流 " + StationEstimatedDemand(index) + " 人/日";
+        int lineCount = StationLineCount(index);
         if (!station.built) status += " · 开站 ¥" + StationOpeningCost(index);
         else if (station.closed) status += " · 已关停";
-        else if (StationLineCount(index) > 0) status += "\n当前客流 " + Mathf.RoundToInt(StationPassengerFlow(index)) + " 人/日";
+        else if (lineCount > 0) status += "\n当前客流 " + Mathf.RoundToInt(StationPassengerFlow(index)) + " 人/日";
         else status += " · 已开站";
-        Txt(p.transform, status + "\n" + StationAreaHint(index), 20, InkSoft, 28, 92, 464, 86, TextAnchor.MiddleLeft);
+        status += "\n" + StationAreaHint(index);
+        float statusY = lineCount > 0 ? 166 : 92;
+        float statusH = Mathf.Max(54, MeasureTextHeight(status, 20, 464) + 8);
+        float introY = statusY + statusH + 8;
+        float introH = Mathf.Max(30, MeasureTextHeight(StationIntroduction(index), 20, 464) + 4);
+        var p = OpenBubble(StationDisplayName(index, currentRegion), introY + introH + 76, 520, anchor);
+        var intro = Txt(p.transform, StationIntroduction(index), 20, InkSoft, 28, introY, 464, introH, TextAnchor.MiddleLeft);
+        intro.name = "StationIntroduction";
+        Txt(p.transform, status, 20, InkSoft, 28, statusY, 464, statusH, TextAnchor.UpperLeft);
+        if (lineCount > 0) {
+            var remove = Btn(p.transform, "RemoveWaystation", "移除线路途经站", 23, 28, 92, 464, 62, Paper2, () => OpenRemoveStationLines(index, 0));
+            TInk(remove, Ink);
+        }
         bool canOpen = !station.built || station.closed;
         if (canOpen)
         {
@@ -240,9 +318,11 @@ public partial class DemoBootstrap
     {
         if (index < 0 || index >= stations.Count || pageRoot || sceneryViewer) return;
         var station = stations[index];
-        var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, 940, 960);
+        string description = StationTrafficDescription(index);
+        float contentHeight = Mathf.Clamp(MeasureTextHeight(description, 28, 884) + 16, 100, H - 620);
+        var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, contentHeight + 390, 960);
         stationTrafficPanel = p; stationTrafficIndex = index;
-        stationTrafficLabel = Txt(p.transform, StationTrafficDescription(index), 28, InkSoft, 38, 300, 884, 490, TextAnchor.UpperLeft);
+        stationTrafficLabel = ScrollableText(p.transform, description, 28, InkSoft, 38, 300, 884, contentHeight);
         int cost = Mathf.RoundToInt(100f * Mathf.Pow(1.65f, station.level - 1));
         var upgrade = Btn(p.transform, "UpgradeStation", station.level >= 10 ? "已满级" : "升级  ¥" + cost, 27, 38, 155, 420, 92, Matcha, () => {
             if (!station.built) { Toast("请先开站"); return; }
@@ -339,15 +419,22 @@ public partial class DemoBootstrap
         else badgeRt.anchoredPosition = Vector2.Lerp(badgeRt.anchoredPosition, target, 1f - Mathf.Exp(-14f * dt));
     }
 
+    // 与一代收益飘字共用深色调色板，保持浅色描边以便在地图上辨认。
+    static readonly Color32[] FloaterColors = {
+        new Color32(150, 100, 10, 255), new Color32(26, 100, 46, 255),
+        new Color32(160, 44, 36, 255), new Color32(30, 70, 130, 255),
+        new Color32(120, 70, 20, 255)
+    };
+    readonly System.Random floaterColorRandom = new System.Random();
     // ---------- income floaters ----------
     void SpawnFloater(int amount, Vector2 at)
     {
         if (qualityTier == 0) return;
         if (amount <= 0) return;
-        var go = Rect("Float", trainLayer, at.x - 60, at.y + 20, 160, 34);
+        var go = Rect("Float", floaterLayer, at.x - 60, at.y + 20, 160, 34);
         var t = go.AddComponent<Text>();
         t.font = font; t.fontSize = 27; t.alignment = TextAnchor.MiddleCenter;
-        t.color = Gold; t.text = "+¥" + amount; t.raycastTarget = false;
+        t.color = FloaterColors[floaterColorRandom.Next(FloaterColors.Length)]; t.text = "+¥" + amount; t.raycastTarget = false;
         var sh = go.AddComponent<Shadow>(); sh.effectColor = new Color(1, 0.99f, 0.95f, 0.85f);
         var f = new Floater { txt = t, rt = go.GetComponent<RectTransform>(), age = 0f };
         floaters.Add(f);
@@ -356,13 +443,21 @@ public partial class DemoBootstrap
     {
         for (int i = floaters.Count - 1; i >= 0; i--)
         {
-            var f = floaters[i]; f.age += dt;
+            var f = floaters[i];
+            if (!f.rt || !f.txt) { floaters.RemoveAt(i); continue; }
+            f.age += dt;
             f.rt.anchoredPosition += new Vector2(0, dt * 38f);
             var c = f.txt.color;
             c.a = Mathf.Clamp01(1f - (f.age - 0.55f) / 0.7f);
             f.txt.color = c;
             if (c.a <= 0f) { Destroy(f.rt.gameObject); floaters.RemoveAt(i); }
         }
+    }
+
+    void ClearFloaters()
+    {
+        foreach (var floater in floaters) if (floater.rt) Destroy(floater.rt.gameObject);
+        floaters.Clear();
     }
 
     // ---------- station dots ----------

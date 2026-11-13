@@ -26,9 +26,9 @@
   var viewportPixels = Math.max(1, window.innerWidth * window.innerHeight);
   var renderDpr = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(pixelBudget / viewportPixels));
   createUnityInstance(canvas, {
-    dataUrl: "Build/WebGL.data",
-    frameworkUrl: "Build/WebGL.framework.js",
-    codeUrl: "Build/WebGL.wasm",
+    dataUrl: "Build/WebGL.data.unityweb",
+    frameworkUrl: "Build/WebGL.framework.js.unityweb",
+    codeUrl: "Build/WebGL.wasm.unityweb",
     companyName: "Railway2",
     productName: "Railway2 HK Demo",
     productVersion: "0.1",

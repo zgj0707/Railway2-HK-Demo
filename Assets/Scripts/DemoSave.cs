@@ -88,7 +88,7 @@ public partial class DemoBootstrap
     }
     void TickAutosave() { autosaveTimer += Time.unscaledDeltaTime; if (autosaveTimer >= 5f) { autosaveTimer=0; SaveGame(); } }
     void OnApplicationPause(bool paused) { if(paused) SaveGame(); }
-    void OnApplicationFocus(bool focused) { if(!focused) SaveGame(); }
+    void OnApplicationFocus(bool focused) { if (!focused) { if (lineInsertActive) CancelLineInsert(); SaveGame(); } }
     void OnApplicationQuit() { SaveGame(); }
     void OnDisable() { SaveGame(); }
 }

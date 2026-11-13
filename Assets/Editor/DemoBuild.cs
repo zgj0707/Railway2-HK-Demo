@@ -22,7 +22,8 @@ public class DemoBuild
         PlayerSettings.productName = "Railway2 HK Demo";
         PlayerSettings.defaultScreenWidth = 1080;
         PlayerSettings.defaultScreenHeight = 1920;
-        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+        PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
+        PlayerSettings.WebGL.decompressionFallback = true;
         PlayerSettings.WebGL.template = "APPLICATION:Default";
         PlayerSettings.runInBackground = true;
 

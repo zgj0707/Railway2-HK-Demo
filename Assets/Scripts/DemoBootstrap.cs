@@ -46,7 +46,7 @@ public partial class DemoBootstrap : MonoBehaviour
     // ---------- state ----------
     Font font;
     Sprite spriteRound, spriteCircle, spriteWhite, spriteDiamond, spriteRing, spriteStationRing;
-    Canvas canvas; RectTransform root, mapRect, lineLayer, stationLayer, trainLayer, previewLayer;
+    Canvas canvas; RectTransform root, mapRect, lineLayer, stationLayer, trainLayer, floaterLayer, previewLayer;
     MapWheelZoom mapWheelZoom;
     GraphicRaycaster raycaster;
     float coins = 2378f, diamonds = 20f, rp = 60f, progress = 0.08f;
@@ -78,7 +78,19 @@ public partial class DemoBootstrap : MonoBehaviour
     List<Scenery> pendingCheckin = new List<Scenery>();
     GameObject sceneryBadge;
 
-    class LineVisual { public List<GameObject> segs = new List<GameObject>(); public List<Vector2Int> segEnds = new List<Vector2Int>(); public GameObject train; public float t; public int lastSt = -1; public float credit; }
+    class LineSegmentVisual
+    {
+        public int from, to;
+        public GameObject casing, body, core, hit;
+        public void SetVisible(bool visible)
+        {
+            if (casing && casing.activeSelf != visible) casing.SetActive(visible);
+            if (body && body.activeSelf != visible) body.SetActive(visible);
+            if (core && core.activeSelf != visible) core.SetActive(visible);
+            if (hit && hit.activeSelf != visible) hit.SetActive(visible);
+        }
+    }
+    class LineVisual { public List<LineSegmentVisual> segments = new List<LineSegmentVisual>(); public GameObject train; public float t; public int lastSt = -1; public float credit; }
     // 地图放大时要按 1/zoom 反向补偿厚度的矩形（线路段、点击热区、草稿线）
     class ZoomRect { public RectTransform rt; public float baseWidth; public ZoomRect(RectTransform rt, float baseWidth) { this.rt = rt; this.baseWidth = baseWidth; } }
     readonly List<ZoomRect> zoomRects = new List<ZoomRect>();
@@ -109,6 +121,8 @@ public partial class DemoBootstrap : MonoBehaviour
     void Start()
     {
         qualityTier = Mathf.Clamp(PlayerPrefs.GetInt("visual_quality", 1), 0, 2);
+        selectedFrameRate = PlayerPrefs.GetInt("target_fps", 60);
+        if (selectedFrameRate != 30 && selectedFrameRate != 60 && selectedFrameRate != 120) selectedFrameRate = 60;
         font = Resources.Load<Font>("Fonts/LXGWWenKai-Regular");
         if (font == null) { Debug.LogError("FONT MISSING"); font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); }
         spriteWhite = MakeWhite();
@@ -367,7 +381,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
         var gb = Btn(bar.transform, "Gear", "设", 26, 24, -24, 60, 60, new Color(1,0.99f,0.96f,0.94f), OpenAudioSettings);
         gb.GetComponentInChildren<Text>().color = Ink;
-        var hb = Btn(bar.transform, "Help", "?", 30, 94, -24, 60, 60, new Color(1,0.99f,0.96f,0.94f), () => HelpPopup("长按站点拖动铺线。\n从线路端点出发可延长，从中间站出发可新建；拖回起点可成环。\n交界站可衔接区域，点击线路查看运营。\n在图鉴打开名胜大图即可打卡。\n右侧可调倍速，1 倍速下 6 分钟为一天。"));
+        var hb = Btn(bar.transform, "Help", "?", 30, 94, -24, 60, 60, new Color(1,0.99f,0.96f,0.94f), () => HelpPopup("长按站点拖动铺线。\n从线路端点出发可延长，从中间站出发可新建；拖回起点可成环。\n长按线路拖到新站，可插入途经站。\n交界站可衔接区域，点击线路查看运营。\n在图鉴打开名胜大图即可打卡。\n右侧可调倍速，1 倍速下 6 分钟为一天。"));
         hb.GetComponentInChildren<Text>().color = InkSoft;
     }
 
@@ -392,7 +406,7 @@ public partial class DemoBootstrap : MonoBehaviour
         var mapZoom = map.AddComponent<MapWheelZoom>();
         mapWheelZoom = mapZoom;
         mapZoom.map = mapRect; mapZoom.viewport = root;
-        mapZoom.canZoom = () => !dragging && pageRoot == null && activePanel == null && sceneryViewer == null;
+        mapZoom.canZoom = () => !dragging && !lineInsertActive && pageRoot == null && activePanel == null && sceneryViewer == null;
         mapZoom.maxZoom = () => currentRegion == "广东" ? 12f : 2.5f;
         mapZoom.onPanStart = () => { pressing = false; pressIdx = -1; HidePressRing(); };
         hkMapArt = Rect("HongKongArt", map.transform, 0, 0, W, H);
@@ -413,6 +427,7 @@ public partial class DemoBootstrap : MonoBehaviour
         dragTip.raycastTarget = false; tipGo.SetActive(false);
         stationLayer = Rect("Stations", mapRect, 0, 0, W, H).GetComponent<RectTransform>();
         trainLayer = Rect("Trains", mapRect, 0, 0, W, H).GetComponent<RectTransform>();
+        floaterLayer = Rect("IncomeFloaters", mapRect, 0, 0, W, H).GetComponent<RectTransform>();
 
         Label(hkMapArt.GetComponent<RectTransform>(), "新 界", 34, 0.55f, 0.90f, new Color(0.40f,0.38f,0.32f,0.75f), 180);
         Label(hkMapArt.GetComponent<RectTransform>(), "香港岛", 26, 0.50f, 0.170f, new Color(0.40f,0.38f,0.32f,0.72f), 150);
@@ -435,7 +450,7 @@ public partial class DemoBootstrap : MonoBehaviour
         if (dragging || activePanel || sceneryViewer || !RegionUnlocked(destination)) return;
         if (destination == currentRegion) { ClosePage(); return; }
         FreezeRegionTraffic();
-        ClosePage(); CloseLineBubble(); CancelDraft(); currentRegion = destination;
+        ClosePage(); CloseLineBubble(); CancelDraft(); ClearFloaters(); currentRegion = destination;
         hkMapArt.SetActive(currentRegion == "香港"); macauMapArt.SetActive(currentRegion == "澳门");
         guangdongMapArt.SetActive(currentRegion == "广东");
         mapRect.localScale = Vector3.one; mapRect.anchoredPosition = Vector2.zero;
@@ -758,18 +773,11 @@ public partial class DemoBootstrap : MonoBehaviour
         // 线路段跟随端点：至少一端可见才画，避免线条连到看不见的点
         foreach (var lv in lineVisuals.Values)
         {
-            for (int seg = 0; seg < lv.segEnds.Count; seg++)
+            foreach (var segment in lv.segments)
             {
-                var e = lv.segEnds[seg];
-                bool show = (e.x >= 0 && e.x < stationVisible.Length && stationVisible[e.x])
-                         || (e.y >= 0 && e.y < stationVisible.Length && stationVisible[e.y]);
-                for (int j = 0; j < 3; j++)
-                {
-                    int idx = seg * 3 + j;
-                    if (idx >= lv.segs.Count) break;
-                    var g = lv.segs[idx];
-                    if (g && g.gameObject.activeSelf != show) g.SetActive(show);
-                }
+                bool show = (segment.from >= 0 && segment.from < stationVisible.Length && stationVisible[segment.from])
+                         || (segment.to >= 0 && segment.to < stationVisible.Length && stationVisible[segment.to]);
+                segment.SetVisible(show);
             }
         }
     }
@@ -1205,7 +1213,7 @@ public partial class DemoBootstrap : MonoBehaviour
     void CreateLineVisuals()
     {
         var oldVisuals = new Dictionary<int, LineVisual>(lineVisuals);
-        foreach (var v in lineVisuals.Values) { foreach (var g in v.segs) if (g) Destroy(g); if (v.train) Destroy(v.train); }
+        foreach (var v in lineVisuals.Values) if (v.train) Destroy(v.train);
         if (lineLayer) { for (int i = lineLayer.childCount - 1; i >= 0; i--) Destroy(lineLayer.GetChild(i).gameObject); }
         if (trainLayer) { for (int i = trainLayer.childCount - 1; i >= 0; i--) Destroy(trainLayer.GetChild(i).gameObject); }
         lineVisuals.Clear();
@@ -1221,9 +1229,8 @@ public partial class DemoBootstrap : MonoBehaviour
                 var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 7.5f, lineLayer);
                 var trackCore = AddSeg(line.st[i], line.st[i+1], new Color(1f,0.98f,0.92f,0.65f), 2.2f, lineLayer);
                 var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer);
-                var lt = hit.AddComponent<LineTapPress>(); lt.boot = this;
-                lv.segs.Add(casing); lv.segs.Add(segBody); lv.segs.Add(trackCore); lv.segs.Add(hit);
-                lv.segEnds.Add(new Vector2Int(line.st[i], line.st[i + 1]));
+                var lt = hit.AddComponent<LineTapPress>(); lt.boot = this; lt.lineId = line.id; lt.segment = i;
+                lv.segments.Add(new LineSegmentVisual { from = line.st[i], to = line.st[i + 1], casing = casing, body = segBody, core = trackCore, hit = hit });
             }
             // 日式微缩铁道模型（硬朗修长车厢，规避肉感胶囊）
             var t = Rect("Train" + line.id, trainLayer, 0, 0, 34, 14);
@@ -1293,6 +1300,7 @@ public partial class DemoBootstrap : MonoBehaviour
         TickAutosave();
         UpdateRegionalMarkers(false);
         TickPress(dt);
+        if (lineInsertActive) { TickDragEdgeAutoPan(dt); UpdateLineInsert(Input.mousePosition); }
         TickClock(dt);
         TickStationTraffic(dt);
         TickStory();
@@ -1347,6 +1355,7 @@ public partial class DemoBootstrap : MonoBehaviour
         }
         else if (!dragging) UpdateRings();
         if (Input.GetMouseButtonUp(0) && dragging) EndDraw();
+        if (Input.GetMouseButtonUp(0) && lineInsertActive) EndLineInsert(Input.mousePosition);
         if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0 && toastGo) toastGo.SetActive(false); }
     }
 
@@ -1584,6 +1593,7 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         RebuildForecasts();
         traffic = trafficSlots[DispatchSlot()];
+        RebuildOperatingRates();
         float total = 0;
         foreach (var line in lines) total += ForecastFor(line).Profit;
         foreach (var station in stations) if (!station.closed) total += station.riderBonus * TechMult();
@@ -1625,7 +1635,8 @@ public partial class DemoBootstrap : MonoBehaviour
         y = Mathf.Clamp(y, 190, H - h - 200);
         activePanel = Rect("Bubble", root, x, y, w, h);
         Rounded(activePanel, new Color(0.99f,0.976f,0.95f,0.98f)); SoftShadow(activePanel);
-        Txt(activePanel.transform, title, 32, Ink, 26, h-64, w-110, 46, TextAnchor.MiddleLeft);
+        var heading = Txt(activePanel.transform, title, 32, Ink, 26, h-64, w-110, 46, TextAnchor.MiddleLeft);
+        FitSingleLine(heading, 32);
         var close = Btn(activePanel.transform, "Close", "×", 28, w-72, h-68, 52, 52, new Color(0.92f,0.89f,0.83f), ClosePanel);
         TInk(close, Ink); panelOpenedFrame = Time.frameCount + 1;
         return activePanel;
@@ -1641,7 +1652,8 @@ public partial class DemoBootstrap : MonoBehaviour
         panelShadow = Rect("PShadow", root, x+8, y-10, w, h); Rounded(panelShadow, new Color(0.10f,0.08f,0.06f,0.16f)); panelShadow.GetComponent<Image>().raycastTarget = false;
         activePanel = Rect("Popup", root, x, y, w, h);
         Rounded(activePanel, new Color(0.99f,0.976f,0.95f,0.95f));
-        Txt(activePanel.transform, title, 34, Ink, 26, h-64, w-110, 46, TextAnchor.MiddleLeft);
+        var heading = Txt(activePanel.transform, title, 34, Ink, 26, h-64, w-110, 46, TextAnchor.MiddleLeft);
+        FitSingleLine(heading, 34);
         var cb = Btn(activePanel.transform, "Close", "×", 28, w-72, h-68, 52, 52, new Color(0.92f,0.89f,0.83f), ClosePanel);
         TInk(cb, Ink);
         panelOpenedFrame = Time.frameCount + 1;
@@ -1721,8 +1733,9 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     void Confirm(string title, string body, Action ok, Action cancel = null)
     {
-        var p = OpenBubble(title, 420, 860, new Vector2(W / 2, H / 2));
-        Txt(p.transform, body, 26, InkSoft, 34, 160, 792, 150, TextAnchor.UpperLeft);
+        float bodyHeight = Mathf.Clamp(MeasureTextHeight(body, 26, 792) + 10, 44, H - 440);
+        var p = OpenBubble(title, bodyHeight + 240, 860, new Vector2(W / 2, H / 2));
+        ScrollableText(p.transform, body, 26, InkSoft, 34, 150, 792, bodyHeight);
         Btn(p.transform, "Ok", "确 认", 32, 34, 36, 380, 92, Vermilion, () => { ClosePanel(); ok(); });
         var no = Btn(p.transform, "No", "取 消", 32, 446, 36, 380, 92, new Color(0.92f,0.89f,0.83f), () => { ClosePanel(); if (cancel != null) cancel(); });
         TInk(no, Ink);
@@ -1751,11 +1764,39 @@ public partial class DemoBootstrap : MonoBehaviour
         t.raycastTarget = false;
         return t;
     }
+    float MeasureTextHeight(string value, int size, float width)
+    {
+        var settings = new TextGenerationSettings { font = font, fontSize = size, color = Color.white,
+            scaleFactor = 1, lineSpacing = 1, richText = true, generationExtents = new Vector2(width, 0),
+            horizontalOverflow = HorizontalWrapMode.Wrap, verticalOverflow = VerticalWrapMode.Overflow };
+        return Mathf.Ceil(new TextGenerator().GetPreferredHeight(DisplayPlaceAliases(value), settings));
+    }
+    void FitSingleLine(Text text, int size)
+    {
+        text.resizeTextForBestFit = true; text.resizeTextMinSize = Mathf.Max(12, size - 10);
+        text.resizeTextMaxSize = size; text.horizontalOverflow = HorizontalWrapMode.Wrap;
+        text.verticalOverflow = VerticalWrapMode.Truncate;
+    }
+    Text ScrollableText(Transform parent, string value, int size, Color color, float x, float y, float width, float height)
+    {
+        var view = Rect("TextViewport", parent, x, y, width, height);
+        var bg = Img(view, Color.clear); bg.raycastTarget = true;
+        view.AddComponent<RectMask2D>();
+        var content = Rect("TextContent", view.transform, 0, 0, width, Mathf.Max(height, MeasureTextHeight(value, size, width) + 8));
+        var rt = content.GetComponent<RectTransform>(); rt.anchorMin = new Vector2(0, 1); rt.anchorMax = new Vector2(0, 1);
+        rt.pivot = new Vector2(0, 1); rt.anchoredPosition = Vector2.zero;
+        var text = Txt(content.transform, value, size, color, 0, 0, width, rt.sizeDelta.y, TextAnchor.UpperLeft);
+        var scroll = view.AddComponent<ScrollRect>(); scroll.viewport = view.GetComponent<RectTransform>();
+        scroll.content = rt; scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 70;
+        return text;
+    }
     Button Btn(Transform p, string name, string label, int size, float x, float y, float w, float h, Color c, Action onClick)
     {
         var go = Rect(name, p, x, y, w, h);
         var im = Img(go, c, spriteRound); im.type = Image.Type.Sliced;
         var t = Txt(go.transform, label, size, new Color(1,0.98f,0.94f), 0, 0, w, h, TextAnchor.MiddleCenter);
+        t.resizeTextForBestFit = true; t.resizeTextMinSize = Mathf.Max(12, size - 8); t.resizeTextMaxSize = size;
+        t.verticalOverflow = VerticalWrapMode.Truncate;
         var b = go.AddComponent<Button>(); b.targetGraphic = im; b.onClick.AddListener(() => onClick());
         return b;
     }
