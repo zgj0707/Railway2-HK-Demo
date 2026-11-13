@@ -15,18 +15,18 @@ public partial class DemoBootstrap
         CloseLineBubble();
         pageRoot = Rect("Page", root, 0, 0, W, H);
         Img(pageRoot, Paper);
-        Img(Rect("PTop", pageRoot.transform, 0, H-160, W, 160), new Color(0.952f,0.922f,0.870f));
-        Img(Rect("PDiv", pageRoot.transform, 0, H-160, W, 3), new Color(0.55f,0.48f,0.38f,0.14f));
-        var bb = Btn(pageRoot.transform, "PBack", "←", 40, 24, 0, 94, 94, new Color(1,1,1,0.94f), GoBackPage);
+        Img(Rect("PTop", pageRoot.transform, 0, H-160, W, 160), HeaderBg);
+        Img(Rect("PDiv", pageRoot.transform, 0, H-160, W, 3), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f));
+        var bb = Btn(pageRoot.transform, "PBack", "←", 40, 24, 0, 94, 94, CardBg, GoBackPage);
         TInk(bb, Ink); SoftShadow(bb.gameObject);
-        var home = Btn(pageRoot.transform, "PHome", "主页", 24, 134, 0, 104, 94, new Color(1,1,1,0.94f), GoHome);
+        var home = Btn(pageRoot.transform, "PHome", "主页", 24, 134, 0, 104, 94, CardBg, GoHome);
         TInk(home, Ink); SoftShadow(home.gameObject);
         var heading = Txt(pageRoot.transform, title, 44, Ink, 0, 0, 600, 60, TextAnchor.MiddleLeft);
         heading.resizeTextForBestFit = true; heading.resizeTextMinSize = 26; heading.resizeTextMaxSize = 44;
         RectTransform helpRect = null;
         if (!string.IsNullOrEmpty(help))
         {
-            var hb = Btn(pageRoot.transform, "PHelp", "?", 32, 0, 0, 64, 64, new Color(1,1,1,0.94f), () => HelpPopup(help));
+            var hb = Btn(pageRoot.transform, "PHelp", "?", 32, 0, 0, 64, 64, CardBg, () => HelpPopup(help));
             TInk(hb, InkSoft); SoftShadow(hb.gameObject); helpRect = hb.GetComponent<RectTransform>();
         }
         if (!string.IsNullOrEmpty(backgroundPath)) AddPageBackground(pageRoot, backgroundPath);
@@ -74,7 +74,7 @@ public partial class DemoBootstrap
 
     void StatBox(Transform p, string label, string value, float x, float y, float w, float h, Color c)
     {
-        var g = Rect("Stat", p, x, y, w, h); Rounded(g, new Color(1,1,1,0.95f)); SoftShadow(g);
+        var g = Rect("Stat", p, x, y, w, h); Rounded(g, CardBg); SoftShadow(g);
         Img(Rect("Bar", g.transform, 0, 24, 7, h-48), c, spriteRound);
         Txt(g.transform, label, 26, InkSoft, 30, h-66, w-56, 34, TextAnchor.MiddleLeft);
         Txt(g.transform, value, 46, Ink, 30, 26, w-56, 54, TextAnchor.MiddleLeft);
@@ -148,7 +148,11 @@ public partial class DemoBootstrap
         var operations=Btn(fleet.transform,"Operations","票价与调度",25,495,8,450,55,Indigo,()=>OpenLineOperations(line));TInk(operations,Color.white);
         Txt(pg.transform, "沿线", 28, InkSoft, 28, H-800, 160, 38, TextAnchor.MiddleLeft);
         Txt(pg.transform, UniquePathText(line.st), 26, Ink, 28, H-870, W-56, 60, TextAnchor.UpperLeft);
-        var colors=Btn(pg.transform,"LineSkins","线路涂装 · 金币",25,28,H-990,W-56,78,Paper2,()=>OpenLineSkins(line));TInk(colors,Ink);
+        int curSkin = GetLineSkin(line);
+        string skinBtnText = curSkin >= 0
+            ? "线路涂装 · " + LineSkinNames[curSkin] + "（" + SkinCategoryName(curSkin) + " · " + SkinPerkSummary(curSkin) + "）"
+            : "线路涂装 · 解锁外观与流派加成";
+        var colors=Btn(pg.transform,"LineSkins",skinBtnText,24,28,H-990,W-56,78,Paper2,()=>OpenLineSkins(line));TInk(colors,Ink);
         Btn(pg.transform, "Add", "机车商店", 30, 28, 56, 490, 124, Indigo, () => { fleetBack = () => OpenLineScreen(id, back); OpenLocoShop(); });
         Btn(pg.transform, "Del", "拆除线路", 30, 544, 56, 508, 124, Vermilion, () => {
             Confirm("拆除 " + line.name, "退还 ¥" + Mathf.RoundToInt(120f*(UniqueCount(line.st)-1)*0.6f), () => {
@@ -160,7 +164,7 @@ public partial class DemoBootstrap
     }
 
     // ---------- 调度 / 车库 / 商店 ----------
-    int fleetPowerFilter, fleetUseFilter, fleetRegionFilter;
+    int fleetPowerFilter, fleetUseFilter, fleetRegionFilter, shopCategory;
     Action fleetBack;
     static readonly string[] FleetPowerFilters = { "全部动力", "蒸汽", "内燃", "电力", "氢能", "双动力", "其他" };
     static readonly string[] FleetUseFilters = { "全部用途", "客运优先", "货运优先", "客货兼顾" };
@@ -170,7 +174,8 @@ public partial class DemoBootstrap
     static readonly int[] FleetRegions = { 1, 1, 1, 1, 1, 2, 3, 4, 2 };
     void OpenGarageScreen() { fleetBack = null; OpenFleetTab(0); }
     void OpenResearchInventory() { OpenFleetTab(1); }
-    void OpenLocoShop() { OpenFleetTab(2); }
+    void OpenLocoShop() { shopCategory = 0; OpenFleetTab(2); }
+    void OpenThemeShopScreen() { fleetBack = null; shopCategory = 2; OpenFleetTab(2); }
     bool FleetMatches(int index)
     {
         return (fleetPowerFilter == 0 || fleetPowerFilter == 1) &&
@@ -184,27 +189,42 @@ public partial class DemoBootstrap
         string[] help = {
             "管理线路机车配属与分时调度；车辆性能由配属机车决定。",
             "筛选并查看已拥有的机车，也可将它们配置给线路。",
-            "点击车型查看详情。机车须先在科技树解锁；研究完成赠送一辆。"
+            "在机车、线路涂装与全局界面风格之间自由挑选。\n部分涂装与界面风格支持在《铁道映像馆》看片试用或永久解锁。"
         };
         string[] backgrounds = { "dispatch_watercolor", "garage_watercolor", "shop_watercolor" };
         var pg = OpenPage(titles[tab], help[tab], "FleetArt/" + backgrounds[tab]);
         pageBack = fleetBack;
         if (tab == 0) BuildFleetDispatch(pg.transform);
-        else BuildFleetCollection(pg.transform, tab);
-        if (tab == 2) BuildShopSidebar(pg.transform);
+        else if (tab == 1) BuildFleetCollection(pg.transform, tab);
+        else
+        {
+            if (shopCategory == 0) BuildFleetCollection(pg.transform, 2);
+            else if (shopCategory == 1) BuildShopLiveries(pg.transform);
+            else BuildShopThemes(pg.transform);
+            BuildShopSidebar(pg.transform);
+        }
         BuildFleetNavigation(pg.transform, tab);
     }
     void BuildShopSidebar(Transform page)
     {
-        var rail = Rect("ShopSidebar", page, 28, H - 560, 136, 206);
-        Rounded(rail, new Color(1f,0.985f,0.95f,0.92f)); SoftShadow(rail);
-        var loco = Btn(rail.transform, "Locomotives", "机车", 26, 6, 108, 124, 88, new Color(0.86f,0.88f,0.79f,0.98f), () => { }); TInk(loco, Ink);
-        var skin = Btn(rail.transform, "Liveries", "涂装", 26, 6, 10, 124, 88, new Color(0.96f,0.94f,0.88f,0.98f), () => Toast("尚未开放")); TInk(skin, InkSoft);
+        var rail = Rect("ShopSidebar", page, 28, H - 550, 136, 304);
+        Rounded(rail, CardBg); SoftShadow(rail);
+        string[] cats = { "机车", "涂装", "风格" };
+        Color activeBg = new Color(Matcha.r, Matcha.g, Matcha.b, 0.25f);
+        for (int i = 0; i < cats.Length; i++)
+        {
+            int cat = i;
+            bool selected = shopCategory == i;
+            var btn = Btn(rail.transform, "ShopCat" + i, cats[i], 25, 6, 206 - i * 98, 124, 88,
+                selected ? activeBg : new Color(Paper2.r, Paper2.g, Paper2.b, 0.72f),
+                () => { shopCategory = cat; OpenFleetTab(2); });
+            TInk(btn, selected ? Ink : InkSoft);
+        }
     }
     void BuildFleetNavigation(Transform page, int selected)
     {
         var bar = Rect("FleetBottomNav", page, 0, 0, W, 154);
-        Rounded(bar, new Color(0.985f, 0.975f, 0.95f, 1f)); SoftShadow(bar);
+        Rounded(bar, CardBg); SoftShadow(bar);
         bar.AddComponent<FleetBottomEdge>();
         string[] labels = { "调度", "车库", "商店" };
         string[] subtitles = { "DISPATCH", "GARAGE", "SHOP" };
@@ -246,7 +266,7 @@ public partial class DemoBootstrap
         {
             var line = lines[i];
             var card = Rect("Dispatch" + i, content, 0, height - 350 - i * 360, W - 56, 340);
-            Rounded(card, new Color(1, 1, 1, 0.97f)); SoftShadow(card);
+            Rounded(card, CardBg); SoftShadow(card);
             Img(Rect("Dot", card.transform, 28, 262, 38, 38), line.color, spriteCircle).raycastTarget = false;
             Txt(card.transform, line.name, 36, Ink, 84, 260, 700, 48, TextAnchor.MiddleLeft);
             var lineStats = Txt(card.transform, UniqueCount(line.st) + " 站 · " + line.trains + " 列 · 预计日利润 " + Mathf.RoundToInt(LineDaily(line)), 24, InkSoft, 28, 205, 940, 38, TextAnchor.MiddleLeft);
@@ -327,7 +347,7 @@ public partial class DemoBootstrap
             var assigned = item == null ? null : lines.Find(l => l.id == item.lineId);
             if (item != null && assigned == null) item.lineId = 0;
             var card = Rect("Vehicle" + i, content, 0, height - 208 - i * 218, cardWidth, 198);
-            Rounded(card, new Color(1, 1, 1, 0.97f)); SoftShadow(card);
+            Rounded(card, CardBg); SoftShadow(card);
             var cardButton = card.AddComponent<Button>(); cardButton.targetGraphic = card.GetComponent<Image>();
             cardButton.onClick.AddListener(() => OpenVehicleDetails(index));
             var art = Rect("TrainArt", card.transform, 16, 35, artWidth, 116).AddComponent<RawImage>();
@@ -492,33 +512,275 @@ public partial class DemoBootstrap
         new Color(0.48f,0.54f,0.56f), new Color(0.48f,0.37f,0.30f), new Color(0.64f,0.50f,0.70f)
     };
     static readonly int[] LineSkinPrices = { 180,220,260,200,200,240,200,220,220,200,240,220,180,180,240 };
+
+    bool IsSkinFreeByScenery(int skin)
+    {
+        return (skin == 10 || skin == 11) && FoundCount() >= 1;
+    }
+
+    void ApplySkinToLine(Line line, int skin, bool payIfNeeded)
+    {
+        if (line == null || !lines.Contains(line) || skin < 0 || skin >= LineSkinNames.Length) return;
+        bool alreadyOwned = ownedLineSkins.Contains(skin);
+        bool freeByScenery = IsSkinFreeByScenery(skin);
+        if (!alreadyOwned && payIfNeeded && !freeByScenery && coins < LineSkinPrices[skin])
+        {
+            Toast("金币不足，还差 ¥" + Mathf.CeilToInt(LineSkinPrices[skin] - coins));
+            return;
+        }
+        BeginUndo("线路涂装");
+        if (!alreadyOwned && payIfNeeded)
+        {
+            if (!freeByScenery) coins -= LineSkinPrices[skin];
+            ownedLineSkins.Add(skin);
+        }
+        else ownedLineSkins.Add(skin);
+        line.skin = skin;
+        line.color = LineSkinColors[skin];
+        CreateLineVisuals();
+        RecalcIncome();
+        EndUndo();
+        RefreshHUD();
+        Toast("已换装：" + LineSkinNames[skin] + "（" + SkinPerkSummary(skin) + "）");
+    }
+
+    void PromptRewardedAd(string adKey, int requiredCount, string itemName, Action onPermanentUnlock, Action onTrialUnlock = null)
+    {
+        int watched = adWatchCounts.TryGetValue(adKey, out int c) ? c : 0;
+        string desc = requiredCount <= 1
+            ? "观看 1 段赞助铁道宣传短片，即可免费永久解锁\n「" + itemName + "」"
+            : "观看赞助宣传片可立即免费试用「" + itemName + "」24小时\n累计观影进度：" + watched + " / " + requiredCount + " 次（满次即永久拥有）";
+        var bubble = OpenBubble("铁道映像馆 · 赞助放映", 400, 740, new Vector2(W / 2, H / 2));
+        Txt(bubble.transform, desc, 25, InkSoft, 34, 146, 672, 160, TextAnchor.MiddleLeft);
+        var watch = Btn(bubble.transform, "WatchAd", "▶ 观看宣传片（模拟放映）", 26, 34, 34, 420, 84, Matcha, () => {
+            ClosePanel(true);
+            int next = (adWatchCounts.TryGetValue(adKey, out int cur) ? cur : 0) + 1;
+            adWatchCounts[adKey] = next;
+            PlayTone(true);
+            SaveGame();
+            if (next >= requiredCount) onPermanentUnlock?.Invoke();
+            else onTrialUnlock?.Invoke();
+        });
+        TInk(watch, Color.white);
+        var cancel = Btn(bubble.transform, "CancelAd", "暂不观看", 25, 474, 34, 232, 84, Paper2, ClosePanel);
+        TInk(cancel, Ink);
+    }
+
     void OpenLineSkins(Line line)
     {
-        if(line==null||!lines.Contains(line))return;
-        const float h = 850f, rowHeight = 100f;
-        var bubble = OpenBubble("线路涂装", h, 760, new Vector2(W/2,H/2));
-        Txt(bubble.transform, "金币解锁 · 所有线路可重复使用", 23, InkSoft, 30, h-130, 700, 38, TextAnchor.MiddleLeft);
-        var view = Rect("SkinViewport", bubble.transform, 28, 38, 704, 650);
-        Img(view, new Color(1,1,1,0.01f)); var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = false;
+        if (line == null || !lines.Contains(line)) return;
+        const float h = 920f, rowHeight = 118f;
+        var bubble = OpenBubble("线路涂装", h, 800, new Vector2(W / 2, H / 2));
+        Txt(bubble.transform, "双色精装涂装 · 附带流派微特性 · 全网可复用", 22, InkSoft, 30, h - 126, 740, 36, TextAnchor.MiddleLeft);
+        var view = Rect("SkinViewport", bubble.transform, 28, 36, 744, 725);
+        Img(view, new Color(1, 1, 1, 0.01f)); var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = false;
         var scroll = view.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true;
         scroll.scrollSensitivity = 100f; scroll.movementType = ScrollRect.MovementType.Elastic;
         scroll.viewport = view.GetComponent<RectTransform>();
-        var content = Rect("SkinOptions", view.transform, 0, 0, 704, LineSkinNames.Length * rowHeight);
-        var contentRt = content.GetComponent<RectTransform>(); contentRt.anchorMin = contentRt.anchorMax = new Vector2(0,1);
-        contentRt.pivot = new Vector2(0,1); contentRt.anchoredPosition = Vector2.zero; scroll.content = contentRt;
-        for (int i = 0; i < LineSkinNames.Length; i++) {
-            int skin = i; bool owned = ownedLineSkins.Contains(skin); bool selected = line.color == LineSkinColors[skin];
-            var row = Rect("SkinRow" + i, content.transform, 0, LineSkinNames.Length * rowHeight - (i + 1) * rowHeight, 704, 90);
-            Rounded(row, new Color(1f,0.99f,0.96f,0.96f));
-            Img(Rect("Swatch", row.transform, 20, 19, 52, 52), LineSkinColors[i], spriteCircle).raycastTarget = false;
-            Txt(row.transform, LineSkinNames[i], 27, Ink, 88, 24, 330, 42, TextAnchor.MiddleLeft);
-            var button = Btn(row.transform, "Skin" + i, selected && owned ? "使用中" : owned ? "使用" : "¥" + LineSkinPrices[i], 25, 486, 10, 196, 70, Paper2, () => {
-                if (ownedLineSkins.Contains(skin) && line.color == LineSkinColors[skin]) { Toast("当前已使用此颜色"); return; }
-                if (!ownedLineSkins.Contains(skin) && coins < LineSkinPrices[skin]) { Toast("金币不足，还差 ¥" + Mathf.CeilToInt(LineSkinPrices[skin] - coins)); return; }
-                BeginUndo("线路涂装"); if (ownedLineSkins.Add(skin)) coins -= LineSkinPrices[skin];
-                line.color = LineSkinColors[skin]; CreateLineVisuals(); EndUndo(); RefreshHUD();
-                ClosePanel(true); OpenLineScreen(line.id); Toast("涂装已应用");
-            }); TInk(button, Ink);
+        var content = Rect("SkinOptions", view.transform, 0, 0, 744, LineSkinNames.Length * rowHeight);
+        var contentRt = content.GetComponent<RectTransform>(); contentRt.anchorMin = contentRt.anchorMax = new Vector2(0, 1);
+        contentRt.pivot = new Vector2(0, 1); contentRt.anchoredPosition = Vector2.zero; scroll.content = contentRt;
+        int activeSkin = GetLineSkin(line);
+        for (int i = 0; i < LineSkinNames.Length; i++)
+        {
+            int skin = i;
+            bool owned = ownedLineSkins.Contains(skin);
+            bool selected = activeSkin == skin;
+            bool freeScenery = !owned && IsSkinFreeByScenery(skin);
+            var row = Rect("SkinRow" + i, content.transform, 0, LineSkinNames.Length * rowHeight - (i + 1) * rowHeight, 744, 108);
+            Rounded(row, CardBg);
+            Img(Rect("Swatch", row.transform, 18, 26, 56, 56), LineSkinColors[i], spriteCircle).raycastTarget = false;
+            Img(Rect("SwatchTrim", row.transform, 33, 41, 26, 26), LineSkinTrimColors[i], spriteCircle).raycastTarget = false;
+            Txt(row.transform, LineSkinNames[i] + " · " + SkinCategoryName(i), 25, Ink, 88, 56, 360, 38, TextAnchor.MiddleLeft);
+            Txt(row.transform, SkinPerkSummary(i), 20, InkSoft, 88, 18, 360, 30, TextAnchor.MiddleLeft);
+
+            if (owned)
+            {
+                var btn = Btn(row.transform, "Skin" + i, selected ? "使用中 ✓" : "换装", 24, 520, 18, 204, 72, selected ? Matcha : Paper2, () => {
+                    if (selected) { Toast("当前已使用此涂装"); return; }
+                    ApplySkinToLine(line, skin, false);
+                    ClosePanel(true); OpenLineScreen(line.id);
+                });
+                TInk(btn, selected ? Color.white : Ink);
+            }
+            else
+            {
+                var buyBtn = Btn(row.transform, "SkinBuy" + i, freeScenery ? "名胜免费领" : "¥" + LineSkinPrices[i], 21, 444, 18, 148, 72, freeScenery ? Matcha : Paper2, () => {
+                    ApplySkinToLine(line, skin, true);
+                    if (ownedLineSkins.Contains(skin)) { ClosePanel(true); OpenLineScreen(line.id); }
+                });
+                TInk(buyBtn, freeScenery ? Color.white : Ink);
+                var adBtn = Btn(row.transform, "SkinAd" + i, "看片领", 21, 602, 18, 122, 72, Indigo, () => {
+                    PromptRewardedAd("skin_" + skin, 1, LineSkinNames[skin], () => {
+                        ownedLineSkins.Add(skin);
+                        ApplySkinToLine(line, skin, false);
+                        OpenLineScreen(line.id);
+                    });
+                });
+                TInk(adBtn, Color.white);
+            }
+        }
+    }
+
+    void ChooseLineForSkin(int skin)
+    {
+        if (lines.Count == 0) { Toast("请先修建一条铁路线路"); return; }
+        float h = 230 + Mathf.Clamp(lines.Count, 1, 7) * 84f;
+        var bubble = OpenBubble("将「" + LineSkinNames[skin] + "」应用于", h, 720, new Vector2(W / 2, H / 2));
+        var view = Rect("LineViewport", bubble.transform, 28, 36, 664, h - 140);
+        Img(view, new Color(1, 1, 1, 0.01f)); var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = false;
+        var scroll = view.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true;
+        scroll.viewport = view.GetComponent<RectTransform>();
+        var content = Rect("Lines", view.transform, 0, 0, 664, lines.Count * 84f);
+        var crt = content.GetComponent<RectTransform>(); crt.anchorMin = crt.anchorMax = new Vector2(0, 1);
+        crt.pivot = new Vector2(0, 1); crt.anchoredPosition = Vector2.zero; scroll.content = crt;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            var target = lines[i];
+            int cur = GetLineSkin(target);
+            string desc = target.name + (cur == skin ? "（已佩戴）" : cur >= 0 ? "（" + LineSkinNames[cur] + "）" : "");
+            var row = Btn(content.transform, "ApplyLine" + i, desc, 24, 0, lines.Count * 84f - (i + 1) * 84f, 664, 72, Paper2, () => {
+                ClosePanel(true);
+                ApplySkinToLine(target, skin, false);
+                OpenFleetTab(2);
+            });
+            TInk(row, Ink);
+        }
+    }
+
+    void BuildShopLiveries(Transform page)
+    {
+        Txt(page, "线路涂装馆 · 15 款双色涂装（带流派微特性 · 可叠加看片免费解锁）", 22, InkSoft, 178, H - 235, 860, 36, TextAnchor.MiddleLeft);
+        var content = FleetScroll(page, 172, H - 255, LineSkinNames.Length * 158f + 24, 150f);
+        float height = content.sizeDelta.y;
+        float cardWidth = content.sizeDelta.x;
+        for (int i = 0; i < LineSkinNames.Length; i++)
+        {
+            int skin = i;
+            bool owned = ownedLineSkins.Contains(skin);
+            bool freeScenery = !owned && IsSkinFreeByScenery(skin);
+            var card = Rect("LiveryShop" + i, content, 0, height - 148 - i * 158, cardWidth, 142);
+            Rounded(card, CardBg); SoftShadow(card);
+            Img(Rect("Swatch", card.transform, 20, 41, 60, 60), LineSkinColors[i], spriteCircle).raycastTarget = false;
+            Img(Rect("Trim", card.transform, 36, 57, 28, 28), LineSkinTrimColors[i], spriteCircle).raycastTarget = false;
+            Txt(card.transform, LineSkinNames[i] + "  ·  " + SkinCategoryName(i), 27, Ink, 98, 76, 430, 40, TextAnchor.MiddleLeft);
+            Txt(card.transform, SkinPerkSummary(i) + (freeScenery ? "（已达成名胜打卡免费领）" : ""), 21, InkSoft, 98, 28, 430, 34, TextAnchor.MiddleLeft);
+            if (owned)
+            {
+                var apply = Btn(card.transform, "Apply" + i, "装配到线路", 23, cardWidth - 220, 33, 196, 76, Matcha, () => ChooseLineForSkin(skin));
+                TInk(apply, Color.white);
+            }
+            else
+            {
+                var buy = Btn(card.transform, "Buy" + i, freeScenery ? "免费领" : "¥" + LineSkinPrices[i], 22, cardWidth - 336, 33, 150, 76, freeScenery ? Matcha : Paper2, () => {
+                    if (!freeScenery && coins < LineSkinPrices[skin]) { Toast("金币不足，还差 ¥" + Mathf.CeilToInt(LineSkinPrices[skin] - coins)); return; }
+                    BeginUndo("解锁线路涂装");
+                    if (!freeScenery) coins -= LineSkinPrices[skin];
+                    ownedLineSkins.Add(skin);
+                    EndUndo(); RefreshHUD(); OpenFleetTab(2); Toast("已解锁涂装「" + LineSkinNames[skin] + "」");
+                });
+                TInk(buy, freeScenery ? Color.white : Ink);
+                var ad = Btn(card.transform, "Ad" + i, "看片解锁", 22, cardWidth - 174, 33, 150, 76, Indigo, () => {
+                    PromptRewardedAd("skin_" + skin, 1, LineSkinNames[skin], () => {
+                        ownedLineSkins.Add(skin); SaveGame(); OpenFleetTab(2); Toast("已永久解锁「" + LineSkinNames[skin] + "」");
+                    });
+                });
+                TInk(ad, Color.white);
+            }
+        }
+    }
+
+    void BuildShopThemes(Transform page)
+    {
+        Txt(page, "全局界面风格馆 · 更换整套游戏纸面、地图与 UI 色系", 22, InkSoft, 178, H - 235, 860, 36, TextAnchor.MiddleLeft);
+        var content = FleetScroll(page, 172, H - 255, Themes.Length * 252f + 24, 150f);
+        float height = content.sizeDelta.y;
+        float cardWidth = content.sizeDelta.x;
+        for (int i = 0; i < Themes.Length; i++)
+        {
+            int t = i;
+            var spec = Themes[i];
+            bool owned = ownedThemes.Contains(t);
+            bool trial = !owned && IsThemeTrialActive(t);
+            bool avail = owned || trial;
+            bool active = currentTheme == t && avail;
+
+            var card = Rect("ThemeShop" + i, content, 0, height - 236 - i * 252, cardWidth, 228);
+            Rounded(card, CardBg); SoftShadow(card);
+            // 主题色条与4色调色板圆点预览
+            Img(Rect("Accent", card.transform, 0, 22, 8, 184), spec.indigo, spriteRound).raycastTarget = false;
+            Color[] chips = { spec.paper, spec.sea, spec.indigo, spec.matcha };
+            for (int c = 0; c < chips.Length; c++)
+                Img(Rect("Chip" + c, card.transform, 28 + c * 38, 148, 28, 28), chips[c], spriteCircle).raycastTarget = false;
+
+            string statusTag = owned ? (active ? "使用中 ✓" : "已拥有") : trial ? ThemeTrialRemainingText(t) : "未解锁";
+            Txt(card.transform, spec.name, 31, Ink, 200, 144, 340, 44, TextAnchor.MiddleLeft);
+            Txt(card.transform, statusTag, 22, active ? Matcha : InkSoft, cardWidth - 270, 148, 240, 36, TextAnchor.MiddleRight);
+            Txt(card.transform, spec.subtitle, 22, InkSoft, 28, 92, cardWidth - 56, 40, TextAnchor.MiddleLeft);
+
+            if (avail)
+            {
+                float btnW = owned ? cardWidth - 56 : 360f;
+                var useBtn = Btn(card.transform, "UseTheme" + i, active ? "当前正在使用" : "立即应用此风格", 24, 28, 18, btnW, 64, active ? Matcha : Indigo, () => {
+                    if (active) { Toast("当前已经是该风格"); return; }
+                    ApplyTheme(t); SaveGame(); OpenFleetTab(2); Toast("已切换为「" + spec.name + "」");
+                });
+                TInk(useBtn, Color.white);
+            }
+
+            if (!owned)
+            {
+                string adKey = "theme_" + t;
+                int req = t == 3 ? 5 : 3;
+                int watched = adWatchCounts.TryGetValue(adKey, out int wc) ? wc : 0;
+                float adX = avail ? 404f : 28f;
+                float adW = avail ? cardWidth - 432f : 430f;
+                string adTxt = "看片试用24h (" + watched + "/" + req + " 永久)";
+                var adBtn = Btn(card.transform, "AdTheme" + i, adTxt, 21, adX, 18, adW, 64, Indigo, () => {
+                    PromptRewardedAd(adKey, req, spec.name,
+                        () => {
+                            ownedThemes.Add(t);
+                            ApplyTheme(t); SaveGame(); OpenFleetTab(2);
+                            Toast("已永久解锁「" + spec.name + "」");
+                        },
+                        () => {
+                            themeTrialUntil[t] = NowUnixSeconds() + 86400;
+                            ApplyTheme(t); SaveGame(); OpenFleetTab(2);
+                            Toast("已激活「" + spec.name + "」24小时免费试用！");
+                        });
+                });
+                TInk(adBtn, Color.white);
+
+                if (!avail)
+                {
+                    bool techFree = t == 2 && techDone.Count >= 5;
+                    string altLabel = t == 1 ? "¥800 直接解锁" : t == 2 ? (techFree ? "免费领(科技≥5)" : "¥800 或 5科技") : "30 钻永久解锁";
+                    var altBtn = Btn(card.transform, "AltTheme" + i, altLabel, 21, 474, 18, cardWidth - 502f, 64, techFree ? Matcha : Paper2, () => {
+                        if (t == 1)
+                        {
+                            if (coins < 800) { Toast("金币不足，还差 ¥" + Mathf.CeilToInt(800 - coins)); return; }
+                            BeginUndo("解锁界面风格"); coins -= 800; ownedThemes.Add(t); EndUndo();
+                        }
+                        else if (t == 2)
+                        {
+                            if (techDone.Count < 5)
+                            {
+                                if (coins < 800) { Toast("研究满 5 项科技可免费领，或花 ¥800 解锁"); return; }
+                                BeginUndo("解锁界面风格"); coins -= 800; ownedThemes.Add(t); EndUndo();
+                            }
+                            else { ownedThemes.Add(t); }
+                        }
+                        else
+                        {
+                            if (diamonds < 30) { Toast("钻石不足，还差 " + Mathf.CeilToInt(30 - diamonds) + " 颗"); return; }
+                            BeginUndo("解锁界面风格"); diamonds -= 30; ownedThemes.Add(t); EndUndo();
+                        }
+                        ApplyTheme(t); RefreshHUD(); SaveGame(); OpenFleetTab(2);
+                        Toast("已永久解锁「" + spec.name + "」");
+                    });
+                    TInk(altBtn, techFree ? Color.white : Ink);
+                }
+            }
         }
     }
     int dailyStationBaseline;

@@ -11,16 +11,18 @@ public partial class DemoBootstrap : MonoBehaviour
     const float W = 1080f, H = 1920f;
     const float MAP_X = 0f, MAP_Y = 173f, MAP_W = 1080f, MAP_H = 1574f;
     const float BAND_T = 0.09f, BAND_H = 0.82f;
-    static readonly Color Paper = new Color(0.965f, 0.937f, 0.890f);
-    static readonly Color Paper2 = new Color(0.925f, 0.886f, 0.816f);
-    static readonly Color Ink = new Color(0.184f, 0.165f, 0.149f);
-    static readonly Color InkSoft = new Color(0.42f, 0.39f, 0.35f);
-    static readonly Color Vermilion = new Color(0.784f, 0.333f, 0.239f);
-    static readonly Color Indigo = new Color(0.231f, 0.353f, 0.549f);
-    static readonly Color Matcha = new Color(0.435f, 0.627f, 0.353f);
-    static readonly Color Gold = new Color(0.851f, 0.663f, 0.306f);
-    static readonly Color Sakura = new Color(0.910f, 0.627f, 0.706f);
-    static readonly Color Sea = new Color(0.663f, 0.788f, 0.808f);
+    static Color Paper = new Color(0.965f, 0.937f, 0.890f);
+    static Color Paper2 = new Color(0.925f, 0.886f, 0.816f);
+    static Color CardBg = new Color(0.992f, 0.982f, 0.955f, 0.96f);
+    static Color HeaderBg = new Color(0.952f, 0.922f, 0.870f);
+    static Color Ink = new Color(0.184f, 0.165f, 0.149f);
+    static Color InkSoft = new Color(0.42f, 0.39f, 0.35f);
+    static Color Vermilion = new Color(0.784f, 0.333f, 0.239f);
+    static Color Indigo = new Color(0.231f, 0.353f, 0.549f);
+    static Color Matcha = new Color(0.435f, 0.627f, 0.353f);
+    static Color Gold = new Color(0.851f, 0.663f, 0.306f);
+    static Color Sakura = new Color(0.910f, 0.627f, 0.706f);
+    static Color Sea = new Color(0.663f, 0.788f, 0.808f);
     static readonly Color[] LineColors = {
         new Color(0.78f,0.33f,0.24f), new Color(0.30f,0.62f,0.47f),
         new Color(0.24f,0.45f,0.72f), new Color(0.88f,0.52f,0.20f),
@@ -35,7 +37,7 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     [Serializable] public class Scenery { public string name; public float x,y; public bool natural; public bool found, unlocked; public string triggerStation; public string region = "香港"; }
     [Serializable] public class Line {
-        public int id; public string name; public Color color; public List<int> st = new List<int>();
+        public int id; public string name; public Color color; public int skin = -1; public List<int> st = new List<int>();
         public int trains = 1;
         public int[] dispatch = { 1, 1, 1, 1 }; public float fare = 1.5f;
         public float todayGross, todayMaintenance, todayTrack;
@@ -78,6 +80,16 @@ public partial class DemoBootstrap : MonoBehaviour
     List<Scenery> pendingCheckin = new List<Scenery>();
     GameObject sceneryBadge;
 
+    // 主题与 IAA 激励状态
+    GameObject paperBgGo, topBarGo, stationFilterGo, speedBoardGo;
+    RawImage hkMapRaw, macauMapRaw, guangdongMapRaw, topFadeImg, botFadeImg;
+    MapBackdropGraphic backdropGraphic;
+    readonly List<GameObject> leftRailGos = new List<GameObject>();
+    int currentTheme = 0;
+    readonly HashSet<int> ownedThemes = new HashSet<int> { 0 };
+    readonly Dictionary<string, int> adWatchCounts = new Dictionary<string, int>();
+    readonly Dictionary<int, long> themeTrialUntil = new Dictionary<int, long>();
+
     class LineSegmentVisual
     {
         public int from, to;
@@ -111,8 +123,11 @@ public partial class DemoBootstrap : MonoBehaviour
         }
         saveBlocked = false;
         saveReady = true;
+        if (!IsThemeAvailable(currentTheme)) currentTheme = 0;
+        ApplyThemeColors(currentTheme);
         if (canvas != null && lines != null && lines.Count > 0)
         {
+            ApplyTheme(currentTheme, false);
             if (lineVisuals == null) lineVisuals = new Dictionary<int, LineVisual>();
             CreateLineVisuals();
             RefreshAllLines();
@@ -134,7 +149,10 @@ public partial class DemoBootstrap : MonoBehaviour
         BuildData();
         bool restored = RestoreGame();
         if (!restored) dailyStationBaseline = DailyConnectedCount();
+        if (!IsThemeAvailable(currentTheme)) currentTheme = 0;
+        ApplyThemeColors(currentTheme);
         BuildUI();
+        ApplyTheme(currentTheme, false);
         ApplyVisualQuality();
         CheckSceneryOnLine(null);
         RecalcIncome();
@@ -302,7 +320,8 @@ public partial class DemoBootstrap : MonoBehaviour
         backdropRt.anchorMin = Vector2.zero; backdropRt.anchorMax = Vector2.one;
         backdropRt.pivot = new Vector2(0.5f, 0.5f);
         backdropRt.offsetMin = Vector2.zero; backdropRt.offsetMax = Vector2.zero;
-        backdrop.AddComponent<MapBackdropGraphic>().raycastTarget = false;
+        backdropGraphic = backdrop.AddComponent<MapBackdropGraphic>();
+        backdropGraphic.raycastTarget = false;
 
         // 设计画布 1080x1920 居中；所有 UI 都挂在它下面，内部坐标不用改
         var stage = Rect("Stage", cgo.transform, 0, 0, W, H);
@@ -319,6 +338,7 @@ public partial class DemoBootstrap : MonoBehaviour
         stageShadow.GetComponent<Image>().raycastTarget = false;
 
         var bg = Rect("Paper", root, 0, 0, W, H); Img(bg, Sea);
+        paperBgGo = bg;
 
         BuildMap();
         BuildStationViews();
@@ -355,18 +375,20 @@ public partial class DemoBootstrap : MonoBehaviour
     void BuildTopBar()
     {
         var bar = Rect("Top", root, 0, 1610, W, 280); Img(bar, new Color(1,1,1,0));
+        topBarGo = bar;
 
-        var c1 = Rect("Coin", bar.transform, 24, 46, 318, 92); Rounded(c1, new Color(0.99f,0.985f,0.955f,0.96f)); SoftShadow(c1);
+        var c1 = Rect("Coin", bar.transform, 24, 46, 318, 92); Rounded(c1, CardBg); SoftShadow(c1);
         var coinRing = Rect("CoinRing", c1.transform, 12, 18, 56, 56); Img(coinRing, new Color(0.25f,0.21f,0.17f,0.88f), spriteStationRing).raycastTarget = false;
         var coinIcon = Rect("Icon", coinRing.transform, 4, 4, 48, 48); Img(coinIcon, Gold, spriteCircle);
         coinTxt = Txt(c1.transform, "2378", 46, Ink, 80, 38, 220, 54, TextAnchor.MiddleLeft);
         incomeTxt = Txt(c1.transform, "每日收入 240", 24, InkSoft, 82, 8, 226, 30, TextAnchor.MiddleLeft);
 
-        var cap = Rect("Cap", bar.transform, 354, 26, 400, 162); Rounded(cap, new Color(0.99f,0.985f,0.955f,0.96f)); SoftShadow(cap);
+        var cap = Rect("Cap", bar.transform, 354, 26, 400, 162); Rounded(cap, CardBg); SoftShadow(cap);
         var tape = Rect("CapTape", cap.transform, 130, 150, 140, 24);
         var tapeIm = Img(tape, new Color(0.88f, 0.78f, 0.62f, 0.75f), spriteRound); tapeIm.type = Image.Type.Sliced; tapeIm.raycastTarget = false;
         tape.transform.localRotation = Quaternion.Euler(0, 0, -1.5f);
-        var title = Txt(cap.transform, "香 港", 48, Ink, 0, 106, 400, 52, TextAnchor.MiddleCenter);
+        string regTitle = currentRegion == "香港" ? "香 港" : currentRegion == "澳门" ? "澳 门" : "广 东";
+        var title = Txt(cap.transform, regTitle, 48, Ink, 0, 106, 400, 52, TextAnchor.MiddleCenter);
         regionTitle = title;
         var regionEntry = cap.AddComponent<Button>(); regionEntry.targetGraphic = cap.GetComponent<Image>();
         regionEntry.onClick.AddListener(OpenRegionScreen);
@@ -374,22 +396,24 @@ public partial class DemoBootstrap : MonoBehaviour
         timeTxt = Txt(cap.transform, "08:00", 26, InkSoft, 0, 60, 400, 36, TextAnchor.MiddleCenter);
         dayTxt = Txt(cap.transform, "第 1 日", 23, InkSoft, 0, 20, 400, 32, TextAnchor.MiddleCenter);
 
-        var c3 = Rect("Dia", bar.transform, 768, 46, 226, 92); Rounded(c3, new Color(1,0.99f,0.96f,0.95f)); SoftShadow(c3);
+        var c3 = Rect("Dia", bar.transform, 768, 46, 226, 92); Rounded(c3, CardBg); SoftShadow(c3);
         var diaIcon = Rect("Icon", c3.transform, 12, 18, 52, 52); Img(diaIcon, Sakura, spriteDiamond);
         diamondTxt = Txt(c3.transform, "20", 42, Ink, 66, 19, 100, 54, TextAnchor.MiddleCenter);
         Btn(c3.transform, "DiamondInfo", "?", 30, 168, 23, 52, 52, Matcha, () => Toast("钻石可通过名胜打卡和机车里程碑获得"));
 
-        var gb = Btn(bar.transform, "Gear", "设", 26, 24, -24, 60, 60, new Color(1,0.99f,0.96f,0.94f), OpenAudioSettings);
+        var gb = Btn(bar.transform, "Gear", "设", 26, 24, -24, 60, 60, CardBg, OpenAudioSettings);
         gb.GetComponentInChildren<Text>().color = Ink;
-        var hb = Btn(bar.transform, "Help", "?", 30, 94, -24, 60, 60, new Color(1,0.99f,0.96f,0.94f), () => HelpPopup("长按站点拖动铺线。\n从线路端点出发可延长，从中间站出发可新建；拖回起点可成环。\n长按线路拖到新站，可插入途经站。\n交界站可衔接区域，点击线路查看运营。\n在图鉴打开名胜大图即可打卡。\n右侧可调倍速，1 倍速下 6 分钟为一天。"));
+        var hb = Btn(bar.transform, "Help", "?", 30, 94, -24, 60, 60, CardBg, () => HelpPopup("长按站点拖动铺线。\n从线路端点出发可延长，从中间站出发可新建；拖回起点可成环。\n长按线路拖到新站，可插入途经站。\n交界站可衔接区域，点击线路查看运营。\n在图鉴打开名胜大图即可打卡。\n右侧可调倍速，1 倍速下 6 分钟为一天。"));
         hb.GetComponentInChildren<Text>().color = InkSoft;
+        lastDisplayedMinute = -1; lastDisplayedDay = -1;
+        lastHudCoins = int.MinValue; lastHudIncome = int.MinValue; lastHudDiamonds = int.MinValue;
     }
 
     void BuildZoomNotice()
     {
         // 顶部轻提示：不占画面中央，只做状态说明
         zoomNotice = Rect("ZoomNotice", root, 300, 1458, 480, 54);
-        var nbg = Img(zoomNotice, new Color(0.99f, 0.975f, 0.94f, 0.95f), spriteRound);
+        var nbg = Img(zoomNotice, CardBg, spriteRound);
         nbg.type = Image.Type.Sliced;
         nbg.raycastTarget = false;
         SoftShadow(zoomNotice);
@@ -438,11 +462,14 @@ public partial class DemoBootstrap : MonoBehaviour
 
         // 顶部/底部奶油渐隐，让悬浮 UI 压得住地图
         var fade = MakeFadeTexture();
+        Color fadeCol = Themes[Mathf.Clamp(currentTheme, 0, Themes.Length - 1)].fade;
         var top = Rect("TopFade", root, 0, H-320, W, 320);
-        var tri = top.AddComponent<RawImage>(); tri.texture = fade; tri.color = new Color(0.985f,0.97f,0.93f,0.92f); tri.raycastTarget = false;
+        var tri = top.AddComponent<RawImage>(); tri.texture = fade; tri.color = new Color(fadeCol.r, fadeCol.g, fadeCol.b, 0.92f); tri.raycastTarget = false;
+        topFadeImg = tri;
         var bot = Rect("BotFade", root, 0, 0, W, 240);
-        var bri = bot.AddComponent<RawImage>(); bri.texture = fade; bri.color = new Color(0.985f,0.97f,0.93f,0.85f); bri.raycastTarget = false;
+        var bri = bot.AddComponent<RawImage>(); bri.texture = fade; bri.color = new Color(fadeCol.r, fadeCol.g, fadeCol.b, 0.85f); bri.raycastTarget = false;
         bri.uvRect = new Rect(0, 1, 1, -1);
+        botFadeImg = bri;
     }
 
     void SwitchRegion(string destination)
@@ -789,26 +816,28 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void BuildLeftRail()
     {
+        leftRailGos.Clear();
         string[] names = { "任务", "图鉴", "排行" };
         string[] icons = { "手帐", "名胜", "番位" };
-        Color[] accents = { new Color(0.85f,0.48f,0.28f,0.95f), new Color(0.38f,0.62f,0.45f,0.95f), new Color(0.32f,0.48f,0.68f,0.95f) };
+        Color[] accents = { new Color(0.85f,0.48f,0.28f,0.95f), Matcha, Indigo };
         for (int i = 0; i < 3; i++)
         {
             int k = i;
             var b = Rect("L" + i, root, 0, 1070 - i*106, 92, 88);
-            Rounded(b, new Color(0.985f, 0.975f, 0.94f, 0.95f)); SoftShadow(b);
+            leftRailGos.Add(b);
+            Rounded(b, CardBg); SoftShadow(b);
             var ribbon = Rect("Ribbon", b.transform, 0, 0, 5, 88);
             Img(ribbon, accents[i], spriteWhite).raycastTarget = false;
             Txt(b.transform, names[i], 22, Ink, 6, 44, 82, 36, TextAnchor.MiddleCenter);
             var tag = Rect("Tag", b.transform, 18, 10, 60, 26);
-            Rounded(tag, new Color(0.92f,0.90f,0.85f,0.60f));
+            Rounded(tag, new Color(Paper2.r, Paper2.g, Paper2.b, 0.72f));
             Txt(tag.transform, icons[i], 15, InkSoft, 0, 0, 60, 26, TextAnchor.MiddleCenter);
             if (i == 1)
             {
-                Img(Rect("BadgeRing", b.transform, 68, 64, 22, 22), new Color(1,0.98f,0.94f,0.98f), spriteCircle).raycastTarget = false;
+                Img(Rect("BadgeRing", b.transform, 68, 64, 22, 22), CardBg, spriteCircle).raycastTarget = false;
                 var dotGo = Rect("Badge", b.transform, 70, 66, 18, 18); Img(dotGo, Vermilion, spriteCircle).raycastTarget = false;
                 sceneryBadge = dotGo;
-                dotGo.SetActive(false);
+                dotGo.SetActive(pendingCheckin.Count > 0);
             }
             var btn = b.AddComponent<Button>(); btn.targetGraphic = b.GetComponent<Image>();
             btn.onClick.AddListener(() => {
@@ -822,13 +851,15 @@ public partial class DemoBootstrap : MonoBehaviour
     void BuildStationFilterButton()
     {
         var button = Rect("StationFilter", root, 0, 752, 92, 88);
-        Rounded(button, new Color(0.985f, 0.975f, 0.94f, 0.95f)); SoftShadow(button);
+        stationFilterGo = button;
+        Rounded(button, CardBg); SoftShadow(button);
         var ribbon = Rect("Ribbon", button.transform, 0, 0, 5, 88);
-        Img(ribbon, new Color(0.55f,0.48f,0.38f,0.95f), spriteWhite).raycastTarget = false;
+        Img(ribbon, new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.90f), spriteWhite).raycastTarget = false;
         Txt(button.transform, "筛选", 22, Ink, 6, 44, 82, 36, TextAnchor.MiddleCenter);
         var tag = Rect("FilterTag", button.transform, 8, 10, 76, 26);
-        Rounded(tag, new Color(0.92f,0.90f,0.85f,0.60f));
-        stationFilterText = Txt(tag.transform, "全部", 15, InkSoft, 0, 0, 76, 26, TextAnchor.MiddleCenter);
+        Rounded(tag, new Color(Paper2.r, Paper2.g, Paper2.b, 0.72f));
+        string[] filterShort = { "全部", "地级市以上", "除市辖区" };
+        stationFilterText = Txt(tag.transform, filterShort[Mathf.Clamp(stationFilter, 0, 2)], 15, InkSoft, 0, 0, 76, 26, TextAnchor.MiddleCenter);
         stationFilterText.resizeTextForBestFit = true; stationFilterText.resizeTextMinSize = 13; stationFilterText.resizeTextMaxSize = 15;
         var control = button.AddComponent<Button>(); control.targetGraphic = button.GetComponent<Image>();
         control.onClick.AddListener(CycleStationFilter);
@@ -837,21 +868,23 @@ public partial class DemoBootstrap : MonoBehaviour
     void BuildRightRail()
     {
         var go = Rect("SpeedBoard", root, 986, 1168, 86, 96);
-        var shell = Img(go, new Color(0.24f, 0.20f, 0.17f, 0.88f), spriteRound); shell.type = Image.Type.Sliced;
+        speedBoardGo = go;
+        var shell = Img(go, new Color(Ink.r, Ink.g, Ink.b, 0.88f), spriteRound); shell.type = Image.Type.Sliced;
         SoftShadow(go);
         var inner = Rect("Inner", go.transform, 3, 3, 80, 90);
-        var innerIm = Img(inner, new Color(0.985f, 0.975f, 0.94f, 0.96f), spriteRound); innerIm.type = Image.Type.Sliced;
+        var innerIm = Img(inner, CardBg, spriteRound); innerIm.type = Image.Type.Sliced;
         var topBar = Rect("TopBar", inner.transform, 0, 68, 80, 22);
-        Img(topBar, new Color(0.88f, 0.78f, 0.62f, 0.75f), spriteWhite).raycastTarget = false;
+        Img(topBar, new Color(Paper2.r, Paper2.g, Paper2.b, 0.85f), spriteWhite).raycastTarget = false;
         Txt(inner.transform, "运行", 15, InkSoft, 0, 68, 80, 22, TextAnchor.MiddleCenter);
-        speedTxt = Txt(inner.transform, "1×", 32, Ink, 0, 6, 80, 60, TextAnchor.MiddleCenter);
+        speedTxt = Txt(inner.transform, timeSpeed == 0 ? "暂停" : timeSpeed + "×", 32, Ink, 0, 6, 80, 60, TextAnchor.MiddleCenter);
+        lastDisplayedSpeed = -1;
         var btn = go.AddComponent<Button>(); btn.targetGraphic = shell; btn.onClick.AddListener(CycleSpeed);
     }
 
     void BuildBottomNav()
     {
         dock = Rect("Dock", root, 22, 16, 1036, 156);
-        Rounded(dock, new Color(1,0.99f,0.96f,0.96f)); SoftShadow(dock);
+        Rounded(dock, CardBg); SoftShadow(dock);
         string[] names = { "线路", "列车", "公司", "科技" };
         string[] ens = { "LINE", "TRAIN", "COMPANY", "TECH" };
         Color[] cols = { Vermilion, Indigo, Matcha, Gold };
@@ -866,9 +899,9 @@ public partial class DemoBootstrap : MonoBehaviour
             var btn = item.AddComponent<Button>(); btn.targetGraphic = item.GetComponent<Image>();
             btn.onClick.AddListener(() => OnTab(k));
         }
-        Img(Rect("Sep1", dock.transform, 268, 30, 1, 96), new Color(0.45f,0.40f,0.33f,0.14f));
-        Img(Rect("Sep2", dock.transform, 522, 30, 1, 96), new Color(0.45f,0.40f,0.33f,0.14f));
-        Img(Rect("Sep3", dock.transform, 776, 30, 1, 96), new Color(0.45f,0.40f,0.33f,0.14f));
+        Img(Rect("Sep1", dock.transform, 268, 30, 1, 96), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f));
+        Img(Rect("Sep2", dock.transform, 522, 30, 1, 96), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f));
+        Img(Rect("Sep3", dock.transform, 776, 30, 1, 96), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f));
     }
 
     // ---------- tabs ----------
@@ -1222,12 +1255,16 @@ public partial class DemoBootstrap : MonoBehaviour
         {
             var lv = new LineVisual();
             if (oldVisuals.TryGetValue(line.id, out var old)) { lv.t = old.t; lv.credit = old.credit; lv.lastSt = old.lastSt; }
+            int skin = GetLineSkin(line);
+            Color trim = skin >= 0 ? LineSkinTrimColors[skin] : Color.Lerp(line.color, Color.white, 0.40f);
+            Color coreColor = skin >= 0 ? Color.Lerp(trim, Color.white, 0.35f) : new Color(1f, 0.98f, 0.92f, 0.65f);
+            coreColor.a = skin >= 0 ? 0.80f : 0.65f;
             for (int i = 0; i < line.st.Count - 1; i++)
             {
                 if (SegmentRegion(line.st[i], line.st[i+1]) != currentRegion) continue;
                 var casing = AddSeg(line.st[i], line.st[i+1], new Color(0.20f,0.18f,0.15f,0.92f), 12f, lineLayer);
                 var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 7.5f, lineLayer);
-                var trackCore = AddSeg(line.st[i], line.st[i+1], new Color(1f,0.98f,0.92f,0.65f), 2.2f, lineLayer);
+                var trackCore = AddSeg(line.st[i], line.st[i+1], coreColor, 2.2f, lineLayer);
                 var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer);
                 var lt = hit.AddComponent<LineTapPress>(); lt.boot = this; lt.lineId = line.id; lt.segment = i;
                 lv.segments.Add(new LineSegmentVisual { from = line.st[i], to = line.st[i + 1], casing = casing, body = segBody, core = trackCore, hit = hit });
@@ -1240,9 +1277,16 @@ public partial class DemoBootstrap : MonoBehaviour
             // 线路涂装车身主体
             var body = Rect("Body", t.transform, 1, 1, 32, 12);
             var bimg = Img(body, line.color, spriteWhite); bimg.raycastTarget = false;
-            // 车顶中央浅色肋带
+            // 涂装专属腰线 / 星夜流派暖琥珀车窗灯带
+            if (skin >= 0)
+            {
+                Color stripeColor = SkinCategory(skin) == 3 ? new Color(1f, 0.88f, 0.45f, 0.95f) : trim;
+                Img(Rect("StripeL", body.transform, 1, 0.8f, 25, 1.8f), stripeColor, spriteWhite).raycastTarget = false;
+                Img(Rect("StripeR", body.transform, 1, 9.4f, 25, 1.8f), stripeColor, spriteWhite).raycastTarget = false;
+            }
+            // 车顶中央浅色/副色肋带
             var roof = Rect("Roof", body.transform, 3, 2, 22, 8);
-            Img(roof, Color.Lerp(line.color, Color.white, 0.40f), spriteWhite).raycastTarget = false;
+            Img(roof, trim, spriteWhite).raycastTarget = false;
             // 车顶受电弓 / 空调机罩
             var ac = Rect("AC", roof.transform, 8, 1, 8, 6);
             Img(ac, new Color(0.22f,0.20f,0.18f,0.85f), spriteWhite).raycastTarget = false;
@@ -1634,10 +1678,10 @@ public partial class DemoBootstrap : MonoBehaviour
         if (y + h > H - 230) y = anchor.y - h - 60;
         y = Mathf.Clamp(y, 190, H - h - 200);
         activePanel = Rect("Bubble", root, x, y, w, h);
-        Rounded(activePanel, new Color(0.99f,0.976f,0.95f,0.98f)); SoftShadow(activePanel);
+        Rounded(activePanel, new Color(CardBg.r, CardBg.g, CardBg.b, 0.985f)); SoftShadow(activePanel);
         var heading = Txt(activePanel.transform, title, 32, Ink, 26, h-64, w-110, 46, TextAnchor.MiddleLeft);
         FitSingleLine(heading, 32);
-        var close = Btn(activePanel.transform, "Close", "×", 28, w-72, h-68, 52, 52, new Color(0.92f,0.89f,0.83f), ClosePanel);
+        var close = Btn(activePanel.transform, "Close", "×", 28, w-72, h-68, 52, 52, Paper2, ClosePanel);
         TInk(close, Ink); panelOpenedFrame = Time.frameCount + 1;
         return activePanel;
     }
@@ -1651,10 +1695,10 @@ public partial class DemoBootstrap : MonoBehaviour
         float x = (W - w) / 2f, y = (H - h) / 2f;
         panelShadow = Rect("PShadow", root, x+8, y-10, w, h); Rounded(panelShadow, new Color(0.10f,0.08f,0.06f,0.16f)); panelShadow.GetComponent<Image>().raycastTarget = false;
         activePanel = Rect("Popup", root, x, y, w, h);
-        Rounded(activePanel, new Color(0.99f,0.976f,0.95f,0.95f));
+        Rounded(activePanel, new Color(CardBg.r, CardBg.g, CardBg.b, 0.965f));
         var heading = Txt(activePanel.transform, title, 34, Ink, 26, h-64, w-110, 46, TextAnchor.MiddleLeft);
         FitSingleLine(heading, 34);
-        var cb = Btn(activePanel.transform, "Close", "×", 28, w-72, h-68, 52, 52, new Color(0.92f,0.89f,0.83f), ClosePanel);
+        var cb = Btn(activePanel.transform, "Close", "×", 28, w-72, h-68, 52, 52, Paper2, ClosePanel);
         TInk(cb, Ink);
         panelOpenedFrame = Time.frameCount + 1;
         return activePanel;
@@ -1907,6 +1951,183 @@ public partial class DemoBootstrap : MonoBehaviour
         }
         t.SetPixels(px); t.Apply(); t.wrapMode = TextureWrapMode.Clamp;
         return t;
+    }
+
+    // ---------- 主题切换与涂装流派体系 ----------
+    struct ThemeSpec
+    {
+        public string name, shortName, subtitle;
+        public Color paper, paper2, cardBg, headerBg, ink, inkSoft, indigo, matcha, sea, mapTint, fade, backdropTop, backdropBottom;
+    }
+    static readonly ThemeSpec[] Themes = {
+        new ThemeSpec {
+            name = "和纸手帐", shortName = "和纸", subtitle = "默认 · 暖阳宣纸手绘质感，全天候舒适护眼",
+            paper = new Color(0.965f, 0.937f, 0.890f), paper2 = new Color(0.925f, 0.886f, 0.816f),
+            cardBg = new Color(0.992f, 0.982f, 0.955f, 0.96f), headerBg = new Color(0.952f, 0.922f, 0.870f),
+            ink = new Color(0.184f, 0.165f, 0.149f), inkSoft = new Color(0.42f, 0.39f, 0.35f),
+            indigo = new Color(0.231f, 0.353f, 0.549f), matcha = new Color(0.435f, 0.627f, 0.353f),
+            sea = new Color(0.663f, 0.788f, 0.808f), mapTint = Color.white,
+            fade = new Color(0.985f, 0.97f, 0.93f, 0.90f),
+            backdropTop = new Color(0.74f, 0.86f, 0.87f, 1f), backdropBottom = new Color(0.52f, 0.70f, 0.77f, 1f)
+        },
+        new ThemeSpec {
+            name = "工程蓝图", shortName = "蓝图", subtitle = "基建晒图 · 普鲁士蓝制图网格，硬核规划控最爱",
+            paper = new Color(0.875f, 0.925f, 0.965f), paper2 = new Color(0.795f, 0.868f, 0.930f),
+            cardBg = new Color(0.945f, 0.975f, 0.995f, 0.96f), headerBg = new Color(0.835f, 0.898f, 0.950f),
+            ink = new Color(0.090f, 0.185f, 0.310f), inkSoft = new Color(0.260f, 0.390f, 0.540f),
+            indigo = new Color(0.140f, 0.420f, 0.720f), matcha = new Color(0.220f, 0.560f, 0.520f),
+            sea = new Color(0.420f, 0.610f, 0.760f), mapTint = new Color(0.82f, 0.92f, 1.00f, 1f),
+            fade = new Color(0.88f, 0.94f, 0.98f, 0.90f),
+            backdropTop = new Color(0.52f, 0.70f, 0.84f, 1f), backdropBottom = new Color(0.32f, 0.50f, 0.68f, 1f)
+        },
+        new ThemeSpec {
+            name = "复古铁道报", shortName = "复古", subtitle = "1920s 特刊 · 怀旧牛皮纸褐配深铅字排印风",
+            paper = new Color(0.925f, 0.865f, 0.765f), paper2 = new Color(0.855f, 0.780f, 0.665f),
+            cardBg = new Color(0.965f, 0.925f, 0.845f, 0.96f), headerBg = new Color(0.895f, 0.825f, 0.715f),
+            ink = new Color(0.165f, 0.115f, 0.085f), inkSoft = new Color(0.450f, 0.355f, 0.275f),
+            indigo = new Color(0.460f, 0.285f, 0.195f), matcha = new Color(0.380f, 0.520f, 0.310f),
+            sea = new Color(0.620f, 0.680f, 0.640f), mapTint = new Color(0.98f, 0.90f, 0.76f, 1f),
+            fade = new Color(0.94f, 0.88f, 0.78f, 0.90f),
+            backdropTop = new Color(0.72f, 0.74f, 0.68f, 1f), backdropBottom = new Color(0.52f, 0.56f, 0.50f, 1f)
+        },
+        new ThemeSpec {
+            name = "维港暮色", shortName = "暮色", subtitle = "都市薄暮 · 温柔紫靛夜航色调，伴随晚高峰灯火",
+            paper = new Color(0.895f, 0.885f, 0.935f), paper2 = new Color(0.815f, 0.800f, 0.875f),
+            cardBg = new Color(0.955f, 0.948f, 0.980f, 0.96f), headerBg = new Color(0.855f, 0.842f, 0.905f),
+            ink = new Color(0.160f, 0.135f, 0.240f), inkSoft = new Color(0.390f, 0.355f, 0.490f),
+            indigo = new Color(0.380f, 0.295f, 0.580f), matcha = new Color(0.340f, 0.560f, 0.480f),
+            sea = new Color(0.420f, 0.495f, 0.620f), mapTint = new Color(0.86f, 0.84f, 0.95f, 1f),
+            fade = new Color(0.90f, 0.89f, 0.94f, 0.90f),
+            backdropTop = new Color(0.52f, 0.56f, 0.70f, 1f), backdropBottom = new Color(0.34f, 0.38f, 0.52f, 1f)
+        }
+    };
+
+    static long NowUnixSeconds() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
+    bool IsThemeTrialActive(int theme)
+    {
+        return themeTrialUntil.TryGetValue(theme, out long until) && until > NowUnixSeconds();
+    }
+    bool IsThemeAvailable(int theme)
+    {
+        if (theme <= 0 || theme >= Themes.Length) return theme == 0;
+        return ownedThemes.Contains(theme) || IsThemeTrialActive(theme);
+    }
+    string ThemeTrialRemainingText(int theme)
+    {
+        if (!themeTrialUntil.TryGetValue(theme, out long until)) return "";
+        long rem = until - NowUnixSeconds();
+        if (rem <= 0) return "";
+        long h = rem / 3600, m = (rem % 3600) / 60;
+        return "试用中 " + h + "时" + m + "分";
+    }
+    void ApplyThemeColors(int theme)
+    {
+        theme = Mathf.Clamp(theme, 0, Themes.Length - 1);
+        var spec = Themes[theme];
+        Paper = spec.paper; Paper2 = spec.paper2; CardBg = spec.cardBg; HeaderBg = spec.headerBg;
+        Ink = spec.ink; InkSoft = spec.inkSoft; Indigo = spec.indigo; Matcha = spec.matcha; Sea = spec.sea;
+    }
+    void ApplyTheme(int theme, bool rebuildUI = true)
+    {
+        theme = Mathf.Clamp(theme, 0, Themes.Length - 1);
+        currentTheme = theme;
+        ApplyThemeColors(theme);
+        var spec = Themes[theme];
+        if (Camera.main != null) Camera.main.backgroundColor = spec.sea;
+        if (backdropGraphic)
+        {
+            backdropGraphic.top = spec.backdropTop;
+            backdropGraphic.bottom = spec.backdropBottom;
+            backdropGraphic.SetVerticesDirty();
+        }
+        if (paperBgGo)
+        {
+            var pi = paperBgGo.GetComponent<Image>();
+            if (pi) pi.color = spec.sea;
+        }
+        if (hkMapRaw) hkMapRaw.color = spec.mapTint;
+        if (macauMapRaw) macauMapRaw.color = spec.mapTint;
+        if (guangdongMapRaw) guangdongMapRaw.color = spec.mapTint;
+        if (topFadeImg) topFadeImg.color = new Color(spec.fade.r, spec.fade.g, spec.fade.b, 0.92f);
+        if (botFadeImg) botFadeImg.color = new Color(spec.fade.r, spec.fade.g, spec.fade.b, 0.85f);
+        if (rebuildUI && root) RebuildChromeUI();
+    }
+    void RebuildChromeUI()
+    {
+        if (topBarGo) Destroy(topBarGo);
+        foreach (var go in leftRailGos) if (go) Destroy(go);
+        leftRailGos.Clear();
+        if (stationFilterGo) Destroy(stationFilterGo);
+        if (speedBoardGo) Destroy(speedBoardGo);
+        if (dock) Destroy(dock);
+        if (undoButton) Destroy(undoButton.gameObject);
+        BuildTopBar();
+        BuildLeftRail();
+        BuildStationFilterButton();
+        BuildRightRail();
+        BuildBottomNav();
+        BuildUndoButton();
+        RefreshHUD();
+        UpdateTimeText();
+        RefreshPendingBadge();
+        RefreshUndoButton();
+        if (pageRoot) pageRoot.transform.SetAsLastSibling();
+        if (scrim) scrim.transform.SetAsLastSibling();
+        if (panelShadow) panelShadow.transform.SetAsLastSibling();
+        if (activePanel) activePanel.transform.SetAsLastSibling();
+        if (toastGo) toastGo.transform.SetAsLastSibling();
+    }
+
+    static readonly Color[] LineSkinTrimColors = {
+        new Color(0.95f,0.97f,0.99f), new Color(1.00f,0.94f,0.96f), new Color(0.99f,0.92f,0.68f),
+        new Color(0.84f,0.95f,0.86f), new Color(0.98f,0.88f,0.62f), new Color(0.99f,0.86f,0.52f),
+        new Color(0.92f,0.98f,0.98f), new Color(0.99f,0.86f,0.54f), new Color(0.90f,0.93f,0.99f),
+        new Color(0.89f,0.96f,0.82f), new Color(0.91f,0.98f,0.95f), new Color(0.96f,0.86f,0.74f),
+        new Color(0.86f,0.89f,0.91f), new Color(0.88f,0.77f,0.64f), new Color(0.98f,0.87f,0.58f)
+    };
+    int GetLineSkin(Line line)
+    {
+        if (line == null) return -1;
+        if (line.skin >= 0 && line.skin < LineSkinNames.Length) return line.skin;
+        for (int i = 0; i < LineSkinColors.Length; i++)
+            if (Vector4.Distance(line.color, LineSkinColors[i]) < 0.02f) return i;
+        return -1;
+    }
+    static int SkinCategory(int skin)
+    {
+        switch (skin)
+        {
+            case 0: case 1: case 6: return 0; // 观光专列
+            case 2: case 4: case 8: return 1; // 干线急行
+            case 3: case 9: case 10: return 2; // 轻轨节能
+            case 5: case 7: case 14: return 3; // 星夜守候
+            case 11: case 12: case 13: return 4; // 重载编组
+            default: return -1;
+        }
+    }
+    static string SkinCategoryName(int skin)
+    {
+        switch (SkinCategory(skin))
+        {
+            case 0: return "观光专列";
+            case 1: return "干线急行";
+            case 2: return "轻轨节能";
+            case 3: return "星夜守候";
+            case 4: return "重载编组";
+            default: return "标准涂装";
+        }
+    }
+    static string SkinPerkSummary(int skin)
+    {
+        switch (SkinCategory(skin))
+        {
+            case 0: return "票款收入 +6%";
+            case 1: return "速度 +8% · 轨维 +4%";
+            case 2: return "轨道维护 -12%";
+            case 3: return "机维 -10% · 夜间再降 10%";
+            case 4: return "单向区段运力 +8%";
+            default: return "无加成";
+        }
     }
 
 

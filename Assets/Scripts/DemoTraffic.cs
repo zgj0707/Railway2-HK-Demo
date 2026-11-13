@@ -125,7 +125,8 @@ public partial class DemoBootstrap
             total += trait == 0 ? FleetMaintenanceTraits[v.node] : trait == 1 ? FleetCapacityTraits[v.node] : FleetSpeedTraits[v.node]; count++;
         }
         while (count < needed) { total += 1f; count++; }
-        return total / needed * (trait == 2 ? ResearchFactor(ResearchEffect.Speed) : 1f);
+        float speedMult = trait == 2 ? ResearchFactor(ResearchEffect.Speed) * (SkinCategory(GetLineSkin(line)) == 1 ? 1.08f : 1f) : 1f;
+        return total / needed * speedMult;
     }
     void SettleRemovedLineTax(Line line)
     {
@@ -145,7 +146,7 @@ public partial class DemoBootstrap
     }
     float StationCapacity(int i) { return (180f + (stations[i].level - 1) * 100f) * PassengerScale * ResearchFactor(ResearchEffect.Station); }
     // 单方向单区段的日化运力；不同区段可由不同乘客复用。
-    float FleetCapacity(Line line) { return 4000f * RunningTrains(line) * FleetTrait(line, 1, true) * ResearchFactor(ResearchEffect.Capacity); }
+    float FleetCapacity(Line line) { return 4000f * RunningTrains(line) * FleetTrait(line, 1, true) * ResearchFactor(ResearchEffect.Capacity) * (SkinCategory(GetLineSkin(line)) == 4 ? 1.08f : 1f); }
     float LineCapacity(Line line) { return FleetCapacity(line); }
     int hkEconomicAnchor = -2, macauEconomicAnchor = -2;
     Vector2 EconomicPosition(int index)
@@ -354,8 +355,9 @@ public partial class DemoBootstrap
             foreach(int section in trip.sections)result.sectionServed[section]+=served;
             float distance=0;foreach(float d in trip.lineDistance.Values)distance+=d;
             float revenue=served*trip.fare/10f*trip.bonus*revenueMultiplier;
-            foreach(var part in trip.lineDistance){var line=serviceLines[part.Key];result.lineServed[line]+=served;result.lineRevenue[line]+=revenue*part.Value/distance;}
-            result.totalPassengers+=served;result.totalRevenue+=revenue;
+            float tripTotalRev=0f;
+            foreach(var part in trip.lineDistance){var line=serviceLines[part.Key];float partRev=revenue*part.Value/distance*(SkinCategory(GetLineSkin(line))==0?1.06f:1f);result.lineServed[line]+=served;result.lineRevenue[line]+=partRev;tripTotalRev+=partRev;}
+            result.totalPassengers+=served;result.totalRevenue+=tripTotalRev;
         }
         MergeFrozenTraffic(result, serviceLines);
         return result;
@@ -374,7 +376,7 @@ public partial class DemoBootstrap
         unchecked {
             int hash = 17; hash = hash * 31 + currentRegion.GetHashCode();
             foreach (var line in lines) {
-                hash=hash*31+line.GetHashCode(); hash=hash*31+line.trains; hash=hash*31+line.fare.GetHashCode();
+                hash=hash*31+line.GetHashCode(); hash=hash*31+line.trains; hash=hash*31+line.fare.GetHashCode(); hash=hash*31+GetLineSkin(line);
                 foreach (int v in line.st) hash=hash*31+v;
                 foreach (int v in line.dispatch) hash=hash*31+v;
             }
@@ -415,8 +417,15 @@ public partial class DemoBootstrap
             gross = TrafficRevenue(line, traffic), vehicle = VehicleMaintenance(line), track = TrackMaintenance(line)
         };
     }
-    float VehicleMaintenance(Line line) { return (line.trains * 4f + RunningTrains(line) * 24f) * FleetTrait(line, 0, false) * ResearchCostFactor(ResearchEffect.Vehicle); }
-    float TrackMaintenance(Line line) { return (40f + EconomicPathLength(line.st) * 0.25f + UniqueCount(line.st) * 5f) * ResearchCostFactor(ResearchEffect.Track); }
+    float VehicleMaintenance(Line line) {
+        float skinMult = SkinCategory(GetLineSkin(line)) == 3 ? (DispatchSlot() == 3 ? 0.81f : 0.90f) : 1f;
+        return (line.trains * 4f + RunningTrains(line) * 24f) * FleetTrait(line, 0, false) * ResearchCostFactor(ResearchEffect.Vehicle) * skinMult;
+    }
+    float TrackMaintenance(Line line) {
+        int cat = SkinCategory(GetLineSkin(line));
+        float skinMult = cat == 2 ? 0.88f : cat == 1 ? 1.04f : 1f;
+        return (40f + EconomicPathLength(line.st) * 0.25f + UniqueCount(line.st) * 5f) * ResearchCostFactor(ResearchEffect.Track) * skinMult;
+    }
     float LineProfitRate(Line line, TrafficResult result)
     {
         float beforeTax = TrafficRevenue(line,result) - VehicleMaintenance(line) - TrackMaintenance(line);

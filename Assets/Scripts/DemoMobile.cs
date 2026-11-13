@@ -82,23 +82,47 @@ public partial class DemoBootstrap
     }
     void OpenAudioSettings()
     {
-        var bubble = OpenBubble("设置", 680, 680, new Vector2(100, H - 250));
-        Txt(bubble.transform, "画面质量", 27, InkSoft, 34, 515, 550, 44, TextAnchor.MiddleLeft);
+        var bubble = OpenBubble("设置", 850, 680, new Vector2(100, H - 250));
+        Txt(bubble.transform, "画面质量", 27, InkSoft, 34, 685, 550, 44, TextAnchor.MiddleLeft);
         string[] levels = { "低", "中", "高" };
         for (int i = 0; i < levels.Length; i++) {
             int selected = i;
             var quality = Btn(bubble.transform, "Quality" + i, levels[i] + (qualityTier == i ? " · 当前" : ""), 26,
-                34 + i * 205, 420, 190, 78, qualityTier == i ? Indigo : Paper2, () => { SetVisualQuality(selected); OpenAudioSettings(); });
+                34 + i * 205, 590, 190, 78, qualityTier == i ? Indigo : Paper2, () => { SetVisualQuality(selected); OpenAudioSettings(); });
             TInk(quality, qualityTier == i ? Color.white : Ink);
         }
-        Txt(bubble.transform, "帧率上限", 27, InkSoft, 34, 350, 550, 44, TextAnchor.MiddleLeft);
+        Txt(bubble.transform, "帧率上限", 27, InkSoft, 34, 520, 550, 44, TextAnchor.MiddleLeft);
         for (int i = 0; i < FrameRateOptions.Length; i++) {
             int fps = FrameRateOptions[i];
             var choice = Btn(bubble.transform, "FrameRate" + fps, fps + " FPS" + (selectedFrameRate == fps ? " · 当前" : ""), 24,
-                34 + i * 205, 260, 190, 78, selectedFrameRate == fps ? Indigo : Paper2, () => { SetFrameRate(fps); OpenAudioSettings(); });
+                34 + i * 205, 430, 190, 78, selectedFrameRate == fps ? Indigo : Paper2, () => { SetFrameRate(fps); OpenAudioSettings(); });
             TInk(choice, selectedFrameRate == fps ? Color.white : Ink);
         }
-        Txt(bubble.transform, "实际帧率取决于屏幕刷新率和设备性能", 21, InkSoft, 34, 205, 612, 40, TextAnchor.MiddleLeft);
+        Txt(bubble.transform, "实际帧率取决于屏幕刷新率和设备性能", 21, InkSoft, 34, 380, 612, 36, TextAnchor.MiddleLeft);
+
+        Txt(bubble.transform, "界面风格", 27, InkSoft, 34, 315, 350, 44, TextAnchor.MiddleLeft);
+        var moreTheme = Btn(bubble.transform, "ThemeShopLink", "商店 / 试用解锁 ›", 21, 410, 318, 236, 40, Paper2, () => { ClosePanel(true); OpenThemeShopScreen(); });
+        TInk(moreTheme, Indigo);
+        for (int i = 0; i < Themes.Length; i++) {
+            int themeIdx = i;
+            bool avail = IsThemeAvailable(themeIdx);
+            bool active = currentTheme == themeIdx && avail;
+            string label = Themes[themeIdx].shortName + (active ? " ✓" : avail ? "" : " 🔒");
+            var tb = Btn(bubble.transform, "ThemeBtn" + i, label, 23,
+                34 + i * 155, 220, 146, 78, active ? Indigo : avail ? Paper2 : new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f), () => {
+                    if (IsThemeAvailable(themeIdx)) {
+                        ApplyTheme(themeIdx);
+                        SaveGame();
+                        OpenAudioSettings();
+                        Toast("已切换为「" + Themes[themeIdx].name + "」");
+                    } else {
+                        ClosePanel(true);
+                        OpenThemeShopScreen();
+                    }
+                });
+            TInk(tb, active ? Color.white : Ink);
+        }
+
         var toggle = Btn(bubble.transform, "MusicToggle", musicEnabled ? "背景音乐：开" : "背景音乐：关", 30, 34, 54, 612, 92, Matcha, () => {
             musicEnabled = !musicEnabled;
             if (music) { if (musicEnabled && music.clip) music.Play(); else music.Stop(); }
@@ -380,7 +404,7 @@ public partial class DemoBootstrap
     void BuildDragCostBadge()
     {
         dragCostBadge = Rect("DragCostBadge", root, 0, 0, 250, 96);
-        Rounded(dragCostBadge, new Color(0.99f,0.98f,0.95f,0.96f));
+        Rounded(dragCostBadge, CardBg);
         dragCostBadge.GetComponent<Image>().raycastTarget = false; SoftShadow(dragCostBadge);
         dragCostHeading = Txt(dragCostBadge.transform, "线路造价", 20, InkSoft, 12, 62, 226, 26, TextAnchor.MiddleCenter);
         dragCostNumber = Txt(dragCostBadge.transform, "¥0", 38, Ink, 12, 12, 226, 49, TextAnchor.MiddleCenter);
