@@ -27,6 +27,8 @@ public partial class DemoBootstrap
     Text historyInfo, historyHeading, historyRpText;
     GameObject historyInfoPanel, historyControls, eraJournalModal;
     bool techCollapseDone = true;
+    readonly HashSet<string> techSessionUnlocked = new HashSet<string>();
+    bool IsCollapsedIntoHub(string key, bool collapsed) { return collapsed && techDone.Contains(key) && !techSessionUnlocked.Contains(key); }
     TechCoinWidget historyCoinWidget;
     readonly HashSet<string> historyAnimated = new HashSet<string>();
     readonly Dictionary<string, Vector2> historyPositions = new Dictionary<string, Vector2>();
@@ -308,7 +310,7 @@ public partial class DemoBootstrap
         historyAnimated.Clear();
         foreach (var candidate in historyNodes) if (HistoryVisible(candidate)) historyAnimated.Add(candidate.key);
         BeginUndo("解锁科技");
-        coins -= cost; rp -= rpCost; techDone.Add(key);
+        coins -= cost; rp -= rpCost; techDone.Add(key); techSessionUnlocked.Add(key);
         if (node.loco >= 0) {
             researchVehicles.Add(new ResearchVehicle { node = node.loco });
             if(node.loco==0 || node.loco==4 || node.loco==8) { diamonds+=50; Toast("机车里程碑：钻石 +50"); }
@@ -389,8 +391,12 @@ public partial class DemoBootstrap
     void TickResearch(float dt) { }
     void OpenTechScreen(int mode = 0)
     {
-        // mode == 0：从外部进入时默认收拢已解锁节点为中央典藏大圆盘；mode == 1：保持当前折叠/展开态
-        if (mode == 0) techCollapseDone = true;
+        // mode == 0：重新进入科技树界面时清空本次解锁暂留名单并自动收纳全部已解锁节点；mode == 1：停留在页面内刷新，本次解锁节点留在外面
+        if (mode == 0)
+        {
+            techCollapseDone = true;
+            techSessionUnlocked.Clear();
+        }
         InitHistoryTree();
         ClosePage(); pageBack = null; CloseLineBubble(); eraJournalModal = null;
         var page = Rect("HistoryFullScreen", canvas.transform, 0, 0, 0, 0);
@@ -453,7 +459,9 @@ public partial class DemoBootstrap
         var graphRects = new Dictionary<string, RectTransform>();
         historyNodeRects.Clear();
 
-        bool collapsed = techCollapseDone && techDone.Count > 0;
+        int hubCollapsedCount = 0;
+        if (techCollapseDone) foreach (var k in techDone) if (!techSessionUnlocked.Contains(k)) hubCollapsedCount++;
+        bool collapsed = techCollapseDone && hubCollapsedCount > 0;
         const string HubKey = "__completed_hub__";
         if (collapsed)
         {
@@ -474,13 +482,14 @@ public partial class DemoBootstrap
             var innerDisc = Rect("HubInner", hubGo.transform, 18, 18, hubSize - 36, hubSize - 36);
             Img(innerDisc, new Color(0.985f, 0.968f, 0.928f), historyHubDiscSprite).raycastTarget = true;
 
-            var hubSub = Txt(hubGo.transform, "— XIX CENTURY —", 17, new Color(0.56f, 0.42f, 0.22f), 24, 260, hubSize - 48, 28, TextAnchor.MiddleCenter);
+            string subLabel = techSessionUnlocked.Count > 0 ? "本次新解 " + techSessionUnlocked.Count + " 项外留" : "— XIX CENTURY —";
+            var hubSub = Txt(hubGo.transform, subLabel, 17, new Color(0.56f, 0.42f, 0.22f), 24, 260, hubSize - 48, 28, TextAnchor.MiddleCenter);
             hubSub.fontStyle = FontStyle.Normal; hubSub.raycastTarget = false;
             var hubTitle = Txt(hubGo.transform, "已研典藏图谱", 32, Ink, 24, 208, hubSize - 48, 46, TextAnchor.MiddleCenter);
             hubTitle.fontStyle = FontStyle.Normal; hubTitle.raycastTarget = false;
-            var hubCount = Txt(hubGo.transform, techDone.Count + " / " + historyNodes.Count, 48, new Color(0.74f, 0.48f, 0.16f), 24, 136, hubSize - 48, 64, TextAnchor.MiddleCenter);
+            var hubCount = Txt(hubGo.transform, hubCollapsedCount + " / " + historyNodes.Count, 48, new Color(0.74f, 0.48f, 0.16f), 24, 136, hubSize - 48, 64, TextAnchor.MiddleCenter);
             hubCount.fontStyle = FontStyle.Normal; hubCount.raycastTarget = false;
-            bool allDone = techDone.Count >= historyNodes.Count;
+            bool allDone = hubCollapsedCount >= historyNodes.Count;
             var hubHintBg = Rect("HubHintChip", hubGo.transform, 68, 64, hubSize - 136, 44);
             Rounded(hubHintBg, new Color(0.24f, 0.34f, 0.48f, 0.12f));
             hubHintBg.GetComponent<Image>().raycastTarget = false;
@@ -496,7 +505,7 @@ public partial class DemoBootstrap
         {
             if (!HistoryVisible(node)) continue;
             bool done = techDone.Contains(node.key), ready = HistoryAvailable(node);
-            if (collapsed && done) continue;
+            if (IsCollapsedIntoHub(node.key, collapsed)) continue;
 
             Vector2 point = HistoryPosition(node.key);
             var card = Rect(node.key, content.transform, 4000 + point.x - 100, 4000 + point.y - 60, 200, 120);
@@ -509,7 +518,7 @@ public partial class DemoBootstrap
                 bool linkedHub = false;
                 foreach (string parent in node.parents)
                 {
-                    if (techDone.Contains(parent)) { if (!linkedHub) { mapped.Add(HubKey); linkedHub = true; } }
+                    if (IsCollapsedIntoHub(parent, collapsed)) { if (!linkedHub) { mapped.Add(HubKey); linkedHub = true; } }
                     else mapped.Add(parent);
                 }
                 resolvedParents = mapped.ToArray();
@@ -588,7 +597,7 @@ public partial class DemoBootstrap
             bool linkedHub = false;
             foreach (string parent in node.parents)
             {
-                if (collapsed && techDone.Contains(parent))
+                if (IsCollapsedIntoHub(parent, collapsed))
                 {
                     if (!linkedHub && graphRects.TryGetValue(HubKey, out var hubRect))
                     {
@@ -703,9 +712,9 @@ public partial class DemoBootstrap
         Img(Rect("EraAccent", eraBadge.transform, 0, 8, 6, 28), Gold, spriteRound).raycastTarget = false;
         var ert = eraBadge.GetComponent<RectTransform>(); ert.anchorMin = ert.anchorMax = new Vector2(0, 1); ert.pivot = new Vector2(0, 1); ert.anchoredPosition = new Vector2(24, -198);
 
-        if (!techCollapseDone && techDone.Count > 0)
+        if ((!techCollapseDone || techSessionUnlocked.Count > 0) && techDone.Count > 0)
         {
-            var collapseBtn = Btn(historyControls.transform, "CollapseDoneBtn", "收纳已研节点 ⟲", 20, 336, 0, 204, 44, new Color(0.95f, 0.92f, 0.85f, 0.98f), () => { techCollapseDone = true; OpenTechScreen(1); });
+            var collapseBtn = Btn(historyControls.transform, "CollapseDoneBtn", "收纳已研节点 ⟲", 20, 336, 0, 204, 44, new Color(0.95f, 0.92f, 0.85f, 0.98f), () => { techSessionUnlocked.Clear(); techCollapseDone = true; OpenTechScreen(1); });
             TInk(collapseBtn, Indigo);
             SoftShadow(collapseBtn.gameObject);
             var crt2 = collapseBtn.GetComponent<RectTransform>(); crt2.anchorMin = crt2.anchorMax = new Vector2(0, 1); crt2.pivot = new Vector2(0, 1); crt2.anchoredPosition = new Vector2(336, -198);
@@ -743,6 +752,33 @@ public partial class DemoBootstrap
         historyInfoPanel.SetActive(false);
     }
 
+    struct EraThemeSpec
+    {
+        public string bigNum, volRoman, yearSpan, title, desc, stampText;
+        public Color windowColor, neonColor, antiColor, buttonColor;
+    }
+
+    // 伪立体色彩视差纯文字叠层：外加偏移重影，前景字保持 FontStyle.Normal 锐利清晰
+    void AddChromaticDepthText(Transform parent, string label, int fontSize, float x, float y, float w, float h, TextAnchor align, Color mainCol, Color neonCol, Color antiCol, float shiftX, float shiftY)
+    {
+        var anti = Txt(parent, label, fontSize, antiCol, x + shiftX, y - shiftY, w, h, align);
+        anti.fontStyle = FontStyle.Normal; anti.raycastTarget = false;
+        var mid = Txt(parent, label, fontSize, neonCol, x - shiftX * 0.7f, y + shiftY * 0.7f, w, h, align);
+        mid.fontStyle = FontStyle.Normal; mid.raycastTarget = false;
+        var main = Txt(parent, label, fontSize, mainCol, x, y, w, h, align);
+        main.fontStyle = FontStyle.Normal; main.raycastTarget = false;
+    }
+
+    // 空心霓虹几何边框（由四条细线构成，用于穿透画框边界形成前后景深）
+    void AddNeonOutline(Transform parent, float x, float y, float w, float h, float thickness, Color color)
+    {
+        var box = Rect("NeonBox", parent, x, y, w, h);
+        Img(Rect("Top", box.transform, 0, h - thickness, w, thickness), color).raycastTarget = false;
+        Img(Rect("Bot", box.transform, 0, 0, w, thickness), color).raycastTarget = false;
+        Img(Rect("Left", box.transform, 0, 0, thickness, h), color).raycastTarget = false;
+        Img(Rect("Right", box.transform, w - thickness, 0, thickness, h), color).raycastTarget = false;
+    }
+
     void OpenEraJournalModal(Transform parent)
     {
         if (eraJournalModal) Destroy(eraJournalModal);
@@ -750,7 +786,7 @@ public partial class DemoBootstrap
         var mrt = modal.GetComponent<RectTransform>(); mrt.anchorMin = Vector2.zero; mrt.anchorMax = Vector2.one; mrt.offsetMin = mrt.offsetMax = Vector2.zero;
         eraJournalModal = modal;
 
-        var scrimBg = Img(modal, new Color(0.14f, 0.11f, 0.08f, 0.56f));
+        var scrimBg = Img(modal, new Color(0.08f, 0.09f, 0.13f, 0.62f));
         var closeBtn = modal.AddComponent<Button>(); closeBtn.targetGraphic = scrimBg; closeBtn.transition = Selectable.Transition.None;
         closeBtn.onClick.AddListener(() => { if (eraJournalModal) Destroy(eraJournalModal); eraJournalModal = null; });
 
@@ -760,7 +796,7 @@ public partial class DemoBootstrap
         Rounded(sheet, new Color(0.972f, 0.948f, 0.895f, 0.99f));
         SoftShadow(sheet);
 
-        // 古典双线边框 + 做旧手帐纸胶带
+        // 古典外框 + 顶部手帐胶带
         var frameOuter = Rect("JournalFrame", sheet.transform, 18, 18, cardW - 36, cardH - 36);
         Rounded(frameOuter, new Color(0.65f, 0.50f, 0.28f, 0.14f));
         frameOuter.GetComponent<Image>().raycastTarget = false;
@@ -773,83 +809,138 @@ public partial class DemoBootstrap
         enHeader.fontStyle = FontStyle.Normal;
         var cnHeader = Txt(sheet.transform, "— ◆ 铁道百年 · 时代手帐 ◆ —", 38, Ink, 44, cardH - 144, cardW - 88, 52, TextAnchor.MiddleCenter);
         cnHeader.fontStyle = FontStyle.Normal;
-        var subHeader = Txt(sheet.transform, "翻阅不同纪元的蒸汽、电气与高速轨交图谱", 22, InkSoft, 44, cardH - 184, cardW - 88, 32, TextAnchor.MiddleCenter);
+        var subHeader = Txt(sheet.transform, "色彩视差纯文字手帐 · 点击查阅各纪元脉络", 22, InkSoft, 44, cardH - 184, cardW - 88, 32, TextAnchor.MiddleCenter);
 
         var xClose = Btn(sheet.transform, "CloseJournal", "×", 34, cardW - 96, cardH - 96, 62, 62, new Color(0.92f, 0.87f, 0.78f), () => {
             if (eraJournalModal) Destroy(eraJournalModal); eraJournalModal = null;
         });
         TInk(xClose, Ink);
 
-        string[] volNums = { "VOL. I", "VOL. II", "VOL. III" };
-        string[] volTitles = { "十九世纪 · 蒸汽奠基", "二十世纪 · 内燃电气", "二十一世纪 · 高速智行" };
-        string[] volYears = { "1800 — 1899", "1900 — 1999", "2000 — 以降" };
-        string[] volDescs = {
-            "从高压蒸汽、齿轨试验到自动空气制动；已收编 " + historyNodes.Count + " 项典籍（已完成 " + techDone.Count + " 项）。",
-            "重型大功率蒸汽机、内燃与电气化接触网、流线型高速列车陆续登上舞台。",
-            "高速动车组、智能全网调度与超导磁浮干线，绘就当代轨道交通新篇。"
+        // 三张不同色彩主题的裸眼 3D 伪立体纯文字卡片（红蓝电光 / 绛紫荧光青 / 幽翠朱橙）
+        EraThemeSpec[] eras =
+        {
+            new EraThemeSpec {
+                bigNum = "19", volRoman = "XIX CENTURY", yearSpan = "1800 — 1899",
+                title = "十九世纪 · 蒸汽奠基",
+                desc = "高压蒸汽、齿轨试行至连续制动；已收编 " + historyNodes.Count + " 项典籍（已完成 " + techDone.Count + " 项）。",
+                stampText = "现行编纂",
+                windowColor = new Color(0.04f, 0.11f, 0.78f),
+                neonColor = new Color(1.00f, 0.14f, 0.56f),
+                antiColor = new Color(0.05f, 0.88f, 1.00f),
+                buttonColor = new Color(0.90f, 0.14f, 0.50f)
+            },
+            new EraThemeSpec {
+                bigNum = "20", volRoman = "XX CENTURY", yearSpan = "1900 — 1999",
+                title = "二十世纪 · 内燃电气",
+                desc = "大功率蒸汽干线、内燃与接触网电气化、流线型城际快车相继登场。",
+                stampText = "待启卷册",
+                windowColor = new Color(0.24f, 0.05f, 0.43f),
+                neonColor = new Color(0.08f, 0.94f, 0.82f),
+                antiColor = new Color(1.00f, 0.24f, 0.62f),
+                buttonColor = new Color(0.38f, 0.20f, 0.58f)
+            },
+            new EraThemeSpec {
+                bigNum = "21", volRoman = "XXI CENTURY", yearSpan = "2000 — 以降",
+                title = "二十一世纪 · 高速智行",
+                desc = "高速动车组、智能联锁全网调度与磁浮新制式，开启当代轨交新纪元。",
+                stampText = "远景档案",
+                windowColor = new Color(0.02f, 0.24f, 0.23f),
+                neonColor = new Color(1.00f, 0.36f, 0.12f),
+                antiColor = new Color(0.32f, 0.86f, 1.00f),
+                buttonColor = new Color(0.12f, 0.38f, 0.36f)
+            }
         };
-        string[] stampTexts = { "现行编纂", "待启卷册", "远景档案" };
-        Color[] stampCols = { Vermilion, Indigo, new Color(0.56f, 0.42f, 0.22f) };
 
-        for (int i = 0; i < 3; i++)
+        float itemW = cardW - 92f;
+        const float itemH = 260f;
+        for (int i = 0; i < eras.Length; i++)
         {
             int idx = i;
+            var spec = eras[i];
             bool activeEra = i == 0;
-            float cy = cardH - 472f - i * 282f;
-            var vol = Rect("EraVolume_" + i, sheet.transform, 46, cy, cardW - 92, 254);
-            Rounded(vol, activeEra ? new Color(1f, 0.992f, 0.968f) : new Color(0.955f, 0.935f, 0.892f));
+            float cy = cardH - 476f - i * 284f;
+
+            // 外层深黑景深画框：上下黑边配合内嵌鲜艳色窗，打造强对比裸眼 3D 视窗
+            var vol = Rect("EraVolume_" + i, sheet.transform, 46, cy, itemW, itemH);
+            Rounded(vol, new Color(0.04f, 0.05f, 0.08f, 0.98f));
             SoftShadow(vol);
-            Img(Rect("VolBar", vol.transform, 0, 22, 8, 210), stampCols[i], spriteRound).raycastTarget = false;
 
-            // 左侧深色景深立体画框 + 机车微微越出右框线的裸眼 3D 破框感
-            var artDepthShadow = Rect("ArtDepth", vol.transform, 18, 20, 220, 202);
-            Rounded(artDepthShadow, new Color(0.14f, 0.17f, 0.25f, 0.35f));
-            artDepthShadow.GetComponent<Image>().raycastTarget = false;
-            var artFrame = Rect("ArtFrame", vol.transform, 24, 26, 220, 202);
-            Rounded(artFrame, new Color(0.16f, 0.19f, 0.27f, 0.96f));
-            artFrame.GetComponent<Image>().raycastTarget = false;
-            var raw = Rect("ArtTex", artFrame.transform, 12, 34, 214, 152).AddComponent<RawImage>();
-            raw.texture = Resources.Load<Texture2D>("Research/Train/" + LocoArtForEra(i)); raw.raycastTarget = false;
-            if (!activeEra) raw.color = new Color(1f, 1f, 1f, 0.88f);
-            if (raw.texture)
+            // 中层高饱和色场窗（上下各留 14px 黑曜画框形成深邃窗格）
+            var colorWin = Rect("ColorWindow", vol.transform, 10, 14, itemW - 20f, itemH - 28f);
+            Img(colorWin, spec.windowColor).raycastTarget = false;
+
+            // 装饰几何霓虹星点与双层细线框（故意越出内色窗上下边压在黑框上，营造跃屏破框感）
+            var gridCross = Rect("HoloLine", colorWin.transform, 248, 22, 2, itemH - 72f);
+            Img(gridCross, new Color(spec.antiColor.r, spec.antiColor.g, spec.antiColor.b, 0.38f)).raycastTarget = false;
+            AddNeonOutline(vol.transform, 22, 6, 214, itemH - 12f, 2.5f, new Color(spec.neonColor.r, spec.neonColor.g, spec.neonColor.b, 0.85f));
+            AddNeonOutline(vol.transform, 28, 12, 214, itemH - 12f, 1.5f, new Color(spec.antiColor.r, spec.antiColor.g, spec.antiColor.b, 0.45f));
+
+            // 几枚简洁霓虹微尘圆环点缀，呼应霓虹手绘质感
+            float[] sparkX = { 36, 198, 216, 48 };
+            float[] sparkY = { 206, 216, 46, 38 };
+            for (int s = 0; s < sparkX.Length; s++)
             {
-                float ratio = (float)raw.texture.width / raw.texture.height;
-                float iw = Mathf.Min(236f, 154f * ratio), ih = iw / ratio;
-                raw.rectTransform.sizeDelta = new Vector2(iw, ih);
-                raw.rectTransform.anchoredPosition = new Vector2(18f + (216f - iw) * 0.5f, 34 + (154f - ih) * 0.5f);
+                var dot = Rect("Spark_" + s, vol.transform, sparkX[s], sparkY[s], s % 2 == 0 ? 10 : 7, s % 2 == 0 ? 10 : 7);
+                Img(dot, s % 2 == 0 ? spec.neonColor : spec.antiColor, spriteCircle).raycastTarget = false;
             }
-            var volTag = Txt(artFrame.transform, volNums[i] + "  ·  " + volYears[i], 16, new Color(0.92f, 0.85f, 0.72f), 6, 6, 208, 24, TextAnchor.MiddleCenter);
-            volTag.fontStyle = FontStyle.Normal; volTag.raycastTarget = false;
 
-            // 右侧排版（留足右侧邮戳空间，防止正文斜碰印章）
-            var vTitle = Txt(vol.transform, volTitles[i], 30, Ink, 268, 178, 376, 44, TextAnchor.MiddleLeft);
-            vTitle.fontStyle = FontStyle.Normal;
-            var vDesc = Txt(vol.transform, volDescs[i], 21, InkSoft, 268, 76, 396, 94, TextAnchor.UpperLeft);
+            // 左侧超大伪立体数字与世纪纯文字（错位色差叠层）
+            AddChromaticDepthText(
+                vol.transform, spec.bigNum, 108,
+                18, 66, 222, 138, TextAnchor.MiddleCenter,
+                Color.Lerp(spec.neonColor, Color.white, 0.25f),
+                spec.neonColor,
+                spec.antiColor,
+                5f, 4f
+            );
+            var romanShadow = Txt(vol.transform, spec.volRoman, 16, spec.antiColor, 26, 42, 210, 26, TextAnchor.MiddleCenter);
+            romanShadow.raycastTarget = false;
+            var romanTxt = Txt(vol.transform, spec.volRoman, 16, new Color(1f, 0.98f, 0.96f), 24, 44, 210, 26, TextAnchor.MiddleCenter);
+            romanTxt.raycastTarget = false;
+            var yearTxt = Txt(vol.transform, spec.yearSpan, 17, new Color(0.88f, 0.94f, 1f, 0.85f), 24, 18, 210, 26, TextAnchor.MiddleCenter);
+            yearTxt.raycastTarget = false;
 
-            // 右上斜盖火漆印章
-            var stampGo = Rect("Stamp", vol.transform, (cardW - 92) - 134, 154, 114, 74);
-            stampGo.transform.localRotation = Quaternion.Euler(0, 0, i % 2 == 0 ? 8f : -7f);
-            Rounded(stampGo, new Color(stampCols[i].r, stampCols[i].g, stampCols[i].b, activeEra ? 0.14f : 0.10f));
-            var stampTxt = Txt(stampGo.transform, stampTexts[i], 21, stampCols[i], 4, 4, 110, 70, TextAnchor.MiddleCenter);
-            stampTxt.fontStyle = FontStyle.Normal; stampTxt.raycastTarget = false;
+            // 右侧主标题（轻微单向霓虹色差浮影，保留清晰笔画）+ 高对比净白正文
+            var titleGhost = Txt(vol.transform, spec.title, 31, spec.neonColor, 275, 174, 380, 44, TextAnchor.MiddleLeft);
+            titleGhost.raycastTarget = false;
+            var vTitle = Txt(vol.transform, spec.title, 31, Color.white, 272, 177, 380, 44, TextAnchor.MiddleLeft);
+            vTitle.raycastTarget = false;
 
-            var enterBtn = Btn(vol.transform, "SelectEra" + i, activeEra ? "当前研习此卷 ›" : "敬请期待", 21, 268, 22, 236, 48,
-                activeEra ? Matcha : new Color(0.84f, 0.80f, 0.73f), () => {
+            var vDesc = Txt(vol.transform, spec.desc, 21, new Color(0.94f, 0.96f, 0.99f, 0.90f), 272, 76, 488, 92, TextAnchor.UpperLeft);
+            vDesc.lineSpacing = 1.26f; vDesc.raycastTarget = false;
+
+            // 右上破框立体标牌（外压深色边框，带错位反色底托）
+            var stampShadow = Rect("StampDepth", vol.transform, itemW - 134f, itemH - 64f, 122, 46);
+            Rounded(stampShadow, new Color(spec.antiColor.r, spec.antiColor.g, spec.antiColor.b, 0.72f));
+            stampShadow.GetComponent<Image>().raycastTarget = false;
+            var stampGo = Rect("Stamp", vol.transform, itemW - 140f, itemH - 58f, 122, 46);
+            Rounded(stampGo, new Color(0.05f, 0.06f, 0.10f, 0.96f));
+            stampGo.GetComponent<Image>().raycastTarget = false;
+            var stampTxt = Txt(stampGo.transform, spec.stampText, 20, spec.neonColor, 0, 0, 122, 46, TextAnchor.MiddleCenter);
+            stampTxt.raycastTarget = false;
+
+            var enterBtn = Btn(vol.transform, "SelectEra" + i, activeEra ? "当前研习此卷 ›" : "敬请期待", 21, 272, 24, 236, 46,
+                spec.buttonColor, () => {
                     if (idx == 0) {
                         if (eraJournalModal) Destroy(eraJournalModal);
                         eraJournalModal = null;
                     } else {
-                        Toast("「" + volTitles[idx] + "」典籍尚在编纂整理中");
+                        Toast("「" + eras[idx].title + "」典籍尚在编纂整理中");
                     }
                 });
-            TInk(enterBtn, activeEra ? Color.white : InkSoft);
+            TInk(enterBtn, activeEra ? Color.white : new Color(0.86f, 0.90f, 0.94f));
+
+            var cardTap = vol.AddComponent<Button>();
+            cardTap.targetGraphic = vol.GetComponent<Image>();
+            cardTap.onClick.AddListener(() => {
+                if (idx == 0) {
+                    if (eraJournalModal) Destroy(eraJournalModal);
+                    eraJournalModal = null;
+                } else {
+                    Toast("「" + eras[idx].title + "」典籍尚在编纂整理中");
+                }
+            });
         }
-    }
-    static string LocoArtForEra(int eraIdx)
-    {
-        if (eraIdx == 0) return "art_train_rocket_1829";
-        if (eraIdx == 1) return "art_train_mallard_1938";
-        return "art_train_cr400af";
     }
     static readonly int[] LocoPrices = { 300, 800, 1500, 3200, 6800, 14000, 28000, 65000, 280000 };
     int LocoPrice(int index) { return LocoPrices[Mathf.Clamp(index, 0, LocoPrices.Length - 1)]; }
