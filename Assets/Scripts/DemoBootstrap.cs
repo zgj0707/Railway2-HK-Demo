@@ -82,7 +82,7 @@ public partial class DemoBootstrap : MonoBehaviour
     GameObject sceneryBadge;
 
     // 主题与 IAA 激励状态
-    GameObject paperBgGo, topBarGo, stationFilterGo, speedBoardGo, noticeBoardGo, noticeUnreadDot;
+    GameObject paperBgGo, topBarGo, stationFilterGo, speedBoardGo, noticeBoardGo, noticeUnreadDot, lineLoadLegendGo;
     bool noticeReadThisSession;
     RawImage hkMapRaw, macauMapRaw, guangdongMapRaw, topFadeImg, botFadeImg;
     RawImage[] mapEdgeFeathers;
@@ -388,6 +388,7 @@ public partial class DemoBootstrap : MonoBehaviour
         BuildRightRail();
         BuildBottomNav();
         BuildUndoButton();
+        BuildLineLoadLegend();
         BuildDragCostBadge();
         CreateLineVisuals();
         RefreshAllLines();
@@ -1040,6 +1041,43 @@ public partial class DemoBootstrap : MonoBehaviour
         Img(Rect("Sep3", dock.transform, 776, 30, 1, 96), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f));
     }
 
+    void BuildLineLoadLegend()
+    {
+        GetSafeMarginsInRoot(out float safeL, out float safeR, out _, out float safeB);
+        float safeW = Mathf.Max(320f, RootW - safeL - safeR);
+        float w = Mathf.Clamp(safeW - 252f, 480f, 756f);
+        const float h = 48f;
+        var legend = Rect("LineLoadLegend", root, safeL + (safeW - w) * 0.5f, safeB + 190f, w, h);
+        lineLoadLegendGo = legend;
+        Rounded(legend, new Color(CardBg.r, CardBg.g, CardBg.b, 0.92f));
+        SoftShadow(legend);
+        var btn = legend.AddComponent<Button>();
+        btn.targetGraphic = legend.GetComponent<Image>();
+        btn.onClick.AddListener(() => Toast("线路负荷色：区间客流÷运力 ≥78% 变黄繁忙，≥98% 变红爆满（加车可缓解）"));
+
+        float labelW = Mathf.Round(w * 0.165f);
+        var titleTxt = Txt(legend.transform, "线路颜色", 18, InkSoft, 14f, 0f, labelW - 10f, h, TextAnchor.MiddleLeft);
+        FitSingleLine(titleTxt, 18);
+
+        string[] itemTexts = { "原色 · 畅通", "黄 · 繁忙78%+", "红 · 爆满98%+" };
+        Color[] itemColors = { Indigo, new Color(0.96f, 0.72f, 0.18f, 0.96f), new Color(0.95f, 0.28f, 0.22f, 0.98f) };
+        float itemsLeft = labelW + 4f;
+        float itemW = (w - itemsLeft - 12f) / itemTexts.Length;
+        for (int i = 0; i < itemTexts.Length; i++)
+        {
+            float ix = itemsLeft + i * itemW;
+            var trackSlot = Rect("LegendTrack" + i, legend.transform, ix + 4f, (h - 10f) * 0.5f, 26f, 10f);
+            var outer = Img(trackSlot, new Color(Ink.r, Ink.g, Ink.b, 0.30f), spriteRound);
+            outer.type = Image.Type.Sliced; outer.raycastTarget = false;
+            var core = Rect("Core", trackSlot.transform, 2f, 2f, 22f, 6f);
+            var coreIm = Img(core, itemColors[i], spriteRound);
+            coreIm.type = Image.Type.Sliced; coreIm.raycastTarget = false;
+
+            var txt = Txt(legend.transform, itemTexts[i], 18, Ink, ix + 34f, 0f, itemW - 38f, h, TextAnchor.MiddleLeft);
+            FitSingleLine(txt, 18);
+        }
+    }
+
     float RootW => root ? Mathf.Max(W, root.rect.width) : W;
     float RootH => root ? Mathf.Max(H, root.rect.height) : H;
     float PageSafeHeight
@@ -1137,6 +1175,14 @@ public partial class DemoBootstrap : MonoBehaviour
 
         if (themePreviewBannerGo)
             themePreviewBannerGo.GetComponent<RectTransform>().anchoredPosition = new Vector2(safeL + (safeW - 860f) * 0.5f, dockY + 170f);
+
+        if (lineLoadLegendGo)
+        {
+            var lrt = lineLoadLegendGo.GetComponent<RectTransform>();
+            float lw = lrt.sizeDelta.x;
+            float legendY = themePreviewBannerGo && themePreviewBannerGo.activeSelf ? dockY + 268f : dockY + 174f;
+            lrt.anchoredPosition = new Vector2(safeL + (safeW - lw) * 0.5f, legendY);
+        }
 
         float railMin = dockY + 188f;
         float railMax = Mathf.Max(railMin + 240f, barY - 40f);
@@ -2575,7 +2621,7 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     void DestroyThemePreviewBanner()
     {
-        if (themePreviewBannerGo) { Destroy(themePreviewBannerGo); themePreviewBannerGo = null; }
+        if (themePreviewBannerGo) { Destroy(themePreviewBannerGo); themePreviewBannerGo = null; ApplyResponsiveLayout(false); }
     }
     void ShowThemePreviewBanner(int theme)
     {
@@ -2604,6 +2650,7 @@ public partial class DemoBootstrap : MonoBehaviour
         });
         TInk(exitBtn, Color.white);
         EnsurePreviewBannerOnTop();
+        ApplyResponsiveLayout(false);
     }
     void EnsurePreviewBannerOnTop()
     {
@@ -2624,12 +2671,14 @@ public partial class DemoBootstrap : MonoBehaviour
         if (noticeBoardGo) Destroy(noticeBoardGo);
         if (dock) Destroy(dock);
         if (undoButton) Destroy(undoButton.gameObject);
+        if (lineLoadLegendGo) Destroy(lineLoadLegendGo);
         BuildTopBar();
         BuildLeftRail();
         BuildStationFilterButton();
         BuildRightRail();
         BuildBottomNav();
         BuildUndoButton();
+        BuildLineLoadLegend();
         ApplyResponsiveLayout(false);
         RefreshHUD();
         UpdateTimeText();
