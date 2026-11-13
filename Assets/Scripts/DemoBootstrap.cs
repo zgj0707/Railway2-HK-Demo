@@ -175,6 +175,7 @@ public partial class DemoBootstrap : MonoBehaviour
         qualityTier = Mathf.Clamp(PlayerPrefs.GetInt("visual_quality", 1), 0, 2);
         selectedFrameRate = PlayerPrefs.GetInt("target_fps", 60);
         if (selectedFrameRate != 30 && selectedFrameRate != 60 && selectedFrameRate != 120) selectedFrameRate = 60;
+        fontSizeTier = Mathf.Clamp(PlayerPrefs.GetInt("font_size_tier", 1), 0, FontSizeScales.Length - 1);
         font = Resources.Load<Font>("Fonts/LXGWWenKai-Regular");
         if (font == null) { Debug.LogError("FONT MISSING"); font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); }
         spriteWhite = MakeWhite();
@@ -422,10 +423,10 @@ public partial class DemoBootstrap : MonoBehaviour
         coinBtn.onClick.AddListener(() => Toast("当前账面资金：¥" + Math.Floor(coins).ToString("N0")));
         var coinRing = Rect("CoinRing", c1.transform, 12, 18, 56, 56); Img(coinRing, new Color(0.25f,0.21f,0.17f,0.88f), spriteStationRing).raycastTarget = false;
         var coinIcon = Rect("Icon", coinRing.transform, 4, 4, 48, 48); Img(coinIcon, Gold, spriteCircle).raycastTarget = false;
-        coinTxt = Txt(c1.transform, FormatCoins(coins), 44, Ink, 78, 38, 224, 54, TextAnchor.MiddleLeft);
-        coinTxt.resizeTextForBestFit = true; coinTxt.resizeTextMinSize = 22; coinTxt.resizeTextMaxSize = 44; coinTxt.raycastTarget = false;
-        incomeTxt = Txt(c1.transform, "预计日利润 +240", 23, InkSoft, 78, 8, 226, 30, TextAnchor.MiddleLeft);
-        incomeTxt.resizeTextForBestFit = true; incomeTxt.resizeTextMinSize = 15; incomeTxt.resizeTextMaxSize = 23; incomeTxt.raycastTarget = false;
+        coinTxt = Txt(c1.transform, FormatCoins(coins), 42, Ink, 78, 42, 224, 44, TextAnchor.MiddleLeft);
+        coinTxt.resizeTextForBestFit = true; coinTxt.resizeTextMinSize = 22; coinTxt.resizeTextMaxSize = ScaledFontSize(42, 1.15f); coinTxt.verticalOverflow = VerticalWrapMode.Truncate; coinTxt.raycastTarget = false;
+        incomeTxt = Txt(c1.transform, "预计日利润 +240", 22, InkSoft, 78, 10, 226, 28, TextAnchor.MiddleLeft);
+        incomeTxt.resizeTextForBestFit = true; incomeTxt.resizeTextMinSize = 13; incomeTxt.resizeTextMaxSize = ScaledFontSize(22, 1.15f); incomeTxt.verticalOverflow = VerticalWrapMode.Truncate; incomeTxt.raycastTarget = false;
 
         var cap = Rect("Cap", bar.transform, 354, 26, 400, 162); Rounded(cap, CardBg); SoftShadow(cap);
         topBarCapRt = cap.GetComponent<RectTransform>();
@@ -434,6 +435,7 @@ public partial class DemoBootstrap : MonoBehaviour
         tape.transform.localRotation = Quaternion.Euler(0, 0, -1.5f);
         string regTitle = currentRegion == "香港" ? "香 港" : currentRegion == "澳门" ? "澳 门" : "广 东";
         var title = Txt(cap.transform, regTitle, 48, Ink, 0, 106, 400, 52, TextAnchor.MiddleCenter);
+        title.fontSize = ScaledFontSize(48, 1.22f);
         regionTitle = title;
         var regionEntry = cap.AddComponent<Button>(); regionEntry.targetGraphic = cap.GetComponent<Image>();
         regionEntry.onClick.AddListener(OpenRegionScreen);
@@ -629,7 +631,7 @@ public partial class DemoBootstrap : MonoBehaviour
                 Img(innerDot, Color.white, spriteCircle).raycastTarget = false;
             }
             var sp = go.AddComponent<StationPress>(); sp.index = i; sp.boot = this;
-            var label = Txt(go.transform, StationDisplayName(i, currentRegion), s.portal ? 20 : 24, new Color(0.16f,0.14f,0.11f,0.96f), -94, -46, 220, 34, TextAnchor.MiddleCenter);
+            var label = Txt(go.transform, StationDisplayName(i, currentRegion), s.portal ? 22 : 24, new Color(0.16f,0.14f,0.11f,0.96f), -94, -46, 220, 34, TextAnchor.MiddleCenter);
             TextShadow(label, new Color(0.99f,0.98f,0.94f,0.95f));
             if (s.county) { label.resizeTextForBestFit = true; label.resizeTextMinSize = 14; label.resizeTextMaxSize = 24; label.verticalOverflow = VerticalWrapMode.Truncate; }
             stationLabels[i] = label;
@@ -644,7 +646,36 @@ public partial class DemoBootstrap : MonoBehaviour
             stationImgs[i] = img;
             go.SetActive(StationInRegion(i, currentRegion));
         }
+        UpdateStationLabelSizes(mapRect ? mapRect.localScale.x : 1f);
         LayoutStationLabels();
+    }
+
+    static float StationZoomFontBoost(float scale)
+    {
+        if (scale <= 1.01f) return 1f;
+        return 1f + Mathf.Clamp(Mathf.Log(scale, 2f) * 0.24f, 0f, 0.65f);
+    }
+
+    void UpdateStationLabelSizes(float scale)
+    {
+        float labelScale = Mathf.Min(2.05f, UiFontScale * StationZoomFontBoost(scale));
+        for (int i = 0; i < stations.Count; i++)
+        {
+            var s = stations[i];
+            if (stationLabels.TryGetValue(i, out var label) && label)
+            {
+                int baseSize = s.portal ? 22 : 24;
+                int targetSize = Mathf.Clamp(Mathf.RoundToInt(baseSize * labelScale), 16, 52);
+                label.fontSize = targetSize;
+                if (s.county)
+                {
+                    label.resizeTextMinSize = Mathf.Clamp(Mathf.RoundToInt(targetSize * 0.65f), 14, targetSize);
+                    label.resizeTextMaxSize = targetSize;
+                }
+            }
+            if (stationDestinations.TryGetValue(i, out var dest) && dest)
+                dest.fontSize = Mathf.Clamp(Mathf.RoundToInt(18 * labelScale), 13, 38);
+        }
     }
 
     // 站名摆放：优先贴近圆点，挤不下就往外挪并用引导线连回去。
@@ -655,40 +686,45 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         if (!stationLabels.TryGetValue(i, out var label) || !label) return false;
         float scale = mapRect ? mapRect.localScale.x : 1f;
+        float labelScale = Mathf.Min(2.05f, UiFontScale * StationZoomFontBoost(scale));
+        float sizeMult = Mathf.Max(1f, labelScale);
+        float viewW = RootW, viewH = RootH;
         Vector2 pan = mapRect ? mapRect.anchoredPosition : Vector2.zero;
         Vector2 center = pan + Pos(i) * scale;
-        float subtitleWidth = stationDestinations.TryGetValue(i, out var subtitle) ? subtitle.preferredWidth + 12f : 0f;
-        float width = Mathf.Clamp(Mathf.Max(label.preferredWidth + 12f, subtitleWidth), 52f, 180f);
-        const float height = 30f;
-        float destHeight = stationDestinations.ContainsKey(i) ? 21f : 0f;
+        float subtitleWidth = stationDestinations.TryGetValue(i, out var subtitle) ? subtitle.preferredWidth + 14f : 0f;
+        float width = Mathf.Clamp(Mathf.Max(label.preferredWidth + 14f, subtitleWidth), 56f, 220f * sizeMult);
+        float height = Mathf.Ceil(32f * sizeMult);
+        float destHeight = stationDestinations.ContainsKey(i) ? Mathf.Ceil(22f * sizeMult) : 0f;
         // 16 个候选位：前 8 个贴着圆点，后 8 个更远，用引导线连回
         var offsets = new List<Vector2> {
-            new Vector2(-width/2, -48-destHeight), new Vector2(-width/2, 22),
-            new Vector2(27, -height/2), new Vector2(-width-27, -height/2),
-            new Vector2(42, 24), new Vector2(-width-42, 24),
-            new Vector2(42, -52-destHeight), new Vector2(-width-42, -52-destHeight),
-            new Vector2(-width/2, -84-destHeight), new Vector2(-width/2, 58),
-            new Vector2(74, -height/2), new Vector2(-width-74, -height/2),
-            new Vector2(96, 58), new Vector2(-width-96, 58),
-            new Vector2(96, -92-destHeight), new Vector2(-width-96, -92-destHeight)
+            new Vector2(-width/2, -20f-height-destHeight), new Vector2(-width/2, 22f),
+            new Vector2(27f, -height/2), new Vector2(-width-27f, -height/2),
+            new Vector2(42f, 24f), new Vector2(-width-42f, 24f),
+            new Vector2(42f, -24f-height-destHeight), new Vector2(-width-42f, -24f-height-destHeight),
+            new Vector2(-width/2, -56f-height-destHeight), new Vector2(-width/2, 58f),
+            new Vector2(74f, -height/2), new Vector2(-width-74f, -height/2),
+            new Vector2(96f, 58f), new Vector2(-width-96f, 58f),
+            new Vector2(96f, -64f-height-destHeight), new Vector2(-width-96f, -64f-height-destHeight)
         };
         // 密集区域扩大搜索范围，优先找不重叠的位置。
+        float radiusMult = Mathf.Max(1f, labelScale * 0.9f);
         for (int radius = 130; radius <= 310; radius += 90)
             for (int direction = 0; direction < 8; direction++)
             {
                 float angle = direction * Mathf.PI / 4f;
-                offsets.Add(new Vector2(Mathf.Cos(angle) * radius - width / 2f,
-                    Mathf.Sin(angle) * radius - (height + destHeight) / 2f));
+                float r = radius * radiusMult;
+                offsets.Add(new Vector2(Mathf.Cos(angle) * r - width / 2f,
+                    Mathf.Sin(angle) * r - (height + destHeight) / 2f));
             }
         // 屏幕边缘的圆点也尽量把名称放进画面。
-        offsets.Add(new Vector2(Mathf.Clamp(center.x - width / 2f, 4f, W - width - 4f) - center.x,
-            Mathf.Clamp(center.y + 22f, 4f, H - height - destHeight - 4f) - center.y));
+        offsets.Add(new Vector2(Mathf.Clamp(center.x - width / 2f, 4f, Mathf.Max(4f, viewW - width - 4f)) - center.x,
+            Mathf.Clamp(center.y + 22f, 4f, Mathf.Max(4f, viewH - height - destHeight - 4f)) - center.y));
         float best = float.PositiveInfinity; int chosen = 0;
         for (int k = 0; k < offsets.Count; k++)
         {
             var rect = new Rect(center.x + offsets[k].x, center.y + offsets[k].y, width, height + destHeight);
             float penalty = k * 2f;
-            if (rect.xMin < 4 || rect.xMax > W-4 || rect.yMin < 4 || rect.yMax > H-4) penalty += 10000;
+            if (rect.xMin < 4 || rect.xMax > viewW-4 || rect.yMin < 4 || rect.yMax > viewH-4) penalty += 10000;
             for (int q = 0; q < occupied.Count; q++) if (rect.Overlaps(occupied[q])) penalty += 1000;
             for (int j = 0; j < stations.Count; j++)
             {
@@ -822,6 +858,7 @@ public partial class DemoBootstrap : MonoBehaviour
         regionalMarkerPos = pan;
         ApplyZoomToOverlays(scale);
         if (stationImgs.Count == 0) { if (zoomNotice) zoomNotice.SetActive(false); return; }
+        UpdateStationLabelSizes(scale);
 
         // 站点标记按 1/zoom 反向补偿，放大地图不会把图标放大到盖住屏幕
         foreach (var kv in stationImgs) kv.Value.transform.parent.localScale = Vector3.one / scale;
@@ -942,7 +979,7 @@ public partial class DemoBootstrap : MonoBehaviour
         Rounded(tag, new Color(Paper2.r, Paper2.g, Paper2.b, 0.72f));
         string[] filterShort = { "全部", "地级市以上", "除市辖区" };
         stationFilterText = Txt(tag.transform, filterShort[Mathf.Clamp(stationFilter, 0, 2)], 15, InkSoft, 0, 0, 76, 26, TextAnchor.MiddleCenter);
-        stationFilterText.resizeTextForBestFit = true; stationFilterText.resizeTextMinSize = 13; stationFilterText.resizeTextMaxSize = 15;
+        stationFilterText.resizeTextForBestFit = true; stationFilterText.resizeTextMinSize = Mathf.Max(11, ScaledFontSize(12)); stationFilterText.resizeTextMaxSize = ScaledFontSize(15);
         var control = button.AddComponent<Button>(); control.targetGraphic = button.GetComponent<Image>();
         control.onClick.AddListener(CycleStationFilter);
     }
@@ -2193,22 +2230,23 @@ public partial class DemoBootstrap : MonoBehaviour
     Text Txt(Transform p, string s, int size, Color c, float x, float y, float w, float h, TextAnchor a)
     {
         var go = Rect("T", p, x, y, w, h);
-        var t = go.AddComponent<Text>(); t.font = font; t.fontSize = size; t.color = c; t.text = DisplayPlaceAliases(s);
+        var t = go.AddComponent<Text>(); t.font = font; t.fontSize = ScaledFontSize(size); t.color = c; t.text = DisplayPlaceAliases(s);
         t.alignment = a; t.horizontalOverflow = HorizontalWrapMode.Wrap; t.verticalOverflow = VerticalWrapMode.Overflow;
         t.raycastTarget = false;
         return t;
     }
     float MeasureTextHeight(string value, int size, float width)
     {
-        var settings = new TextGenerationSettings { font = font, fontSize = size, color = Color.white,
+        var settings = new TextGenerationSettings { font = font, fontSize = ScaledFontSize(size), color = Color.white,
             scaleFactor = 1, lineSpacing = 1, richText = true, generationExtents = new Vector2(width, 0),
             horizontalOverflow = HorizontalWrapMode.Wrap, verticalOverflow = VerticalWrapMode.Overflow };
         return Mathf.Ceil(new TextGenerator().GetPreferredHeight(DisplayPlaceAliases(value), settings));
     }
     void FitSingleLine(Text text, int size)
     {
-        text.resizeTextForBestFit = true; text.resizeTextMinSize = Mathf.Max(12, size - 10);
-        text.resizeTextMaxSize = size; text.horizontalOverflow = HorizontalWrapMode.Wrap;
+        int scaled = ScaledFontSize(size);
+        text.resizeTextForBestFit = true; text.resizeTextMinSize = Mathf.Max(12, Mathf.RoundToInt(size * 0.62f));
+        text.resizeTextMaxSize = scaled; text.horizontalOverflow = HorizontalWrapMode.Wrap;
         text.verticalOverflow = VerticalWrapMode.Truncate;
     }
     Text ScrollableText(Transform parent, string value, int size, Color color, float x, float y, float width, float height)
@@ -2228,8 +2266,9 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         var go = Rect(name, p, x, y, w, h);
         var im = Img(go, c, spriteRound); im.type = Image.Type.Sliced;
+        int scaled = ScaledFontSize(size);
         var t = Txt(go.transform, label, size, new Color(1,0.98f,0.94f), 0, 0, w, h, TextAnchor.MiddleCenter);
-        t.resizeTextForBestFit = true; t.resizeTextMinSize = Mathf.Max(12, size - 8); t.resizeTextMaxSize = size;
+        t.resizeTextForBestFit = true; t.resizeTextMinSize = Mathf.Max(11, Mathf.RoundToInt(size * 0.62f)); t.resizeTextMaxSize = scaled;
         t.verticalOverflow = VerticalWrapMode.Truncate;
         var b = go.AddComponent<Button>(); b.targetGraphic = im; b.onClick.AddListener(() => onClick());
         return b;

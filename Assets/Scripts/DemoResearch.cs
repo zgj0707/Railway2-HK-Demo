@@ -549,10 +549,10 @@ public partial class DemoBootstrap
 
             // 标题文字：单一字重下使用 FontStyle.Normal 避免伪粗体发糊，改以字号与墨色深浅区分层级
             Color nameColor = locked ? new Color(Ink.r, Ink.g, Ink.b, 0.48f) : Ink;
-            int nameMaxSize = ready ? 25 : 23;
+            int nameMaxSize = ScaledFontSize(ready ? 25 : 23, 1.24f);
             var name = Txt(card.transform, node.name, nameMaxSize, nameColor, 6, node.loco >= 0 ? 83 : 62, 188, node.loco >= 0 ? 32 : 48, TextAnchor.MiddleCenter);
             name.fontStyle = FontStyle.Normal;
-            name.resizeTextForBestFit = true; name.resizeTextMinSize = 18; name.resizeTextMaxSize = nameMaxSize;
+            name.resizeTextForBestFit = true; name.resizeTextMinSize = 16; name.resizeTextMaxSize = nameMaxSize;
 
             if (node.loco >= 0)
             {
@@ -571,7 +571,7 @@ public partial class DemoBootstrap
             string label = node.loco >= 0 ? "机车" : node.effect == ResearchEffect.None ? "运营解锁" : HistoryEffectText(node).Replace(" 基础值（同类收益递减）", "");
             Color labelColor = locked ? new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.45f) : InkSoft;
             var labelText = Txt(card.transform, label + (done ? " · 已解锁" : ready ? " · 可解锁" : " · 前置不足"), 17, labelColor, 6, 20, 188, 30, TextAnchor.MiddleCenter);
-            labelText.resizeTextForBestFit = true; labelText.resizeTextMinSize = 12; labelText.resizeTextMaxSize = 17;
+            labelText.resizeTextForBestFit = true; labelText.resizeTextMinSize = 12; labelText.resizeTextMaxSize = ScaledFontSize(17, 1.24f);
             var touch = card.AddComponent<HistoryNodeTouch>(); string key = node.key;
             touch.onTap = () => TapHistoryNode(key); touch.onHold = () => HoldHistoryNode(key); touch.onRelease = HideHistoryInfo;
             bool newlyVisible = historyJustUnlocked != null && !historyAnimated.Contains(key);
@@ -647,7 +647,7 @@ public partial class DemoBootstrap
         var titleRt = titleCard.GetComponent<RectTransform>(); titleRt.anchorMin = titleRt.anchorMax = new Vector2(0,1); titleRt.pivot = new Vector2(0,1); titleRt.anchoredPosition = new Vector2(254,-45);
         var title = Txt(titleCard.transform, "铁路典籍 · 科技树", 34, Ink, 0, 0, 0, 0, TextAnchor.MiddleLeft);
         title.fontStyle = FontStyle.Normal; title.raycastTarget = false;
-        title.resizeTextForBestFit = true; title.resizeTextMinSize = 20; title.resizeTextMaxSize = 34;
+        title.resizeTextForBestFit = true; title.resizeTextMinSize = 18; title.resizeTextMaxSize = ScaledFontSize(34);
         var titleTextRt = title.rectTransform; titleTextRt.anchorMin = Vector2.zero; titleTextRt.anchorMax = Vector2.one;
         titleTextRt.offsetMin = new Vector2(20, 4); titleTextRt.offsetMax = new Vector2(-148, -4);
         var titleSub = Txt(titleCard.transform, "XIX · ARCHIVE", 15, new Color(0.58f, 0.45f, 0.28f, 0.85f), 0, 0, 0, 0, TextAnchor.MiddleRight);
@@ -671,7 +671,7 @@ public partial class DemoBootstrap
         var coinIcon = Rect("Icon", coinRing.transform, 4, 4, 48, 48);
         Img(coinIcon, Gold, spriteCircle).raycastTarget = false;
         var coinText = Txt(coinShakeTarget.transform, FormatCoins(coins), 36, Ink, 82, 18, 126, 58, TextAnchor.MiddleLeft);
-        coinText.resizeTextForBestFit = true; coinText.resizeTextMinSize = 18; coinText.resizeTextMaxSize = 36;
+        coinText.resizeTextForBestFit = true; coinText.resizeTextMinSize = 16; coinText.resizeTextMaxSize = ScaledFontSize(36);
 
         var widget = coinBadge.AddComponent<TechCoinWidget>();
         widget.shakeTarget = coinShakeTarget.GetComponent<RectTransform>();
@@ -699,7 +699,7 @@ public partial class DemoBootstrap
         headerLayout.AddSafeTopLeftTarget(rrt, new Vector2(286, -138));
         var rpDot = Rect("RPDot", rpBadge.transform, 16, 16, 18, 18); Img(rpDot, Indigo, spriteCircle).raycastTarget = false;
         historyRpText = Txt(rpBadge.transform, "科研点  " + Mathf.FloorToInt(rp) + " RP", 22, Indigo, 42, 8, 206, 34, TextAnchor.MiddleLeft);
-        historyRpText.resizeTextForBestFit = true; historyRpText.resizeTextMinSize = 16; historyRpText.resizeTextMaxSize = 22; historyRpText.raycastTarget = false;
+        historyRpText.resizeTextForBestFit = true; historyRpText.resizeTextMinSize = 15; historyRpText.resizeTextMaxSize = ScaledFontSize(22); historyRpText.raycastTarget = false;
         var rpHelpHint = Txt(rpBadge.transform, "?", 20, InkSoft, 250, 8, 28, 34, TextAnchor.MiddleCenter);
         rpHelpHint.raycastTarget = false;
         var rpTouch = rpBadge.AddComponent<HistoryNodeTouch>();
@@ -753,7 +753,7 @@ public partial class DemoBootstrap
         var hrt = historyHeading.rectTransform; hrt.anchorMin = new Vector2(0, 1); hrt.anchorMax = new Vector2(1, 1); hrt.pivot = new Vector2(0.5f, 1); hrt.offsetMin = new Vector2(28, -62); hrt.offsetMax = new Vector2(-28, -16);
         historyInfo = Txt(info.transform, "", 24, InkSoft, 28, 24, 844, 210, TextAnchor.UpperLeft);
         var infoBodyRt = historyInfo.rectTransform; infoBodyRt.anchorMin = Vector2.zero; infoBodyRt.anchorMax = Vector2.one; infoBodyRt.offsetMin = new Vector2(28, 20); infoBodyRt.offsetMax = new Vector2(-28, -68);
-        historyInfo.resizeTextForBestFit = true; historyInfo.resizeTextMinSize = 18; historyInfo.resizeTextMaxSize = 24;
+        historyInfo.resizeTextForBestFit = true; historyInfo.resizeTextMinSize = 17; historyInfo.resizeTextMaxSize = ScaledFontSize(24);
         historyInfoPanel.SetActive(false);
     }
 

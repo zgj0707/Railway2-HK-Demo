@@ -257,8 +257,8 @@ public partial class DemoBootstrap
         label.color = Ink;
         label.alignment = TextAnchor.MiddleLeft;
         label.resizeTextForBestFit = true;
-        label.resizeTextMinSize = 26;
-        label.resizeTextMaxSize = 44;
+        label.resizeTextMinSize = 24;
+        label.resizeTextMaxSize = ScaledFontSize(44);
         Txt(parent, "运营详情", 25, InkSoft, 480, h - 77, 200, 50, TextAnchor.MiddleLeft);
 
         var editor = Rect("RenameEditor", parent, 28, h - 88, 740, 76);

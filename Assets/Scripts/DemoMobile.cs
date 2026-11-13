@@ -57,6 +57,22 @@ public partial class DemoBootstrap
         PlayerPrefs.SetInt("visual_quality", qualityTier); PlayerPrefs.Save();
         ApplyVisualQuality();
     }
+    int fontSizeTier = 1; // 0: 紧凑, 1: 标准, 2: 偏大, 3: 特大
+    static readonly string[] FontSizeTierNames = { "紧凑", "标准", "偏大", "特大" };
+    static readonly float[] FontSizeScales = { 0.90f, 1.00f, 1.16f, 1.32f };
+    float UiFontScale => FontSizeScales[Mathf.Clamp(fontSizeTier, 0, FontSizeScales.Length - 1)];
+    int ScaledFontSize(int baseSize, float maxScale = 1.32f)
+        => Mathf.Max(10, Mathf.RoundToInt(baseSize * Mathf.Min(UiFontScale, maxScale)));
+    void SetFontSizeTier(int tier)
+    {
+        fontSizeTier = Mathf.Clamp(tier, 0, FontSizeScales.Length - 1);
+        PlayerPrefs.SetInt("font_size_tier", fontSizeTier); PlayerPrefs.Save();
+        if (dragCostBadge) { Destroy(dragCostBadge); dragCostBadge = null; BuildDragCostBadge(); }
+        if (zoomNoticeTxt) zoomNoticeTxt.fontSize = ScaledFontSize(22);
+        if (root) RebuildChromeUI();
+        UpdateStationLabelSizes(mapRect ? mapRect.localScale.x : 1f);
+        UpdateRegionalMarkers(true);
+    }
     Image dragTip; int dragFrom = -1, hoverStation = -1;
     GameObject dock; List<Image> stationRings = new List<Image>();
     int pulseIdx = -1; float pulseTimer;
@@ -82,26 +98,40 @@ public partial class DemoBootstrap
     }
     void OpenAudioSettings()
     {
-        var bubble = OpenBubble("设置", 850, 680, new Vector2(100, H - 250));
-        Txt(bubble.transform, "画面质量", 27, InkSoft, 34, 685, 550, 44, TextAnchor.MiddleLeft);
+        var bubble = OpenBubble("设置", 990, 680, new Vector2(100, H - 180));
+        Txt(bubble.transform, "画面质量", 27, InkSoft, 34, 835, 550, 44, TextAnchor.MiddleLeft);
         string[] levels = { "低", "中", "高" };
         for (int i = 0; i < levels.Length; i++) {
             int selected = i;
             var quality = Btn(bubble.transform, "Quality" + i, levels[i] + (qualityTier == i ? " · 当前" : ""), 26,
-                34 + i * 205, 590, 190, 78, qualityTier == i ? Indigo : Paper2, () => { SetVisualQuality(selected); OpenAudioSettings(); });
+                34 + i * 205, 745, 190, 76, qualityTier == i ? Indigo : Paper2, () => { SetVisualQuality(selected); OpenAudioSettings(); });
             TInk(quality, qualityTier == i ? Color.white : Ink);
         }
-        Txt(bubble.transform, "帧率上限", 27, InkSoft, 34, 520, 550, 44, TextAnchor.MiddleLeft);
+        Txt(bubble.transform, "帧率上限", 27, InkSoft, 34, 675, 550, 44, TextAnchor.MiddleLeft);
         for (int i = 0; i < FrameRateOptions.Length; i++) {
             int fps = FrameRateOptions[i];
             var choice = Btn(bubble.transform, "FrameRate" + fps, fps + " FPS" + (selectedFrameRate == fps ? " · 当前" : ""), 24,
-                34 + i * 205, 430, 190, 78, selectedFrameRate == fps ? Indigo : Paper2, () => { SetFrameRate(fps); OpenAudioSettings(); });
+                34 + i * 205, 585, 190, 76, selectedFrameRate == fps ? Indigo : Paper2, () => { SetFrameRate(fps); OpenAudioSettings(); });
             TInk(choice, selectedFrameRate == fps ? Color.white : Ink);
         }
-        Txt(bubble.transform, "实际帧率取决于屏幕刷新率和设备性能", 21, InkSoft, 34, 380, 612, 36, TextAnchor.MiddleLeft);
+        Txt(bubble.transform, "实际帧率取决于屏幕刷新率和设备性能", 21, InkSoft, 34, 540, 612, 34, TextAnchor.MiddleLeft);
 
-        Txt(bubble.transform, "界面风格", 27, InkSoft, 34, 315, 350, 44, TextAnchor.MiddleLeft);
-        var moreTheme = Btn(bubble.transform, "ThemeShopLink", "商店 / 试用解锁 ›", 21, 410, 318, 236, 40, Paper2, () => { ClosePanel(true); OpenThemeShopScreen(); });
+        Txt(bubble.transform, "字体大小", 27, InkSoft, 34, 470, 550, 44, TextAnchor.MiddleLeft);
+        for (int i = 0; i < FontSizeTierNames.Length; i++) {
+            int selectedFont = i;
+            bool activeFont = fontSizeTier == i;
+            var fontBtn = Btn(bubble.transform, "FontSize" + i, FontSizeTierNames[i] + (activeFont ? " ✓" : ""), 24,
+                34 + i * 156, 380, 144, 76, activeFont ? Indigo : Paper2, () => {
+                    SetFontSizeTier(selectedFont);
+                    OpenAudioSettings();
+                    Toast("字体大小已切换为「" + FontSizeTierNames[selectedFont] + "」");
+                });
+            TInk(fontBtn, activeFont ? Color.white : Ink);
+        }
+        Txt(bubble.transform, "当前倍率 " + Mathf.RoundToInt(UiFontScale * 100f) + "% · 地图放大时站名也会清晰增大", 21, InkSoft, 34, 335, 612, 34, TextAnchor.MiddleLeft);
+
+        Txt(bubble.transform, "界面风格", 27, InkSoft, 34, 265, 350, 44, TextAnchor.MiddleLeft);
+        var moreTheme = Btn(bubble.transform, "ThemeShopLink", "商店 / 试用解锁 ›", 21, 410, 268, 236, 40, Paper2, () => { ClosePanel(true); OpenThemeShopScreen(); });
         TInk(moreTheme, Indigo);
         float innerThemeW = 612f;
         float themeGap = 10f;
@@ -112,7 +142,7 @@ public partial class DemoBootstrap
             bool active = currentTheme == themeIdx && avail && previewRestoreTheme < 0;
             string label = Themes[themeIdx].shortName + (active ? " ✓" : avail ? "" : " · 锁");
             var tb = Btn(bubble.transform, "ThemeBtn" + i, label, 21,
-                34 + i * (themeBtnW + themeGap), 220, themeBtnW, 78, active ? Indigo : avail ? Paper2 : new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f), () => {
+                34 + i * (themeBtnW + themeGap), 170, themeBtnW, 76, active ? Indigo : avail ? Paper2 : new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f), () => {
                     if (IsThemeAvailable(themeIdx)) {
                         ApplyTheme(themeIdx);
                         SaveGame();
@@ -126,7 +156,7 @@ public partial class DemoBootstrap
             TInk(tb, active ? Color.white : Ink);
         }
 
-        var toggle = Btn(bubble.transform, "MusicToggle", musicEnabled ? "背景音乐：开" : "背景音乐：关", 30, 34, 54, 612, 92, Matcha, () => {
+        var toggle = Btn(bubble.transform, "MusicToggle", musicEnabled ? "背景音乐：开" : "背景音乐：关", 30, 34, 42, 612, 88, Matcha, () => {
             musicEnabled = !musicEnabled;
             if (music) { if (musicEnabled && music.clip) music.Play(); else music.Stop(); }
             ClosePanel(); Toast(musicEnabled ? "背景音乐已开启" : "背景音乐已关闭");
@@ -542,7 +572,7 @@ public partial class DemoBootstrap
         if (amount <= 0) return;
         var go = Rect("Float", floaterLayer, at.x - 60, at.y + 20, 160, 34);
         var t = go.AddComponent<Text>();
-        t.font = font; t.fontSize = 27; t.alignment = TextAnchor.MiddleCenter;
+        t.font = font; t.fontSize = ScaledFontSize(27); t.alignment = TextAnchor.MiddleCenter;
         t.color = FloaterColors[floaterColorRandom.Next(FloaterColors.Length)]; t.text = "+¥" + amount; t.raycastTarget = false;
         var sh = go.AddComponent<Shadow>(); sh.effectColor = new Color(1, 0.99f, 0.95f, 0.85f);
         var f = new Floater { txt = t, rt = go.GetComponent<RectTransform>(), age = 0f };
