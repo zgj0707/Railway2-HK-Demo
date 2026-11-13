@@ -103,13 +103,16 @@ public partial class DemoBootstrap
         Txt(bubble.transform, "界面风格", 27, InkSoft, 34, 315, 350, 44, TextAnchor.MiddleLeft);
         var moreTheme = Btn(bubble.transform, "ThemeShopLink", "商店 / 试用解锁 ›", 21, 410, 318, 236, 40, Paper2, () => { ClosePanel(true); OpenThemeShopScreen(); });
         TInk(moreTheme, Indigo);
+        float innerThemeW = 612f;
+        float themeGap = 10f;
+        float themeBtnW = (innerThemeW - themeGap * Mathf.Max(0, Themes.Length - 1)) / Mathf.Max(1, Themes.Length);
         for (int i = 0; i < Themes.Length; i++) {
             int themeIdx = i;
             bool avail = IsThemeAvailable(themeIdx);
-            bool active = currentTheme == themeIdx && avail;
+            bool active = currentTheme == themeIdx && avail && previewRestoreTheme < 0;
             string label = Themes[themeIdx].shortName + (active ? " ✓" : avail ? "" : " · 锁");
-            var tb = Btn(bubble.transform, "ThemeBtn" + i, label, 23,
-                34 + i * 155, 220, 146, 78, active ? Indigo : avail ? Paper2 : new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f), () => {
+            var tb = Btn(bubble.transform, "ThemeBtn" + i, label, 21,
+                34 + i * (themeBtnW + themeGap), 220, themeBtnW, 78, active ? Indigo : avail ? Paper2 : new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f), () => {
                     if (IsThemeAvailable(themeIdx)) {
                         ApplyTheme(themeIdx);
                         SaveGame();

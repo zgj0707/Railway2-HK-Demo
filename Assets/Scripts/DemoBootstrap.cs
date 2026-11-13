@@ -1886,6 +1886,7 @@ public partial class DemoBootstrap : MonoBehaviour
         FitSingleLine(heading, 34);
         var cb = Btn(activePanel.transform, "Close", "×", 28, w-72, h-68, 52, 52, Paper2, ClosePanel);
         TInk(cb, Ink);
+        if (IsNeonThemeActive()) SoftShadow(activePanel);
         panelOpenedFrame = Time.frameCount + 1;
         return activePanel;
     }
@@ -2032,6 +2033,19 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     void SoftShadow(GameObject go)
     {
+        if (IsNeonThemeActive())
+        {
+            var neonCyan = go.AddComponent<Shadow>();
+            neonCyan.effectColor = new Color(0.06f, 0.94f, 0.92f, 0.48f);
+            neonCyan.effectDistance = new Vector2(3f, -2.5f);
+            neonCyan.enabled = qualityTier > 0;
+
+            var neonPink = go.AddComponent<Shadow>();
+            neonPink.effectColor = new Color(1.00f, 0.14f, 0.58f, 0.46f);
+            neonPink.effectDistance = new Vector2(-3f, 2.5f);
+            neonPink.enabled = qualityTier > 0;
+            return;
+        }
         var sh = go.AddComponent<Shadow>();
         sh.effectColor = new Color(0.16f,0.13f,0.10f,0.16f);
         sh.effectDistance = new Vector2(0, -5);
@@ -2139,11 +2153,15 @@ public partial class DemoBootstrap : MonoBehaviour
         return t;
     }
 
-    // ---------- 主题切换与涂装流派体系 ----------
+    // ---------- 主题切换、实机预览与涂装流派体系 ----------
+    int previewRestoreTheme = -1;
+    GameObject themePreviewBannerGo;
+
     struct ThemeSpec
     {
         public string name, shortName, subtitle;
         public Color paper, paper2, cardBg, headerBg, ink, inkSoft, indigo, matcha, sea, mapTint, fade, backdropTop, backdropBottom;
+        public bool isNeon;
     }
     static readonly ThemeSpec[] Themes = {
         new ThemeSpec {
@@ -2185,8 +2203,24 @@ public partial class DemoBootstrap : MonoBehaviour
             sea = new Color(0.420f, 0.495f, 0.620f), mapTint = new Color(0.86f, 0.84f, 0.95f, 1f),
             fade = new Color(0.90f, 0.89f, 0.94f, 0.90f),
             backdropTop = new Color(0.52f, 0.56f, 0.70f, 1f), backdropBottom = new Color(0.34f, 0.38f, 0.52f, 1f)
+        },
+        new ThemeSpec {
+            name = "幻夜霓虹", shortName = "霓虹", subtitle = "3D 视界 · 护眼黑曜夜图配荧光青红立体撞色",
+            paper = new Color(0.055f, 0.062f, 0.145f), paper2 = new Color(0.115f, 0.125f, 0.255f),
+            cardBg = new Color(0.088f, 0.095f, 0.205f, 0.97f), headerBg = new Color(0.042f, 0.048f, 0.115f),
+            ink = new Color(0.95f, 0.98f, 1.00f), inkSoft = new Color(0.62f, 0.74f, 0.96f),
+            indigo = new Color(0.94f, 0.14f, 0.56f), matcha = new Color(0.08f, 0.84f, 0.76f),
+            sea = new Color(0.045f, 0.065f, 0.220f), mapTint = new Color(0.46f, 0.52f, 0.78f, 1f),
+            fade = new Color(0.040f, 0.050f, 0.140f, 0.92f),
+            backdropTop = new Color(0.04f, 0.07f, 0.26f, 1f), backdropBottom = new Color(0.02f, 0.02f, 0.08f, 1f),
+            isNeon = true
         }
     };
+
+    bool IsNeonThemeActive()
+    {
+        return Themes[Mathf.Clamp(currentTheme, 0, Themes.Length - 1)].isNeon;
+    }
 
     static long NowUnixSeconds() { return DateTimeOffset.UtcNow.ToUnixTimeSeconds(); }
     bool IsThemeTrialActive(int theme)
@@ -2213,9 +2247,14 @@ public partial class DemoBootstrap : MonoBehaviour
         Paper = spec.paper; Paper2 = spec.paper2; CardBg = spec.cardBg; HeaderBg = spec.headerBg;
         Ink = spec.ink; InkSoft = spec.inkSoft; Indigo = spec.indigo; Matcha = spec.matcha; Sea = spec.sea;
     }
-    void ApplyTheme(int theme, bool rebuildUI = true)
+    void ApplyTheme(int theme, bool rebuildUI = true, bool isPreview = false)
     {
         theme = Mathf.Clamp(theme, 0, Themes.Length - 1);
+        if (!isPreview)
+        {
+            previewRestoreTheme = -1;
+            DestroyThemePreviewBanner();
+        }
         currentTheme = theme;
         ApplyThemeColors(theme);
         var spec = Themes[theme];
@@ -2236,7 +2275,93 @@ public partial class DemoBootstrap : MonoBehaviour
         if (guangdongMapRaw) guangdongMapRaw.color = spec.mapTint;
         if (topFadeImg) topFadeImg.color = new Color(spec.fade.r, spec.fade.g, spec.fade.b, 0.92f);
         if (botFadeImg) botFadeImg.color = new Color(spec.fade.r, spec.fade.g, spec.fade.b, 0.85f);
+        RefreshMapThemeLabels();
         if (rebuildUI && root) RebuildChromeUI();
+    }
+    void RefreshMapThemeLabels()
+    {
+        bool neon = IsNeonThemeActive();
+        Color lblColor = neon ? new Color(0.95f, 0.98f, 1.00f, 0.98f) : new Color(0.16f, 0.14f, 0.11f, 0.96f);
+        Color lblShadow = neon ? new Color(0.03f, 0.04f, 0.16f, 0.94f) : new Color(0.99f, 0.98f, 0.94f, 0.95f);
+        Color dstColor = neon ? new Color(1.00f, 0.62f, 0.86f, 0.96f) : new Color(0.38f, 0.35f, 0.31f, 0.90f);
+        Color dstShadow = neon ? new Color(0.03f, 0.04f, 0.16f, 0.94f) : new Color(1f, 0.99f, 0.96f, 0.95f);
+        Color leaderColor = neon ? new Color(0.45f, 0.88f, 1.00f, 0.45f) : new Color(0.15f, 0.14f, 0.13f, 0.32f);
+        foreach (var kv in stationLabels)
+        {
+            if (!kv.Value) continue;
+            kv.Value.color = lblColor;
+            var sh = kv.Value.GetComponent<Shadow>();
+            if (sh) sh.effectColor = lblShadow;
+        }
+        foreach (var kv in stationDestinations)
+        {
+            if (!kv.Value) continue;
+            kv.Value.color = dstColor;
+            var sh = kv.Value.GetComponent<Shadow>();
+            if (sh) sh.effectColor = dstShadow;
+        }
+        foreach (var kv in stationLeaders) if (kv.Value) kv.Value.color = leaderColor;
+    }
+    void StartThemePreview(int theme)
+    {
+        theme = Mathf.Clamp(theme, 0, Themes.Length - 1);
+        if (previewRestoreTheme < 0) previewRestoreTheme = currentTheme;
+        ClosePage();
+        ClosePanel(true);
+        ApplyTheme(theme, true, true);
+        ShowThemePreviewBanner(theme);
+        Toast("正以「" + Themes[theme].name + "」实机预览，可自由缩放地图与翻阅各页面");
+    }
+    void EndThemePreview(bool reopenShop = false)
+    {
+        int restore = previewRestoreTheme;
+        previewRestoreTheme = -1;
+        DestroyThemePreviewBanner();
+        if (restore >= 0)
+        {
+            if (!IsThemeAvailable(restore)) restore = 0;
+            ApplyTheme(restore, true, false);
+        }
+        if (reopenShop) OpenThemeShopScreen();
+    }
+    void DestroyThemePreviewBanner()
+    {
+        if (themePreviewBannerGo) { Destroy(themePreviewBannerGo); themePreviewBannerGo = null; }
+    }
+    void ShowThemePreviewBanner(int theme)
+    {
+        DestroyThemePreviewBanner();
+        if (!root) return;
+        float bw = 860f, bh = 86f;
+        themePreviewBannerGo = Rect("ThemePreviewBanner", root, (W - bw) * 0.5f, 186f, bw, bh);
+        Rounded(themePreviewBannerGo, new Color(0.05f, 0.06f, 0.14f, 0.94f));
+        SoftShadow(themePreviewBannerGo);
+        var bImg = themePreviewBannerGo.GetComponent<Image>();
+        if (bImg) bImg.raycastTarget = true;
+
+        Img(Rect("Badge", themePreviewBannerGo.transform, 18f, 25f, 14f, 36f), Themes[theme].indigo, spriteRound).raycastTarget = false;
+        var tipTxt = Txt(themePreviewBannerGo.transform, "实机预览中 · " + Themes[theme].name, 25, Color.white, 44f, 0f, 370f, bh, TextAnchor.MiddleLeft);
+        FitSingleLine(tipTxt, 25);
+
+        var unlockBtn = Btn(themePreviewBannerGo.transform, "PreviewToUnlockBtn", "回商店解锁", 22, 434f, 14f, 236f, 58f, new Color(0.08f, 0.80f, 0.72f), () => {
+            EndThemePreview(true);
+        });
+        TInk(unlockBtn, new Color(0.04f, 0.06f, 0.14f));
+        var exitBtn = Btn(themePreviewBannerGo.transform, "PreviewExitBtn", "退出预览", 22, 686f, 14f, 156f, 58f, new Color(0.24f, 0.26f, 0.40f), () => {
+            EndThemePreview(false);
+            Toast("已还原为「" + Themes[currentTheme].name + "」");
+        });
+        TInk(exitBtn, Color.white);
+        EnsurePreviewBannerOnTop();
+    }
+    void EnsurePreviewBannerOnTop()
+    {
+        if (!themePreviewBannerGo) return;
+        themePreviewBannerGo.transform.SetAsLastSibling();
+        if (scrim) scrim.transform.SetAsLastSibling();
+        if (panelShadow) panelShadow.transform.SetAsLastSibling();
+        if (activePanel) activePanel.transform.SetAsLastSibling();
+        if (toastGo) toastGo.transform.SetAsLastSibling();
     }
     void RebuildChromeUI()
     {
@@ -2259,6 +2384,7 @@ public partial class DemoBootstrap : MonoBehaviour
         RefreshPendingBadge();
         RefreshUndoButton();
         if (pageRoot) pageRoot.transform.SetAsLastSibling();
+        if (themePreviewBannerGo) themePreviewBannerGo.transform.SetAsLastSibling();
         if (scrim) scrim.transform.SetAsLastSibling();
         if (panelShadow) panelShadow.transform.SetAsLastSibling();
         if (activePanel) activePanel.transform.SetAsLastSibling();

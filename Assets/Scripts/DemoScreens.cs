@@ -33,6 +33,7 @@ public partial class DemoBootstrap
         var layout = pageRoot.AddComponent<PageHeaderLayout>();
         layout.page = pageRoot.GetComponent<RectTransform>(); layout.back = bb.GetComponent<RectTransform>();
         layout.home = home.GetComponent<RectTransform>(); layout.title = heading.rectTransform; layout.help = helpRect;
+        EnsurePreviewBannerOnTop();
         return pageRoot;
     }
     void AddPageBackground(GameObject page, string path)
@@ -41,7 +42,8 @@ public partial class DemoBootstrap
         if (!texture) return;
         var background = Rect("PageBackground", page.transform, 0, 0, W, H);
         var art = background.AddComponent<RawImage>(); art.texture = texture;
-        art.color = new Color(1, 1, 1, 0.26f); art.raycastTarget = false;
+        art.color = IsNeonThemeActive() ? new Color(0.28f, 0.38f, 0.86f, 0.16f) : new Color(1, 1, 1, 0.26f);
+        art.raycastTarget = false;
         background.transform.SetAsFirstSibling();
         var fit = background.AddComponent<FleetBackgroundFit>(); fit.page = page.GetComponent<RectTransform>(); fit.image = art;
         var header = page.transform.Find("PTop").GetComponent<Image>();
@@ -696,8 +698,8 @@ public partial class DemoBootstrap
 
     void BuildShopThemes(Transform page)
     {
-        Txt(page, "全局界面风格馆 · 更换整套游戏纸面、地图与 UI 色系", 22, InkSoft, 178, H - 235, 860, 36, TextAnchor.MiddleLeft);
-        var content = FleetScroll(page, 172, H - 255, Themes.Length * 252f + 24, 150f);
+        Txt(page, "全局界面风格馆 · 更换纸面、夜图与 UI 色系；购买前可免费实机预览", 22, InkSoft, 178, H - 235, 860, 36, TextAnchor.MiddleLeft);
+        var content = FleetScroll(page, 172, H - 255, Themes.Length * 256f + 24, 150f);
         float height = content.sizeDelta.y;
         float cardWidth = content.sizeDelta.x;
         for (int i = 0; i < Themes.Length; i++)
@@ -707,20 +709,31 @@ public partial class DemoBootstrap
             bool owned = ownedThemes.Contains(t);
             bool trial = !owned && IsThemeTrialActive(t);
             bool avail = owned || trial;
-            bool active = currentTheme == t && avail;
+            bool active = currentTheme == t && avail && previewRestoreTheme < 0;
 
-            var card = Rect("ThemeShop" + i, content, 0, height - 236 - i * 252, cardWidth, 228);
+            var card = Rect("ThemeShop" + i, content, 0, height - 240 - i * 256, cardWidth, 232);
             Rounded(card, CardBg); SoftShadow(card);
             // 主题色条与4色调色板圆点预览
-            Img(Rect("Accent", card.transform, 0, 22, 8, 184), spec.indigo, spriteRound).raycastTarget = false;
+            Img(Rect("Accent", card.transform, 0, 22, 8, 188), spec.indigo, spriteRound).raycastTarget = false;
             Color[] chips = { spec.paper, spec.sea, spec.indigo, spec.matcha };
             for (int c = 0; c < chips.Length; c++)
-                Img(Rect("Chip" + c, card.transform, 28 + c * 38, 148, 28, 28), chips[c], spriteCircle).raycastTarget = false;
+                Img(Rect("Chip" + c, card.transform, 28 + c * 38, 152, 28, 28), chips[c], spriteCircle).raycastTarget = false;
 
             string statusTag = owned ? (active ? "使用中 ✓" : "已拥有") : trial ? ThemeTrialRemainingText(t) : "未解锁";
-            Txt(card.transform, spec.name, 31, Ink, 200, 144, 340, 44, TextAnchor.MiddleLeft);
-            Txt(card.transform, statusTag, 22, active ? Matcha : InkSoft, cardWidth - 270, 148, 240, 36, TextAnchor.MiddleRight);
-            Txt(card.transform, spec.subtitle, 22, InkSoft, 28, 92, cardWidth - 56, 40, TextAnchor.MiddleLeft);
+            Txt(card.transform, spec.name, 31, Ink, 200, 148, 340, 44, TextAnchor.MiddleLeft);
+
+            if (spec.isNeon)
+            {
+                var miniTex = EraPosterGenerator.GetCustomPoster("shop_theme_3d", "3D", 0, 4, 256, 112, 0);
+                CreateNeonPosterFrame(card.transform, "NeonThemeThumb", cardWidth - 224f, 100f, 196f, 88f, miniTex, 4f);
+                Txt(card.transform, statusTag, 21, active ? Matcha : InkSoft, cardWidth - 450, 152, 210, 36, TextAnchor.MiddleRight);
+                Txt(card.transform, spec.subtitle, 21, InkSoft, 28, 96, cardWidth - 266, 40, TextAnchor.MiddleLeft);
+            }
+            else
+            {
+                Txt(card.transform, statusTag, 22, active ? Matcha : InkSoft, cardWidth - 270, 152, 240, 36, TextAnchor.MiddleRight);
+                Txt(card.transform, spec.subtitle, 22, InkSoft, 28, 96, cardWidth - 56, 40, TextAnchor.MiddleLeft);
+            }
 
             if (avail)
             {
@@ -735,31 +748,41 @@ public partial class DemoBootstrap
             if (!owned)
             {
                 string adKey = "theme_" + t;
-                int req = t == 3 ? 5 : 3;
+                int req = t >= 3 ? 5 : 3;
                 int watched = adWatchCounts.TryGetValue(adKey, out int wc) ? wc : 0;
-                float adX = avail ? 404f : 28f;
-                float adW = avail ? cardWidth - 432f : 430f;
-                string adTxt = "看片试用24h (" + watched + "/" + req + " 永久)";
-                var adBtn = Btn(card.transform, "AdTheme" + i, adTxt, 21, adX, 18, adW, 64, Indigo, () => {
-                    PromptRewardedAd(adKey, req, spec.name,
-                        () => {
-                            ownedThemes.Add(t);
-                            ApplyTheme(t); SaveGame(); OpenFleetTab(2);
-                            Toast("已永久解锁「" + spec.name + "」");
-                        },
-                        () => {
-                            themeTrialUntil[t] = NowUnixSeconds() + 86400;
-                            ApplyTheme(t); SaveGame(); OpenFleetTab(2);
-                            Toast("已激活「" + spec.name + "」24小时免费试用！");
-                        });
-                });
-                TInk(adBtn, Color.white);
 
                 if (!avail)
                 {
+                    float pvW = 176f;
+                    var pvBtn = Btn(card.transform, "PreviewTheme" + i, "预览效果", 21, 28, 18, pvW, 64, new Color(0.12f, 0.50f, 0.64f), () => {
+                        StartThemePreview(t);
+                    });
+                    TInk(pvBtn, Color.white);
+
+                    float adX = 28f + pvW + 14f;
+                    float adW = 344f;
+                    string adTxt = "看片试用24h (" + watched + "/" + req + " 永久)";
+                    var adBtn = Btn(card.transform, "AdTheme" + i, adTxt, 20, adX, 18, adW, 64, Indigo, () => {
+                        PromptRewardedAd(adKey, req, spec.name,
+                            () => {
+                                ownedThemes.Add(t);
+                                ApplyTheme(t); SaveGame(); OpenFleetTab(2);
+                                Toast("已永久解锁「" + spec.name + "」");
+                            },
+                            () => {
+                                themeTrialUntil[t] = NowUnixSeconds() + 86400;
+                                ApplyTheme(t); SaveGame(); OpenFleetTab(2);
+                                Toast("已激活「" + spec.name + "」24小时免费试用！");
+                            });
+                    });
+                    TInk(adBtn, Color.white);
+
+                    float altX = adX + adW + 14f;
+                    float altW = cardWidth - altX - 28f;
                     bool techFree = t == 2 && techDone.Count >= 5;
-                    string altLabel = t == 1 ? "¥800 直接解锁" : t == 2 ? (techFree ? "免费领(科技≥5)" : "¥800 或 5科技") : "30 钻永久解锁";
-                    var altBtn = Btn(card.transform, "AltTheme" + i, altLabel, 21, 474, 18, cardWidth - 502f, 64, techFree ? Matcha : Paper2, () => {
+                    int diamondCost = t == 4 ? 50 : 30;
+                    string altLabel = t == 1 ? "¥800 解锁" : t == 2 ? (techFree ? "免费领(科技≥5)" : "¥800 或 5科技") : (diamondCost + " 钻解锁");
+                    var altBtn = Btn(card.transform, "AltTheme" + i, altLabel, 20, altX, 18, altW, 64, techFree ? Matcha : Paper2, () => {
                         if (t == 1)
                         {
                             if (coins < 800) { Toast("金币不足，还差 ¥" + FormatShortfall(800 - coins)); return; }
@@ -776,13 +799,33 @@ public partial class DemoBootstrap
                         }
                         else
                         {
-                            if (diamonds < 30) { Toast("钻石不足，还差 " + Mathf.CeilToInt(30 - diamonds) + " 颗"); return; }
-                            BeginUndo("解锁界面风格"); diamonds -= 30; ownedThemes.Add(t); EndUndo();
+                            if (diamonds < diamondCost) { Toast("钻石不足，还差 " + Mathf.CeilToInt(diamondCost - diamonds) + " 颗"); return; }
+                            BeginUndo("解锁界面风格"); diamonds -= diamondCost; ownedThemes.Add(t); EndUndo();
                         }
                         ApplyTheme(t); RefreshHUD(); SaveGame(); OpenFleetTab(2);
                         Toast("已永久解锁「" + spec.name + "」");
                     });
                     TInk(altBtn, techFree ? Color.white : Ink);
+                }
+                else
+                {
+                    float adX = 404f;
+                    float adW = cardWidth - 432f;
+                    string adTxt = "看片续期/永久 (" + watched + "/" + req + ")";
+                    var adBtn = Btn(card.transform, "AdTheme" + i, adTxt, 21, adX, 18, adW, 64, Indigo, () => {
+                        PromptRewardedAd(adKey, req, spec.name,
+                            () => {
+                                ownedThemes.Add(t);
+                                ApplyTheme(t); SaveGame(); OpenFleetTab(2);
+                                Toast("已永久解锁「" + spec.name + "」");
+                            },
+                            () => {
+                                themeTrialUntil[t] = NowUnixSeconds() + 86400;
+                                ApplyTheme(t); SaveGame(); OpenFleetTab(2);
+                                Toast("已续期「" + spec.name + "」24小时试用！");
+                            });
+                    });
+                    TInk(adBtn, Color.white);
                 }
             }
         }
@@ -1702,7 +1745,7 @@ public partial class DemoBootstrap
         });
         TInk(liveryBtn, Color.white);
 
-        var themeBtn = Btn(lookCard.transform, "GoThemeShop", "进入「主题工坊」（4 套全局手账风格）", 22, 32f + halfLookW + 20f, 24f, halfLookW, 82f, Vermilion, () => {
+        var themeBtn = Btn(lookCard.transform, "GoThemeShop", "进入「主题工坊」（" + Themes.Length + " 套全局风格）", 22, 32f + halfLookW + 20f, 24f, halfLookW, 82f, Vermilion, () => {
             ClosePage();
             fleetBack = () => { companyTab = 3; OpenCompanyScreen(); };
             shopCategory = 2;
