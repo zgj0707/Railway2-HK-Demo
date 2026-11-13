@@ -20,6 +20,10 @@ public partial class DemoBootstrap
         public List<int> trialThemes = new List<int>(); public List<long> trialEnds = new List<long>();
         public string companyName = "湾区铁道社";
         public int companySeal, companyPolicy, bondDaysLeft, lastPolicyDay = -1, lastAdSubsidyDay = -1, dailyTaskClaimedDay = -1;
+        public int bondPrincipal, bondDailyDue, bondsRepaid, consultantId = -1, consultantDaysLeft, economyCycle, nextEconomyCycle = 1, turboDaysLeft, autoDispatchDaysLeft, lastAwardDay;
+        public bool bondSubsidized;
+        public List<int> boardPartners = new List<int>();
+        public List<MunicipalContract> contracts = new List<MunicipalContract>();
     }
     bool saveReady, saveBlocked; float autosaveTimer;
     string StationSaveKey(Station station) { return station.region + ":" + station.name; }
@@ -75,6 +79,26 @@ public partial class DemoBootstrap
             companySeal = Mathf.Clamp(data.companySeal, 0, CompanySealChars.Length - 1);
             companyPolicy = Mathf.Clamp(data.companyPolicy, 0, CompanyPolicyNames.Length - 1);
             bondDaysLeft = Mathf.Max(0, data.bondDaysLeft);
+            bondPrincipal = bondDaysLeft > 0 ? (data.bondPrincipal > 0 ? data.bondPrincipal : BondPrincipal) : 0;
+            bondDailyDue = bondDaysLeft > 0 ? (data.bondDailyDue > 0 ? data.bondDailyDue : BondDailyPayment) : 0;
+            bondsRepaid = Mathf.Max(0, data.bondsRepaid);
+            bondSubsidized = data.bondSubsidized;
+            consultantId = data.consultantDaysLeft > 0 ? Mathf.Clamp(data.consultantId, 0, PartnerNames.Length - 1) : -1;
+            consultantDaysLeft = Mathf.Max(0, data.consultantDaysLeft);
+            economyCycle = Mathf.Clamp(data.economyCycle, 0, EconomyCycleNames.Length - 1);
+            nextEconomyCycle = Mathf.Clamp(data.nextEconomyCycle, 0, EconomyCycleNames.Length - 1);
+            turboDaysLeft = Mathf.Max(0, data.turboDaysLeft);
+            autoDispatchDaysLeft = Mathf.Max(0, data.autoDispatchDaysLeft);
+            lastAwardDay = Mathf.Max(0, data.lastAwardDay);
+            boardPartners.Clear();
+            if (data.boardPartners != null) foreach (int pid in data.boardPartners) if (pid >= 0 && pid < 6 && !boardPartners.Contains(pid)) boardPartners.Add(pid);
+            activeContracts.Clear();
+            if (data.contracts != null)
+            {
+                foreach (var mc in data.contracts)
+                    if (mc != null && !mc.claimed) { activeContracts.Add(mc); nextContractId = Mathf.Max(nextContractId, mc.id + 1); }
+            }
+            EnsureCompanyInitialized();
             lastPolicyDay = data.lastPolicyDay; lastAdSubsidyDay = data.lastAdSubsidyDay; dailyTaskClaimedDay = data.dailyTaskClaimedDay;
             savedRegion=data.region;
             saveBlocked = false;
@@ -99,7 +123,9 @@ public partial class DemoBootstrap
             } catch {}
         }
         try {
-            var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=currentTheme, companyName=companyName, companySeal=companySeal, companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, lastPolicyDay=lastPolicyDay, lastAdSubsidyDay=lastAdSubsidyDay, dailyTaskClaimedDay=dailyTaskClaimedDay };
+            var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=currentTheme, companyName=companyName, companySeal=companySeal, companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, bondPrincipal=bondPrincipal, bondDailyDue=bondDailyDue, bondsRepaid=bondsRepaid, bondSubsidized=bondSubsidized, consultantId=consultantId, consultantDaysLeft=consultantDaysLeft, economyCycle=economyCycle, nextEconomyCycle=nextEconomyCycle, turboDaysLeft=turboDaysLeft, autoDispatchDaysLeft=autoDispatchDaysLeft, lastAwardDay=lastAwardDay, lastPolicyDay=lastPolicyDay, lastAdSubsidyDay=lastAdSubsidyDay, dailyTaskClaimedDay=dailyTaskClaimedDay };
+            data.boardPartners.AddRange(boardPartners);
+            data.contracts.AddRange(activeContracts);
             foreach(var s in stations) data.stations.Add(new SavedStation { key=StationSaveKey(s), level=s.level, trafficEvent=s.trafficEvent, built=s.built, closed=s.closed, riderBonus=s.riderBonus, facLevel=s.facLevel });
             foreach(var s in sceneries) data.scenery.Add(new SavedScenery { key=ScenerySaveKey(s), found=s.found, unlocked=s.unlocked });
             foreach(var l in lines) { var record=new SavedLine { id=l.id, name=l.name, color=l.color, skin=l.skin, trains=l.trains, dispatch=(int[])l.dispatch.Clone(), fare=l.fare, todayGross=l.todayGross, todayMaintenance=l.todayMaintenance, todayTrack=l.todayTrack, todayRevenue=l.todayRevenue, recent=new List<int>(l.recent), stations=new List<string>() }; foreach(int i in l.st) record.stations.Add(StationSaveKey(stations[i])); data.lines.Add(record); }

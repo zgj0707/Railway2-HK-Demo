@@ -15,7 +15,9 @@ public partial class DemoBootstrap
         public string label, region; public float coinsBefore, diamondsBefore, rpBefore, coinsDelta, diamondsDelta, rpDelta;
         public int nextId, speed; public bool macau, guangdong, loanOutstanding;
         public List<UndoLine> lines = new List<UndoLine>();
-        public int companyPolicy, bondDaysLeft, lastPolicyDay;
+        public int companyPolicy, bondDaysLeft, lastPolicyDay, bondPrincipal, bondDailyDue, bondsRepaid;
+        public bool bondSubsidized;
+        public List<int> boardPartners;
         public int[] levels, facLevels; public float[] riderBonuses; public bool[] built, closed, sceneryUnlocked, sceneryFound;
         public List<int> ownedSkins; public List<string> technologies; public List<UndoVehicle> vehicles = new List<UndoVehicle>();
         public Dictionary<Line, FrozenLineTraffic> frozen = new Dictionary<Line, FrozenLineTraffic>();
@@ -36,7 +38,7 @@ public partial class DemoBootstrap
     {
         var state = new UndoState { label=label, region=currentRegion, coinsBefore=coins, diamondsBefore=diamonds, rpBefore=rp, nextId=nextLineId,
             macau=macauUnlocked, guangdong=guangdongUnlocked, loanOutstanding=loanOutstanding, ownedSkins=new List<int>(ownedLineSkins), speed=timeSpeed, levels=new int[stations.Count], built=new bool[stations.Count], closed=new bool[stations.Count],
-            companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, lastPolicyDay=lastPolicyDay,
+            companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, lastPolicyDay=lastPolicyDay, bondPrincipal=bondPrincipal, bondDailyDue=bondDailyDue, bondsRepaid=bondsRepaid, bondSubsidized=bondSubsidized, boardPartners=new List<int>(boardPartners),
             facLevels=new int[stations.Count], riderBonuses=new float[stations.Count],
             sceneryUnlocked=new bool[sceneries.Count], sceneryFound=new bool[sceneries.Count], technologies=new List<string>(techDone) };
         foreach (var line in lines) state.lines.Add(new UndoLine { line=line, name=line.name, color=line.color, skin=line.skin, path=new List<int>(line.st), dispatch=(int[])line.dispatch.Clone(), trains=line.trains, fare=line.fare });
@@ -67,6 +69,8 @@ public partial class DemoBootstrap
         if (state.facLevels != null && state.riderBonuses != null)
             for (int i=0;i<stations.Count && i<state.facLevels.Length && i<state.riderBonuses.Length;i++) { stations[i].facLevel=state.facLevels[i]; stations[i].riderBonus=state.riderBonuses[i]; }
         companyPolicy=state.companyPolicy; bondDaysLeft=state.bondDaysLeft; lastPolicyDay=state.lastPolicyDay;
+        bondPrincipal=state.bondPrincipal; bondDailyDue=state.bondDailyDue; bondsRepaid=state.bondsRepaid; bondSubsidized=state.bondSubsidized;
+        boardPartners.Clear(); if (state.boardPartners != null) boardPartners.AddRange(state.boardPartners);
         techDone.Clear(); techDone.AddRange(state.technologies);
         frozenTraffic.Clear(); foreach (var item in state.frozen) frozenTraffic[item.Key] = item.Value.Copy();
         researchVehicles.Clear(); foreach (var item in state.vehicles) { item.vehicle.lineId=item.lineId; researchVehicles.Add(item.vehicle); }

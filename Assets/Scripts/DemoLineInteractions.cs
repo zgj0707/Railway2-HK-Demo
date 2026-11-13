@@ -95,14 +95,14 @@ public partial class DemoBootstrap
         if (line == null || seg < 0 || seg >= line.st.Count - 1) return "";
         int a = line.st[seg], b = line.st[seg + 1];
         float d = Vector2.Distance(Pos(a), Pos(b));
-        int refund = Mathf.RoundToInt((30f + d * 0.75f) * 0.6f);
+        int refund = Mathf.RoundToInt((30f + d * 0.75f) * DemolishRefundRate());
         string tail = line.st.Count <= 2 ? "\n该段拆除后，这条线路会消失。" : "\n拆除后退还 ¥" + refund + "。";
         return StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion) + tail;
     }
     string LineConfirmText(Line line)
     {
         if (line == null) return "";
-        int refund = Mathf.RoundToInt(120f * (UniqueCount(line.st) - 1) * 0.6f);
+        int refund = Mathf.RoundToInt(120f * (UniqueCount(line.st) - 1) * DemolishRefundRate());
         return UniqueCount(line.st) + " 站 · " + line.trains + " 列车\n拆除后退还 ¥" + refund + "。";
     }
 
@@ -120,7 +120,7 @@ public partial class DemoBootstrap
         }
         int a = line.st[seg], b = line.st[seg + 1];
         float d = Vector2.Distance(Pos(a), Pos(b));
-        int refund = Mathf.RoundToInt((30f + d * 0.75f) * 0.6f);
+        int refund = Mathf.RoundToInt((30f + d * 0.75f) * DemolishRefundRate());
         BeginUndo("拆除线路段");
         string msg;
 
@@ -174,7 +174,7 @@ public partial class DemoBootstrap
     {
         if (line == null || !lines.Contains(line)) return;
         BeginUndo("拆除整条线路");
-        float refund = 120f * (UniqueCount(line.st) - 1) * 0.6f;
+        float refund = 120f * (UniqueCount(line.st) - 1) * DemolishRefundRate();
         coins += refund; SettleRemovedLineTax(line); ReleaseLineFleet(line); lines.Remove(line);
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome(); RefreshHUD();
         EndUndo(); Toast("已拆除 " + line.name);
@@ -345,9 +345,10 @@ public partial class DemoBootstrap
     int InsertStationCost(Line line, int segment, int target)
     {
         int a = line.st[segment], b = line.st[segment + 1];
-        int before = Mathf.RoundToInt(30f + Vector2.Distance(Pos(a), Pos(b)) * 0.75f);
-        int after = Mathf.RoundToInt(30f + Vector2.Distance(Pos(a), Pos(target)) * 0.75f)
-            + Mathf.RoundToInt(30f + Vector2.Distance(Pos(target), Pos(b)) * 0.75f);
+        float f = TrackBuildCostFactor();
+        int before = Mathf.RoundToInt((30f + Vector2.Distance(Pos(a), Pos(b)) * 0.75f) * f);
+        int after = Mathf.RoundToInt((30f + Vector2.Distance(Pos(a), Pos(target)) * 0.75f) * f)
+            + Mathf.RoundToInt((30f + Vector2.Distance(Pos(target), Pos(b)) * 0.75f) * f);
         return Mathf.Max(0, after - before) + StationOpeningCost(target);
     }
     void SetInsertPreview(Image image, Vector2 a, Vector2 b)
@@ -423,9 +424,11 @@ public partial class DemoBootstrap
     }
     int WaystationChangeCost(int previous, int station, int next)
     {
-        int first = Mathf.RoundToInt((30f + Vector2.Distance(Pos(previous), Pos(station)) * 0.75f) * 0.6f);
-        int second = Mathf.RoundToInt((30f + Vector2.Distance(Pos(station), Pos(next)) * 0.75f) * 0.6f);
-        int replacement = Mathf.RoundToInt(30f + Vector2.Distance(Pos(previous), Pos(next)) * 0.75f);
+        float refund = DemolishRefundRate();
+        float f = TrackBuildCostFactor();
+        int first = Mathf.RoundToInt((30f + Vector2.Distance(Pos(previous), Pos(station)) * 0.75f) * f * refund);
+        int second = Mathf.RoundToInt((30f + Vector2.Distance(Pos(station), Pos(next)) * 0.75f) * f * refund);
+        int replacement = Mathf.RoundToInt((30f + Vector2.Distance(Pos(previous), Pos(next)) * 0.75f) * f);
         return replacement - first - second;
     }
     void OpenRemoveStationLines(int station, int page)

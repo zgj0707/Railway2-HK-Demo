@@ -96,11 +96,33 @@ public partial class DemoBootstrap : MonoBehaviour
     int lastPolicyDay = -1;
     int lastAdSubsidyDay = -1;
     int dailyTaskClaimedDay = -1;
+    int bondPrincipal = 0;
+    int bondDailyDue = 0;
+    int bondsRepaid = 0;
+    bool bondSubsidized = false;
+    readonly List<int> boardPartners = new List<int>();
+    int consultantId = -1;
+    int consultantDaysLeft = 0;
+    int economyCycle = 0;
+    int nextEconomyCycle = 1;
+    int turboDaysLeft = 0;
+    int autoDispatchDaysLeft = 0;
+    int lastAwardDay = 0;
+    int companyTab = 0;
+    int nextContractId = 1;
+    [Serializable]
+    class MunicipalContract
+    {
+        public int id, type, startValue, targetValue, rewardCoins, rewardRp, rewardDiamonds, deadlineDay;
+        public bool claimed;
+    }
+    readonly List<MunicipalContract> activeContracts = new List<MunicipalContract>();
 
     class LineSegmentVisual
     {
         public int from, to;
         public GameObject casing, body, core, hit;
+        public Color baseCoreColor;
         public void SetVisible(bool visible)
         {
             if (casing && casing.activeSelf != visible) casing.SetActive(visible);
@@ -132,6 +154,7 @@ public partial class DemoBootstrap : MonoBehaviour
         saveReady = true;
         if (!IsThemeAvailable(currentTheme)) currentTheme = 0;
         ApplyThemeColors(currentTheme);
+        EnsureCompanyInitialized();
         if (canvas != null && lines != null && lines.Count > 0)
         {
             ApplyTheme(currentTheme, false);
@@ -156,6 +179,7 @@ public partial class DemoBootstrap : MonoBehaviour
         BuildData();
         bool restored = RestoreGame();
         if (!restored) dailyStationBaseline = DailyConnectedCount();
+        EnsureCompanyInitialized();
         if (!IsThemeAvailable(currentTheme)) currentTheme = 0;
         ApplyThemeColors(currentTheme);
         BuildUI();
@@ -1269,12 +1293,13 @@ public partial class DemoBootstrap : MonoBehaviour
             for (int i = 0; i < line.st.Count - 1; i++)
             {
                 if (SegmentRegion(line.st[i], line.st[i+1]) != currentRegion) continue;
-                var casing = AddSeg(line.st[i], line.st[i+1], new Color(0.20f,0.18f,0.15f,0.92f), 12f, lineLayer);
-                var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 7.5f, lineLayer);
-                var trackCore = AddSeg(line.st[i], line.st[i+1], coreColor, 2.2f, lineLayer);
-                var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer);
+                Vector2 offset = SegmentVisualOffset(line, i, currentRegion);
+                var casing = AddSeg(line.st[i], line.st[i+1], new Color(0.20f,0.18f,0.15f,0.92f), 11.5f, lineLayer, offset);
+                var segBody = AddSeg(line.st[i], line.st[i+1], line.color, 7.2f, lineLayer, offset);
+                var trackCore = AddSeg(line.st[i], line.st[i+1], coreColor, 2.4f, lineLayer, offset);
+                var hit = AddSeg(line.st[i], line.st[i+1], new Color(1,1,1,0f), 34, lineLayer, offset);
                 var lt = hit.AddComponent<LineTapPress>(); lt.boot = this; lt.lineId = line.id; lt.segment = i;
-                lv.segments.Add(new LineSegmentVisual { from = line.st[i], to = line.st[i + 1], casing = casing, body = segBody, core = trackCore, hit = hit });
+                lv.segments.Add(new LineSegmentVisual { from = line.st[i], to = line.st[i + 1], casing = casing, body = segBody, core = trackCore, hit = hit, baseCoreColor = coreColor });
             }
             // 日式微缩铁道模型（硬朗修长车厢，规避肉感胶囊）
             var t = Rect("Train" + line.id, trainLayer, 0, 0, 34, 14);
@@ -1310,10 +1335,57 @@ public partial class DemoBootstrap : MonoBehaviour
         }
         ApplyZoomToOverlays(mapRect ? mapRect.localScale.x : 1f);
         UpdateRegionalMarkers(true);
+        UpdateLineTrafficColors();
     }
-    GameObject AddSeg(int a, int b, Color c, float width, RectTransform layer)
+    Vector2 SegmentVisualOffset(Line line, int segIdx, string region)
     {
-        var p1 = Pos(a); var p2 = Pos(b);
+        if (line == null || segIdx < 0 || segIdx >= line.st.Count - 1 || string.IsNullOrEmpty(region)) return Vector2.zero;
+        int a = line.st[segIdx], b = line.st[segIdx + 1];
+        int lo = Mathf.Min(a, b), hi = Mathf.Max(a, b);
+        var sharedIds = new List<int>();
+        foreach (var l in lines)
+        {
+            for (int k = 0; k < l.st.Count - 1; k++)
+            {
+                int la = l.st[k], lb = l.st[k + 1];
+                if (Mathf.Min(la, lb) == lo && Mathf.Max(la, lb) == hi && SegmentRegion(la, lb) == region)
+                {
+                    if (!sharedIds.Contains(l.id)) sharedIds.Add(l.id);
+                    break;
+                }
+            }
+        }
+        if (sharedIds.Count <= 1) return Vector2.zero;
+        sharedIds.Sort();
+        int rank = sharedIds.IndexOf(line.id);
+        if (rank < 0) return Vector2.zero;
+        Vector2 d = PosInRegion(hi, region) - PosInRegion(lo, region);
+        if (d.sqrMagnitude < 0.001f) return Vector2.zero;
+        Vector2 normal = new Vector2(-d.y, d.x).normalized;
+        return normal * ((rank - (sharedIds.Count - 1) * 0.5f) * 10f);
+    }
+    void UpdateLineTrafficColors()
+    {
+        if (traffic == null || traffic.lineSegLoad == null) return;
+        foreach (var line in lines)
+        {
+            if (!lineVisuals.TryGetValue(line.id, out var lv)) continue;
+            foreach (var seg in lv.segments)
+            {
+                if (!seg.core) continue;
+                var img = seg.core.GetComponent<Image>();
+                if (!img) continue;
+                string key = line.id + ":" + Mathf.Min(seg.from, seg.to) + ":" + Mathf.Max(seg.from, seg.to);
+                if (traffic.lineSegLoad.TryGetValue(key, out float load) && load >= 0.78f)
+                    img.color = load >= 0.98f ? new Color(0.95f, 0.28f, 0.22f, 0.96f) : new Color(0.96f, 0.72f, 0.18f, 0.92f);
+                else
+                    img.color = seg.baseCoreColor;
+            }
+        }
+    }
+    GameObject AddSeg(int a, int b, Color c, float width, RectTransform layer, Vector2 offset = default)
+    {
+        var p1 = Pos(a) + offset; var p2 = Pos(b) + offset;
         var d = p2 - p1;
         var go = Rect("Seg", layer, p1.x, p1.y, d.magnitude, width);
         var rt = go.GetComponent<RectTransform>(); rt.pivot = new Vector2(0, 0.5f);
@@ -1501,7 +1573,7 @@ public partial class DemoBootstrap : MonoBehaviour
         if (station.built) return 0;
         bool cityHub = station.administrativeCode > 0 && station.administrativeCode % 100 == 0;
         int hubCost = station.portal ? 70 : cityHub ? 50 : 0;
-        float policyMult = companyPolicy == 1 ? 0.85f : 1f;
+        float policyMult = (companyPolicy == 1 ? 0.85f : 1f) * PartnerOpenCostFactor() * (economyCycle == 4 ? 0.80f : 1f);
         return Mathf.RoundToInt((40f + StationBaselineDemand(index) * 0.7f + hubCost) * policyMult);
     }
     int StationEstimatedDemand(int index)
@@ -1517,8 +1589,9 @@ public partial class DemoBootstrap : MonoBehaviour
         int c = 0;
         var counted = new HashSet<int>();
         foreach (int index in path) if (counted.Add(index)) c += StationOpeningCost(index);
+        float trackFactor = TrackBuildCostFactor();
         for (int i = 0; i < path.Count-1; i++)
-            c += Mathf.RoundToInt(30 + Vector2.Distance(Pos(path[i]), Pos(path[i+1])) * 0.75f);
+            c += Mathf.RoundToInt((30f + Vector2.Distance(Pos(path[i]), Pos(path[i+1])) * 0.75f) * trackFactor);
         return c;
     }
     bool HandleDraftRevisit(int near)
@@ -1604,7 +1677,8 @@ public partial class DemoBootstrap : MonoBehaviour
                 bool segShown = (trainA >= 0 && trainA < stationVisible.Length && stationVisible[trainA])
                              || (trainB >= 0 && trainB < stationVisible.Length && stationVisible[trainB]);
                 lv.train.SetActive(segmentRegion == currentRegion && segShown && RunningTrains(line) > 0);
-                var trt = lv.train.GetComponent<RectTransform>(); trt.anchoredPosition = pos;
+                Vector2 segOffset = segmentIndex >= 0 ? SegmentVisualOffset(line, segmentIndex, segmentRegion) : Vector2.zero;
+                var trt = lv.train.GetComponent<RectTransform>(); trt.anchoredPosition = pos + segOffset;
                 float dir = loop || lv.t <= 1f ? ang : ang + 180f;
                 trt.localRotation = Quaternion.Euler(0, 0, dir);
             }
@@ -1648,8 +1722,9 @@ public partial class DemoBootstrap : MonoBehaviour
         RebuildOperatingRates();
         float total = 0;
         foreach (var line in lines) total += ForecastFor(line).Profit;
-        total += StationCommercialTotalDaily() + TourismDividendDaily();
+        total += StationCommercialTotalDaily() + TourismDividendDaily() + CycleDailySubsidy();
         income = total;
+        UpdateLineTrafficColors();
         UpdateRegionUnlocks();
         progress = Mathf.Clamp01(lines.Count / 6f * 0.5f + FoundCount() / (float)Mathf.Max(1, sceneries.Count) * 0.5f);
     }
@@ -2144,8 +2219,8 @@ public partial class DemoBootstrap : MonoBehaviour
     const int BondDailyPayment = 280;
     const int BondEarlyPayPerDay = 265;
 
-    static readonly string[] CompanySealChars = { "轮", "海", "山", "茗", "星", "金" };
-    static readonly string[] CompanySealNames = { "轮轨初心", "山海潮声", "岭南峻岳", "早茶茗香", "湾区星轨", "鎏金枢纽" };
+    static readonly string[] CompanySealChars = { "轮", "海", "山", "茗", "星", "金", "御", "龙" };
+    static readonly string[] CompanySealNames = { "轮轨初心", "山海潮声", "岭南峻岳", "早茶茗香", "湾区星轨", "鎏金枢纽", "大湾区御玺", "鎏金龙印" };
     static readonly string[] CompanyPolicyNames = { "均衡发展", "惠民扩容", "精益运维", "文旅专线" };
     static readonly string[] CompanyPolicyDescs =
     {
@@ -2158,6 +2233,39 @@ public partial class DemoBootstrap : MonoBehaviour
     static readonly int[] StationFacilityCosts = { 180, 420, 880, 0 };
     static readonly int[] StationFacilityRents = { 0, 28, 72, 165 };
 
+    static readonly string[] PartnerNames = { "陈志豪", "阿珍姐", "基建强叔", "林博士", "沈小姐", "何先生", "霍老督办" };
+    static readonly string[] PartnerTitles = { "港铁精算师", "茶楼商业总监", "工程老总工", "高铁调度总监", "跨境招商官", "湾区资本推手", "特聘传奇顾问（IAA）" };
+    static readonly string[] PartnerPros =
+    {
+        "车辆与轨道维护费 -15%",
+        "站前商业租金 +35%，名胜站客流 +15%",
+        "建线造价 -22%，拆线退款率升至 80%",
+        "全队车速 +14%，线路票款收益 +10%",
+        "全网客流需求 +16%",
+        "债券授信 & 市政中标奖金 +25%，开站费 -12%",
+        "全能零负面：客流 +15% · 车速 +10% · 建线 -15% · 维护 -12%"
+    };
+    static readonly string[] PartnerCons =
+    {
+        "新开车站费用 +10%",
+        "全队车辆维护费 +6%",
+        "列车平均速度 -5%",
+        "全队车辆维护费 +10%",
+        "全网轨道维护费 +8%",
+        "常规票款收益 -4%",
+        "无负面特质（仅限特聘第 4 席）"
+    };
+
+    static readonly string[] EconomyCycleNames = { "常态运营周", "广交会客流季", "粤港澳文旅嘉年华", "台风梅雨维护周", "基建低息窗口周" };
+    static readonly string[] EconomyCycleDescs =
+    {
+        "湾区路网平稳运作，客流、票价与造价均处于基准水平",
+        "商贸云集！全网客流 +22%，票款收益 +12%，旺季吸金必争",
+        "景区爆火！名胜关联站客流 +40%，含名胜线路票款 +18%",
+        "天气承压：轨道维护 +18%、客流 -8%，每日获防汛稳底补贴 +¥120",
+        "大兴土木良机！开站、铺轨与站前商业开发成本一律 -20%"
+    };
+
     bool IsSealUnlocked(int sealIndex)
     {
         if (sealIndex <= 1) return true;
@@ -2165,11 +2273,18 @@ public partial class DemoBootstrap : MonoBehaviour
         if (sealIndex == 3) return FoundCount() >= 3;
         if (sealIndex == 4) return techDone.Count >= 3;
         if (sealIndex == 5) return income >= 400f;
+        if (sealIndex == 6 || sealIndex == 7)
+            return adWatchCounts.TryGetValue("seal_" + sealIndex, out int cnt) && cnt >= 2;
         return false;
     }
 
     string SealUnlockHint(int sealIndex)
     {
+        if (sealIndex == 6 || sealIndex == 7)
+        {
+            adWatchCounts.TryGetValue("seal_" + sealIndex, out int cnt);
+            return "看激励片解锁 (" + Mathf.Min(cnt, 2) + "/2)";
+        }
         switch (sealIndex)
         {
             case 2: return "连通 8 座车站解锁";
@@ -2188,6 +2303,305 @@ public partial class DemoBootstrap : MonoBehaviour
         if (connected >= 16 && income >= 500f) return "跨海铁道社";
         if (connected >= 8 || lines.Count >= 3) return "城市干线局";
         return "初创轻轨社";
+    }
+
+    bool HasPartner(int id)
+    {
+        return boardPartners.Contains(id) || (consultantDaysLeft > 0 && consultantId == id);
+    }
+
+    int BoardSeatCapacity()
+    {
+        int connected = DailyConnectedCount();
+        if (connected >= 16 && income >= 500f) return 3;
+        if (connected >= 8 || lines.Count >= 3) return 2;
+        return 1;
+    }
+
+    float PartnerOpenCostFactor()
+    {
+        float m = 1f;
+        if (HasPartner(0)) m *= 1.10f;
+        if (HasPartner(5)) m *= 0.88f;
+        return m;
+    }
+
+    float TrackBuildCostFactor()
+    {
+        float m = economyCycle == 4 ? 0.80f : 1f;
+        if (HasPartner(2)) m *= 0.78f;
+        if (HasPartner(6)) m *= 0.85f;
+        return m;
+    }
+
+    float DemolishRefundRate()
+    {
+        return HasPartner(2) ? 0.80f : 0.60f;
+    }
+
+    float PartnerDemandFactor(bool isScenery)
+    {
+        float m = 1f;
+        if (HasPartner(1) && isScenery) m *= 1.15f;
+        if (HasPartner(4)) m *= 1.16f;
+        if (HasPartner(6)) m *= 1.15f;
+        return m;
+    }
+
+    float PartnerSpeedFactor()
+    {
+        float m = 1f;
+        if (HasPartner(2)) m *= 0.95f;
+        if (HasPartner(3)) m *= 1.14f;
+        if (HasPartner(6)) m *= 1.10f;
+        return m;
+    }
+
+    float PartnerVehicleMaintFactor()
+    {
+        float m = autoDispatchDaysLeft > 0 ? 0.90f : 1f;
+        if (HasPartner(0)) m *= 0.85f;
+        if (HasPartner(1)) m *= 1.06f;
+        if (HasPartner(3)) m *= 1.10f;
+        if (HasPartner(6)) m *= 0.88f;
+        return m;
+    }
+
+    float PartnerTrackMaintFactor()
+    {
+        float m = autoDispatchDaysLeft > 0 ? 0.90f : 1f;
+        if (HasPartner(0)) m *= 0.85f;
+        if (HasPartner(4)) m *= 1.08f;
+        if (HasPartner(6)) m *= 0.88f;
+        return m;
+    }
+
+    float PartnerRevenueFactor()
+    {
+        float m = 1f;
+        if (HasPartner(3)) m *= 1.10f;
+        if (HasPartner(5)) m *= 0.96f;
+        return m;
+    }
+
+    float PartnerContractBonusFactor()
+    {
+        return HasPartner(5) ? 1.25f : 1f;
+    }
+
+    int CycleDaysRemaining()
+    {
+        int rem = 7 - ((day - 1) % 7);
+        return Mathf.Clamp(rem, 1, 7);
+    }
+
+    float CycleDemandFactor(bool isScenery)
+    {
+        if (economyCycle == 1) return 1.22f;
+        if (economyCycle == 2 && isScenery) return 1.40f;
+        if (economyCycle == 3) return 0.92f;
+        return 1f;
+    }
+
+    float CycleRevenueFactor(bool lineHasScenery)
+    {
+        if (economyCycle == 1) return 1.12f;
+        if (economyCycle == 2 && lineHasScenery) return 1.18f;
+        return 1f;
+    }
+
+    float CycleTrackMaintFactor()
+    {
+        return economyCycle == 3 ? 1.18f : 1f;
+    }
+
+    float CycleDailySubsidy()
+    {
+        return economyCycle == 3 ? 120f : 0f;
+    }
+
+    int CompanyCreditScore()
+    {
+        int s = Mathf.Min(35, DailyConnectedCount());
+        s += income >= 800f ? 25 : income >= 300f ? 15 : income >= 100f ? 8 : 0;
+        s += Mathf.Min(20, DevelopedCommercialCount() * 5);
+        s += Mathf.Min(15, techDone.Count * 3);
+        s += Mathf.Min(15, bondsRepaid * 8);
+        if (loanOutstanding) s -= 15;
+        return Mathf.Clamp(s, 0, 100);
+    }
+
+    int CompanyCreditTier()
+    {
+        int s = CompanyCreditScore();
+        if (s >= 82) return 4; // AAA
+        if (s >= 64) return 3; // AA
+        if (s >= 45) return 2; // A
+        if (s >= 26) return 1; // B
+        return 0;              // C
+    }
+
+    static readonly string[] CreditTierLabels = { "C 级", "B 级", "A 级", "AA 级", "AAA 级" };
+    static readonly int[] CreditBondAmounts = { 1800, 3000, 5000, 8000, 12000 };
+    static readonly int[] CreditBondDailyDues = { 205, 335, 545, 855, 1260 };
+
+    int CurrentCreditBondAmount(int tier)
+    {
+        int amt = CreditBondAmounts[Mathf.Clamp(tier, 0, CreditBondAmounts.Length - 1)];
+        if (HasPartner(5)) amt = Mathf.RoundToInt(amt * 1.25f);
+        return amt;
+    }
+
+    int CurrentCreditBondDaily(int tier)
+    {
+        int due = CreditBondDailyDues[Mathf.Clamp(tier, 0, CreditBondDailyDues.Length - 1)];
+        if (HasPartner(5)) due = Mathf.RoundToInt(due * 1.20f);
+        return due;
+    }
+
+    int EffectiveBondDailyPayment()
+    {
+        if (bondDaysLeft <= 0) return 0;
+        int raw = bondDailyDue > 0 ? bondDailyDue : BondDailyPayment;
+        return bondSubsidized ? Mathf.RoundToInt(raw * 0.85f) : raw;
+    }
+
+    void EnsureCompanyInitialized()
+    {
+        economyCycle = Mathf.Clamp(economyCycle, 0, EconomyCycleNames.Length - 1);
+        nextEconomyCycle = Mathf.Clamp(nextEconomyCycle, 0, EconomyCycleNames.Length - 1);
+        if (nextEconomyCycle == economyCycle) nextEconomyCycle = (economyCycle + 1) % EconomyCycleNames.Length;
+        for (int i = activeContracts.Count - 1; i >= 0; i--)
+        {
+            var c = activeContracts[i];
+            if (c == null || c.claimed || (day > c.deadlineDay && !ContractIsReady(c))) activeContracts.RemoveAt(i);
+        }
+        while (activeContracts.Count < 2) activeContracts.Add(RollContract(activeContracts.Count));
+    }
+
+    void AdvanceEconomyCycle()
+    {
+        economyCycle = Mathf.Clamp(nextEconomyCycle, 0, EconomyCycleNames.Length - 1);
+        int pick = (economyCycle + 1 + ((day + DailyConnectedCount()) % (EconomyCycleNames.Length - 1))) % EconomyCycleNames.Length;
+        nextEconomyCycle = pick == economyCycle ? (economyCycle + 1) % EconomyCycleNames.Length : pick;
+        EnsureCompanyInitialized();
+        Toast("《湾区行风周报》本周进入：" + EconomyCycleNames[economyCycle]);
+    }
+
+    MunicipalContract RollContract(int slotIdx)
+    {
+        int type = (day + slotIdx + nextContractId) % 4;
+        var c = new MunicipalContract { id = nextContractId++, type = type, deadlineDay = day + 6 };
+        float mult = PartnerContractBonusFactor();
+        if (type == 0)
+        {
+            c.startValue = DailyConnectedCount();
+            c.targetValue = 3 + (DailyConnectedCount() >= 18 ? 1 : 0);
+            c.rewardCoins = Mathf.RoundToInt(1350 * mult);
+            c.rewardRp = 25; c.rewardDiamonds = 15;
+        }
+        else if (type == 1)
+        {
+            c.startValue = DevelopedCommercialCount();
+            c.targetValue = c.startValue + 2;
+            c.rewardCoins = Mathf.RoundToInt(1150 * mult);
+            c.rewardRp = 20; c.rewardDiamonds = 25;
+        }
+        else if (type == 2)
+        {
+            int curProfit = Mathf.Max(0, Mathf.RoundToInt(income));
+            c.startValue = 0;
+            c.targetValue = Mathf.Max(220, ((curProfit + 180) / 50) * 50);
+            c.rewardCoins = Mathf.RoundToInt(1550 * mult);
+            c.rewardRp = 35; c.rewardDiamonds = 20;
+        }
+        else
+        {
+            c.startValue = FoundCount();
+            c.targetValue = Mathf.Min(sceneries.Count, c.startValue + 1);
+            c.rewardCoins = Mathf.RoundToInt(1080 * mult);
+            c.rewardRp = 20; c.rewardDiamonds = 30;
+        }
+        return c;
+    }
+
+    int ContractCurrentValue(MunicipalContract c)
+    {
+        if (c == null) return 0;
+        switch (c.type)
+        {
+            case 0: return Mathf.Max(0, DailyConnectedCount() - c.startValue);
+            case 1: return DevelopedCommercialCount();
+            case 2: return Mathf.Max(0, Mathf.RoundToInt(income));
+            default: return FoundCount();
+        }
+    }
+
+    bool ContractIsReady(MunicipalContract c)
+    {
+        return c != null && !c.claimed && ContractCurrentValue(c) >= c.targetValue;
+    }
+
+    string ContractTitle(MunicipalContract c)
+    {
+        if (c == null) return "";
+        switch (c.type)
+        {
+            case 0: return "市政连通扩网工程";
+            case 1: return "站前商业繁华开发";
+            case 2: return "湾区干线盈利冲刺";
+            default: return "文旅名胜接驳专线";
+        }
+    }
+
+    string ContractDesc(MunicipalContract c)
+    {
+        if (c == null) return "";
+        int cur = ContractCurrentValue(c);
+        switch (c.type)
+        {
+            case 0: return "较接标新增连通 " + c.targetValue + " 座车站（" + Mathf.Min(cur, c.targetValue) + "/" + c.targetValue + "）";
+            case 1: return "全网累计建成 " + c.targetValue + " 处站前商业（" + Mathf.Min(cur, c.targetValue) + "/" + c.targetValue + "）";
+            case 2: return "全网预计日利润达 ¥" + c.targetValue + "（当前 ¥" + cur + "）";
+            default: return "名胜打卡累计达 " + c.targetValue + " 处（" + Mathf.Min(cur, c.targetValue) + "/" + c.targetValue + "）";
+        }
+    }
+
+    int FacilityUpgradeCost(int curFac)
+    {
+        int raw = StationFacilityCosts[Mathf.Clamp(curFac, 0, StationFacilityCosts.Length - 1)];
+        return economyCycle == 4 ? Mathf.RoundToInt(raw * 0.80f) : raw;
+    }
+
+    void ComputeAnnualAward(out string medalName, out string reason, out int grantCoins, out int grantDiamonds)
+    {
+        int dev = DevelopedCommercialCount();
+        int conn = DailyConnectedCount();
+        int found = FoundCount();
+        if (bondDaysLeft == 0 && !loanOutstanding && income >= 300f)
+        {
+            medalName = "零负债稳健总社";
+            reason = "财务稳健无坏账，现金流充沛且利润丰厚";
+            grantCoins = 950 + conn * 15; grantDiamonds = 25;
+        }
+        else if (dev >= 4)
+        {
+            medalName = "湾区包租公金印";
+            reason = "站前商业体已达 " + dev + " 处，路网与地产双翼齐飞";
+            grantCoins = 850 + dev * 120; grantDiamonds = 30;
+        }
+        else if (found >= 5)
+        {
+            medalName = "粤港澳文旅金招牌";
+            reason = "累计串联打卡 " + found + " 处城市地标与自然风景";
+            grantCoins = 800 + found * 90; grantDiamonds = 35;
+        }
+        else
+        {
+            medalName = "湾区基建先锋局";
+            reason = "持续推进跨城铁路覆盖，全网已连通 " + conn + " 座枢纽站";
+            grantCoins = 700 + conn * 20; grantDiamonds = 20;
+        }
     }
 
     bool StationHasScenery(int index)
@@ -2210,7 +2624,7 @@ public partial class DemoBootstrap : MonoBehaviour
     float StationCommercialTotalDaily()
     {
         float sum = 0f;
-        float mult = TechMult();
+        float mult = TechMult() * (HasPartner(1) ? 1.35f : 1f);
         foreach (var s in stations)
             if (s.built && !s.closed && s.riderBonus > 0f) sum += s.riderBonus * mult;
         return sum;
@@ -2237,7 +2651,15 @@ public partial class DemoBootstrap : MonoBehaviour
 
     int BondEarlyRedeemCost()
     {
-        return Mathf.Max(0, bondDaysLeft) * BondEarlyPayPerDay;
+        if (bondDaysLeft <= 0) return 0;
+        if (bondPrincipal > 0)
+        {
+            float principalPerDay = bondPrincipal / (float)BondTermDays;
+            float duePerDay = EffectiveBondDailyPayment();
+            float interestHalf = Mathf.Max(0f, duePerDay - principalPerDay) * 0.5f;
+            return Mathf.RoundToInt(bondDaysLeft * (principalPerDay + interestHalf));
+        }
+        return bondDaysLeft * BondEarlyPayPerDay;
     }
 }
 

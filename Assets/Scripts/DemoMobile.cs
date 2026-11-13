@@ -158,7 +158,7 @@ public partial class DemoBootstrap
             float step = Mathf.Min(remaining, (hour + 1) * 15f - dayClock);
             if (step <= 0.0001f) { dayClock = (hour + 1) * 15f; step = 0; }
             float fraction = step / GameDaySeconds;
-            researchClock += step;
+            researchClock += step * (turboDaysLeft > 0 ? 1.5f : 1f);
             while (researchClock >= 36f) { researchClock -= 36f; RPTick(); }
             foreach (var line in lines)
             {
@@ -184,12 +184,16 @@ public partial class DemoBootstrap
                 }
                 if (bondDaysLeft > 0)
                 {
-                    float due = Mathf.Min(Mathf.Max(0f, coins), BondDailyPayment);
+                    int targetDue = EffectiveBondDailyPayment();
+                    float due = Mathf.Min(Mathf.Max(0f, coins), targetDue);
                     coins -= due;
                     bondDaysLeft--;
-                    Toast(bondDaysLeft > 0
-                        ? "基建债券扣款 ¥" + Mathf.RoundToInt(due) + "（剩 " + bondDaysLeft + " 天）"
-                        : "基建债券最后一期 ¥" + Mathf.RoundToInt(due) + " 已结清！");
+                    if (bondDaysLeft <= 0)
+                    {
+                        bondDaysLeft = 0; bondPrincipal = 0; bondDailyDue = 0; bondSubsidized = false; bondsRepaid++;
+                        Toast("基建债券最后一期 ¥" + Mathf.RoundToInt(due) + " 已全额结清，企业信用上升！");
+                    }
+                    else Toast("基建债券扣款 ¥" + Mathf.RoundToInt(due) + "（剩 " + bondDaysLeft + " 天）");
                 }
                 if (companyPolicy == 3 && FoundCount() > 0)
                 {
@@ -197,6 +201,31 @@ public partial class DemoBootstrap
                     coins += dividend;
                     Toast("文旅专线红利 +¥" + Mathf.RoundToInt(dividend));
                 }
+                float cycleSub = CycleDailySubsidy();
+                if (cycleSub > 0f)
+                {
+                    coins += cycleSub;
+                    Toast("防汛防台运营补贴 +¥" + Mathf.RoundToInt(cycleSub));
+                }
+                if (consultantDaysLeft > 0)
+                {
+                    consultantDaysLeft--;
+                    if (consultantDaysLeft <= 0) { consultantDaysLeft = 0; consultantId = -1; hasForecastSignature = false; Toast("特聘首席顾问聘期已满"); }
+                }
+                if (turboDaysLeft > 0)
+                {
+                    turboDaysLeft--;
+                    if (turboDaysLeft <= 0) { turboDaysLeft = 0; if (timeSpeed > 3) timeSpeed = 3; Toast("4× 极速推演特权已到期"); }
+                }
+                if (autoDispatchDaysLeft > 0)
+                {
+                    autoDispatchDaysLeft--;
+                    if (autoDispatchDaysLeft <= 0) { autoDispatchDaysLeft = 0; hasForecastSignature = false; Toast("AI 智能调度特权已到期"); }
+                }
+                if ((day - 1) % 7 == 0) AdvanceEconomyCycle();
+                else EnsureCompanyInitialized();
+                if (day % 15 == 0 && lastAwardDay < day)
+                    Toast("《大湾区年度铁道大赏》第 " + day + " 日颁奖开启，去「公司」领奖！");
                 dailyStationBaseline = DailyConnectedCount();
                 RollTrafficEvents();
             }
@@ -214,7 +243,8 @@ public partial class DemoBootstrap
     }
     void CycleSpeed()
     {
-        BeginUndo("切换倍速"); timeSpeed = timeSpeed >= 3 ? 0 : timeSpeed + 1; EndUndo();
+        int maxSpeed = turboDaysLeft > 0 ? 4 : 3;
+        BeginUndo("切换倍速"); timeSpeed = timeSpeed >= maxSpeed ? 0 : timeSpeed + 1; EndUndo();
         UpdateTimeText();
     }
 
@@ -260,11 +290,12 @@ public partial class DemoBootstrap
         foreach (var line in lines) if (line.st.Contains(index)) lineNames += (lineNames.Length == 0 ? "" : "、") + line.name;
         float demand = StationRequestedFlow(index), served = StationPassengerFlow(index), cap = StationCapacity(index);
         string pressure = demand > cap ? "站点拥挤，升级可提高站内容量" : "站点容量充足";
+        string compass = StationCompassHint(index);
         return state + (lineNames.Length > 0 ? "\n途经线路：" + lineNames : "") + "\n预估客流 " + StationEstimatedDemand(index) + " 人/日（潜在需求）" + "\n当前客流 " + Mathf.RoundToInt(served) + " / 日  ·  需求 " + Mathf.RoundToInt(demand) + " / 日\n" +
             "站内容量 " + Mathf.RoundToInt(cap) + " / 日 · " + pressure + "\n" +
             "流量事件：" + TrafficEventNames[station.trafficEvent] + "（需求 " +
             (TrafficEventFactors[station.trafficEvent] >= 1 ? "+" : "") + Mathf.RoundToInt((TrafficEventFactors[station.trafficEvent]-1)*100) + "%）\n" +
-            StationAreaHint(index) + "\n线路覆盖、换乘、票价与班次决定可达客流。";
+            StationAreaHint(index) + (string.IsNullOrEmpty(compass) ? "" : "\n客流罗盘：优先引流去向 " + compass);
     }
     bool OpenStation(int index)
     {
@@ -378,7 +409,7 @@ public partial class DemoBootstrap
             OpenStationInfo(index);
         }); TInk(toggle, Color.white);
         int curFac = Mathf.Clamp(station.facLevel, 0, StationFacilityNames.Length - 1);
-        int facCost = StationFacilityCosts[curFac];
+        int facCost = FacilityUpgradeCost(curFac);
         int nextRent = curFac < 3 ? StationFacilityRents[curFac + 1] : 0;
         string facLabel = curFac < 3
             ? "站前商业 · " + StationFacilityNames[curFac] + " → 建" + StationFacilityNames[curFac + 1] + " (¥" + facCost + " / 日租+¥" + nextRent + ")"

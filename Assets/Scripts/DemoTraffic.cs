@@ -12,6 +12,7 @@ public partial class DemoBootstrap
         public Dictionary<Line, float> lineServed = new Dictionary<Line, float>();
         public Dictionary<Line, float> lineRevenue = new Dictionary<Line, float>();
         public Dictionary<Line, float> linePeakDemand = new Dictionary<Line, float>();
+        public Dictionary<string, float> lineSegLoad = new Dictionary<string, float>();
         public float[] sectionDemand, sectionServed, sectionCapacity, originBudget, originDemand;
         public float totalPassengers, totalRevenue;
     }
@@ -74,8 +75,10 @@ public partial class DemoBootstrap
         float morning = Mathf.Exp(-Mathf.Pow((hour - 8.5f) / 2f, 2f));
         float evening = Mathf.Exp(-Mathf.Pow((hour - 18f) / 2.4f, 2f));
         float leisure = Mathf.Exp(-Mathf.Pow((hour - 14f) / 4f, 2f));
-        float policyDemandMult = (companyPolicy == 1 ? 1.12f : 1f) * (companyPolicy == 3 && StationHasScenery(i) ? 1.35f : 1f);
-        return StationBaselineDemand(i) * (0.72f + 0.30f * morning + 0.30f * evening + 0.14f * leisure) * TrafficEventFactors[s.trafficEvent] * ResearchFactor(ResearchEffect.Demand) * policyDemandMult;
+        bool isScenery = StationHasScenery(i);
+        float policyDemandMult = (companyPolicy == 1 ? 1.12f : 1f) * (companyPolicy == 3 && isScenery ? 1.35f : 1f);
+        float companyMult = PartnerDemandFactor(isScenery) * CycleDemandFactor(isScenery);
+        return StationBaselineDemand(i) * (0.72f + 0.30f * morning + 0.30f * evening + 0.14f * leisure) * TrafficEventFactors[s.trafficEvent] * ResearchFactor(ResearchEffect.Demand) * policyDemandMult * companyMult;
     }
     int StationKind(int i)
     {
@@ -126,7 +129,7 @@ public partial class DemoBootstrap
             total += trait == 0 ? FleetMaintenanceTraits[v.node] : trait == 1 ? FleetCapacityTraits[v.node] : FleetSpeedTraits[v.node]; count++;
         }
         while (count < needed) { total += 1f; count++; }
-        float speedMult = trait == 2 ? ResearchFactor(ResearchEffect.Speed) * (SkinCategory(GetLineSkin(line)) == 1 ? 1.08f : 1f) * (companyPolicy == 2 ? 1.10f : 1f) : 1f;
+        float speedMult = trait == 2 ? ResearchFactor(ResearchEffect.Speed) * (SkinCategory(GetLineSkin(line)) == 1 ? 1.08f : 1f) * (companyPolicy == 2 ? 1.10f : 1f) * PartnerSpeedFactor() : 1f;
         return total / needed * speedMult;
     }
     void SettleRemovedLineTax(Line line)
@@ -246,7 +249,7 @@ public partial class DemoBootstrap
         var result=new TrafficResult { demand=new float[count], served=new float[count], originBudget=new float[count], originDemand=new float[count] };
         int[,] node=new int[lineCount,count]; for(int l=0;l<lineCount;l++)for(int i=0;i<count;i++)node[l,i]=-1;
         var nodeStation=new List<int>(); var nodeLine=new List<int>(); var edges=new List<List<TrafficEdge>>();
-        var capacity=new List<float>(); var sectionOwners=new List<int>();
+        var capacity=new List<float>(); var sectionOwners=new List<int>(); var sectionKeys=new List<string>();
         for(int l=0;l<lineCount;l++)
         {
             var line=serviceLines[l]; var path=line==replacement?replacementPath:line.st;
@@ -257,7 +260,9 @@ public partial class DemoBootstrap
                 int a=path[k],b=path[k+1]; string region=SegmentRegion(a,b); if(region==null)continue;
                 float distance=Mathf.Max(1f,EconomicSegmentDistance(a,b,region));
                 float travel=distance/(58f*FleetTrait(line,2)) + distance * 0.002f * 0.3f; int na=node[l,a],nb=node[l,b];
-                int forward=capacity.Count; capacity.Add(FleetCapacity(line)); sectionOwners.Add(l); int reverse=capacity.Count; capacity.Add(FleetCapacity(line)); sectionOwners.Add(l);
+                string edgeKey = line.id + ":" + Mathf.Min(a, b) + ":" + Mathf.Max(a, b);
+                int forward=capacity.Count; capacity.Add(FleetCapacity(line)); sectionOwners.Add(l); sectionKeys.Add(edgeKey);
+                int reverse=capacity.Count; capacity.Add(FleetCapacity(line)); sectionOwners.Add(l); sectionKeys.Add(edgeKey);
                 edges[na].Add(new TrafficEdge{target=nb,cost=travel,section=forward,distance=distance});
                 edges[nb].Add(new TrafficEdge{target=na,cost=travel,section=reverse,distance=distance});
             }
@@ -344,8 +349,12 @@ public partial class DemoBootstrap
         for(int section=0;section<sectionOwners.Count;section++) {
             var line=serviceLines[sectionOwners[section]];
             result.linePeakDemand[line]=Mathf.Max(result.linePeakDemand[line],result.sectionDemand[section]);
+            string sk = sectionKeys[section];
+            float loadRatio = result.sectionCapacity[section] > 0f ? result.sectionDemand[section] / result.sectionCapacity[section] : 0f;
+            if (!result.lineSegLoad.TryGetValue(sk, out float prevLoad) || loadRatio > prevLoad)
+                result.lineSegLoad[sk] = loadRatio;
         }
-        float revenueMultiplier = TechMult();
+        float revenueMultiplier = TechMult() * PartnerRevenueFactor();
         foreach(var trip in trips)
         {
             float factor=1f;
@@ -357,7 +366,7 @@ public partial class DemoBootstrap
             float distance=0;foreach(float d in trip.lineDistance.Values)distance+=d;
             float revenue=served*trip.fare/10f*trip.bonus*revenueMultiplier;
             float tripTotalRev=0f;
-            foreach(var part in trip.lineDistance){var line=serviceLines[part.Key];float policyRevMult=companyPolicy==1?0.95f:(companyPolicy==3&&LineHasSceneryStation(line)?1.10f:1f);float partRev=revenue*part.Value/distance*(SkinCategory(GetLineSkin(line))==0?1.06f:1f)*policyRevMult;result.lineServed[line]+=served;result.lineRevenue[line]+=partRev;tripTotalRev+=partRev;}
+            foreach(var part in trip.lineDistance){var line=serviceLines[part.Key];bool lineHasScenery=LineHasSceneryStation(line);float policyRevMult=(companyPolicy==1?0.95f:(companyPolicy==3&&lineHasScenery?1.10f:1f))*CycleRevenueFactor(lineHasScenery);float partRev=revenue*part.Value/distance*(SkinCategory(GetLineSkin(line))==0?1.06f:1f)*policyRevMult;result.lineServed[line]+=served;result.lineRevenue[line]+=partRev;tripTotalRev+=partRev;}
             result.totalPassengers+=served;result.totalRevenue+=tripTotalRev;
         }
         MergeFrozenTraffic(result, serviceLines);
@@ -376,6 +385,9 @@ public partial class DemoBootstrap
     {
         unchecked {
             int hash = 17; hash = hash * 31 + currentRegion.GetHashCode(); hash = hash * 31 + companyPolicy;
+            hash = hash * 31 + economyCycle; hash = hash * 31 + (consultantDaysLeft > 0 ? consultantId + 100 : 0);
+            hash = hash * 31 + (autoDispatchDaysLeft > 0 ? 1 : 0);
+            foreach (int pid in boardPartners) hash = hash * 31 + (pid + 7);
             foreach (var line in lines) {
                 hash=hash*31+line.GetHashCode(); hash=hash*31+line.trains; hash=hash*31+line.fare.GetHashCode(); hash=hash*31+GetLineSkin(line);
                 foreach (int v in line.st) hash=hash*31+v;
@@ -420,13 +432,13 @@ public partial class DemoBootstrap
     }
     float VehicleMaintenance(Line line) {
         float skinMult = SkinCategory(GetLineSkin(line)) == 3 ? (DispatchSlot() == 3 ? 0.81f : 0.90f) : 1f;
-        float policyMult = companyPolicy == 2 ? 0.88f : 1f;
+        float policyMult = (companyPolicy == 2 ? 0.88f : 1f) * PartnerVehicleMaintFactor();
         return (line.trains * 4f + RunningTrains(line) * 24f) * FleetTrait(line, 0, false) * ResearchCostFactor(ResearchEffect.Vehicle) * skinMult * policyMult;
     }
     float TrackMaintenance(Line line) {
         int cat = SkinCategory(GetLineSkin(line));
         float skinMult = cat == 2 ? 0.88f : cat == 1 ? 1.04f : 1f;
-        float policyMult = companyPolicy == 2 ? 0.88f : 1f;
+        float policyMult = (companyPolicy == 2 ? 0.88f : 1f) * PartnerTrackMaintFactor() * CycleTrackMaintFactor();
         return (40f + EconomicPathLength(line.st) * 0.25f + UniqueCount(line.st) * 5f) * ResearchCostFactor(ResearchEffect.Track) * skinMult * policyMult;
     }
     float LineProfitRate(Line line, TrafficResult result)
@@ -437,5 +449,69 @@ public partial class DemoBootstrap
     float TrafficRevenue(Line line, TrafficResult result)
     {
         return result != null && result.lineRevenue.TryGetValue(line,out float value) ? value : 0f;
+    }
+    int OptimizeAllLinesDispatch()
+    {
+        int adjusted = 0;
+        if (lines.Count == 0) return 0;
+        var backup = new Dictionary<Line, int[]>();
+        foreach (var l in lines) backup[l] = (int[])l.dispatch.Clone();
+        float savedClock = dayClock;
+        float[] hours = { 8f, 13f, 18f, 1f };
+        try
+        {
+            foreach (var l in lines)
+                if (PathTouchesRegion(l.st, currentRegion))
+                    for (int s = 0; s < 4; s++) l.dispatch[s] = Mathf.Max(1, l.trains);
+
+            for (int slot = 0; slot < 4; slot++)
+            {
+                dayClock = hours[slot] * GameDaySeconds / 24f;
+                var proj = CalculateTraffic();
+                foreach (var l in lines)
+                {
+                    if (!PathTouchesRegion(l.st, currentRegion) || l.trains <= 0) continue;
+                    int maxT = l.trains;
+                    float peak = proj.linePeakDemand.TryGetValue(l, out float p) ? p : 0f;
+                    float perTrainCap = FleetCapacity(l) / Mathf.Max(1, RunningTrains(l));
+                    int needed = peak <= 1f ? 1 : Mathf.Clamp(Mathf.CeilToInt(peak / Mathf.Max(1f, perTrainCap)), 1, maxT);
+                    l.dispatch[slot] = needed;
+                }
+            }
+            foreach (var l in lines)
+            {
+                if (!PathTouchesRegion(l.st, currentRegion)) continue;
+                var old = backup[l];
+                bool changed = false;
+                for (int s = 0; s < 4; s++) if (old[s] != l.dispatch[s]) { changed = true; break; }
+                if (changed) adjusted++;
+            }
+        }
+        finally { dayClock = savedClock; }
+        hasForecastSignature = false;
+        operatingRates.Clear();
+        RecalcIncome();
+        return adjusted;
+    }
+    string StationCompassHint(int index)
+    {
+        if (index < 0 || index >= stations.Count) return "";
+        string region = stations[index].region;
+        var p1 = PosInRegion(index, region);
+        int bestA = -1, bestB = -1;
+        float scoreA = -1f, scoreB = -1f;
+        for (int j = 0; j < stations.Count; j++)
+        {
+            if (j == index || stations[j].region != region || stations[j].closed) continue;
+            float dist = Mathf.Max(24f, Vector2.Distance(p1, PosInRegion(j, region)));
+            float sc = StationBaselineDemand(j) / (36f + dist);
+            if (!stations[j].built) sc *= 1.15f;
+            if (sc > scoreA) { scoreB = scoreA; bestB = bestA; scoreA = sc; bestA = j; }
+            else if (sc > scoreB) { scoreB = sc; bestB = j; }
+        }
+        if (bestA < 0) return "";
+        string res = StationDisplayName(bestA, region);
+        if (bestB >= 0) res += "、" + StationDisplayName(bestB, region);
+        return res;
     }
 }
