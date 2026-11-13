@@ -688,13 +688,15 @@ public partial class DemoBootstrap
         headerLayout.coinBadge = coinBadgeRt;
         var progressBadge = Rect("ProgressBadge", historyControls.transform, 24, 125, 248, 50);
         var pbg = Img(progressBadge, new Color(1f, 0.99f, 0.97f, 0.99f), spriteRound); pbg.type = Image.Type.Sliced; SoftShadow(progressBadge);
-        var prt = progressBadge.GetComponent<RectTransform>(); prt.anchorMin = prt.anchorMax = new Vector2(0,1); prt.pivot = new Vector2(0,1); prt.anchoredPosition = new Vector2(24,-138);
+        var prt = progressBadge.GetComponent<RectTransform>();
+        headerLayout.AddSafeTopLeftTarget(prt, new Vector2(24, -138));
         Txt(progressBadge.transform, "进度  " + techDone.Count + " / " + historyNodes.Count, 22, Ink, 16, 8, 218, 34, TextAnchor.MiddleLeft);
 
         var rpBadge = Rect("RPBadge", historyControls.transform, 286, 125, 290, 50);
         var rbg = Img(rpBadge, new Color(1f, 0.99f, 0.97f, 0.99f), spriteRound); rbg.type = Image.Type.Sliced; rbg.raycastTarget = true; SoftShadow(rpBadge);
-        var rrt = rpBadge.GetComponent<RectTransform>(); rrt.anchorMin = rrt.anchorMax = new Vector2(0,1); rrt.pivot = new Vector2(0,1); rrt.anchoredPosition = new Vector2(286,-138);
+        var rrt = rpBadge.GetComponent<RectTransform>();
         rpBadgeRect = rrt;
+        headerLayout.AddSafeTopLeftTarget(rrt, new Vector2(286, -138));
         var rpDot = Rect("RPDot", rpBadge.transform, 16, 16, 18, 18); Img(rpDot, Indigo, spriteCircle).raycastTarget = false;
         historyRpText = Txt(rpBadge.transform, "科研点  " + Mathf.FloorToInt(rp) + " RP", 22, Indigo, 42, 8, 206, 34, TextAnchor.MiddleLeft);
         historyRpText.resizeTextForBestFit = true; historyRpText.resizeTextMinSize = 16; historyRpText.resizeTextMaxSize = 22; historyRpText.raycastTarget = false;
@@ -710,18 +712,21 @@ public partial class DemoBootstrap
         TInk(eraBadge, new Color(0.45f, 0.31f, 0.16f));
         SoftShadow(eraBadge.gameObject);
         Img(Rect("EraAccent", eraBadge.transform, 0, 8, 6, 28), Gold, spriteRound).raycastTarget = false;
-        var ert = eraBadge.GetComponent<RectTransform>(); ert.anchorMin = ert.anchorMax = new Vector2(0, 1); ert.pivot = new Vector2(0, 1); ert.anchoredPosition = new Vector2(24, -198);
+        var ert = eraBadge.GetComponent<RectTransform>();
+        headerLayout.AddSafeTopLeftTarget(ert, new Vector2(24, -198));
 
         if ((!techCollapseDone || techSessionUnlocked.Count > 0) && techDone.Count > 0)
         {
             var collapseBtn = Btn(historyControls.transform, "CollapseDoneBtn", "收纳已研节点 ⟲", 20, 336, 0, 204, 44, new Color(0.95f, 0.92f, 0.85f, 0.98f), () => { techSessionUnlocked.Clear(); techCollapseDone = true; OpenTechScreen(1); });
             TInk(collapseBtn, Indigo);
             SoftShadow(collapseBtn.gameObject);
-            var crt2 = collapseBtn.GetComponent<RectTransform>(); crt2.anchorMin = crt2.anchorMax = new Vector2(0, 1); crt2.pivot = new Vector2(0, 1); crt2.anchoredPosition = new Vector2(336, -198);
+            var crt2 = collapseBtn.GetComponent<RectTransform>();
+            headerLayout.AddSafeTopLeftTarget(crt2, new Vector2(336, -198));
         }
 
         var legend = Rect("ResearchLegend", historyControls.transform, 0, 0, 1032, 104);
         var legendRt = legend.GetComponent<RectTransform>(); legendRt.anchorMin = legendRt.anchorMax = new Vector2(0.5f, 0); legendRt.pivot = new Vector2(0.5f, 0); legendRt.anchoredPosition = new Vector2(0, 20);
+        headerLayout.bottomSafeTarget = legendRt; headerLayout.bottomSafeMargin = 20f;
         Rounded(legend, new Color(1f, 0.99f, 0.96f, 0.97f)); SoftShadow(legend);
         string[] legendNames = { "收入", "客流", "运力", "速度", "站点吞吐", "车辆维护", "线路维护", "换乘", "机车", "运营解锁" };
         ResearchEffect[] legendKinds = { ResearchEffect.Revenue, ResearchEffect.Demand, ResearchEffect.Capacity, ResearchEffect.Speed, ResearchEffect.Station, ResearchEffect.Vehicle, ResearchEffect.Track, ResearchEffect.Transfer, ResearchEffect.None, ResearchEffect.None };

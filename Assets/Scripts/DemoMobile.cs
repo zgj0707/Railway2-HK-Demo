@@ -515,8 +515,13 @@ public partial class DemoBootstrap
         Vector2 at = (Vector2)root.InverseTransformPoint(mapRect.TransformPoint(pointer)) - root.rect.min;
         float gap = 132f + Mathf.Abs(dir.x) * 52f;  // 水平方向再多留一段，避免气泡压住拖拽点
         Vector2 anchor = at - dir * gap;            // 放在拖拽前进方向的反方向
-        float x = Mathf.Clamp(anchor.x - 125f, 12f, W - 262f);
-        float y = Mathf.Clamp(anchor.y - 48f, 180f, H - 301f);
+        GetSafeMarginsInRoot(out float safeL, out float safeR, out float safeT, out float safeB);
+        float minX = safeL + 12f;
+        float maxX = Mathf.Max(minX, RootW - safeR - 262f);
+        float minY = safeB + 180f;
+        float maxY = Mathf.Max(minY, RootH - safeT - 301f);
+        float x = Mathf.Clamp(anchor.x - 125f, minX, maxX);
+        float y = Mathf.Clamp(anchor.y - 48f, minY, maxY);
         var badgeRt = dragCostBadge.GetComponent<RectTransform>();
         var target = new Vector2(x, y);
         if (dt >= 0.5f) badgeRt.anchoredPosition = target;   // 刚出现时直接落位

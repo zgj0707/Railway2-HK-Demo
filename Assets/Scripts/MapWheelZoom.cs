@@ -12,12 +12,27 @@ public class MapWheelZoom : MonoBehaviour, IScrollHandler, IBeginDragHandler, ID
     float pinchDistance;
     bool panning;
     Vector2 previous;
+    public Vector2 CenterPosition(float scale = 1f)
+    {
+        if (!map || !viewport) return Vector2.zero;
+        float vw = viewport.rect.width, vh = viewport.rect.height;
+        float mw = map.rect.width, mh = map.rect.height;
+        return new Vector2((vw - mw * scale) * 0.5f, (vh - mh * scale) * 0.5f);
+    }
     public Vector2 ClampPosition(Vector2 position, float scale)
     {
-        float width = map.rect.width, height = map.rect.height;
-        float marginX = width * 0.08f, marginY = height * 0.05f;
-        position.x = Mathf.Clamp(position.x, width * (1f - scale) - marginX, marginX);
-        position.y = Mathf.Clamp(position.y, height * (1f - scale) - marginY, marginY);
+        if (!map) return position;
+        float mw = map.rect.width, mh = map.rect.height;
+        float vw = viewport ? viewport.rect.width : mw;
+        float vh = viewport ? viewport.rect.height : mh;
+        float scaledW = mw * scale, scaledH = mh * scale;
+        float marginX = mw * 0.08f, marginY = mh * 0.05f;
+        float minX = scaledW >= vw ? (vw - scaledW - marginX) : ((vw - scaledW) * 0.5f - marginX);
+        float maxX = scaledW >= vw ? marginX : ((vw - scaledW) * 0.5f + marginX);
+        float minY = scaledH >= vh ? (vh - scaledH - marginY) : ((vh - scaledH) * 0.5f - marginY);
+        float maxY = scaledH >= vh ? marginY : ((vh - scaledH) * 0.5f + marginY);
+        position.x = Mathf.Clamp(position.x, minX, maxX);
+        position.y = Mathf.Clamp(position.y, minY, maxY);
         return position;
     }
     public void PanBy(Vector2 delta)

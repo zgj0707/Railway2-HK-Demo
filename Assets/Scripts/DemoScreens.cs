@@ -6,17 +6,35 @@ using UnityEngine.UI;
 public partial class DemoBootstrap
 {
     GameObject pageRoot;
+    RectTransform pageContentRect;
     Action pageBack;
+    float PgH => pageContentRect ? Mathf.Max(1400f, pageContentRect.rect.height) : PageSafeHeight;
 
     GameObject OpenPage(string title, string help, string backgroundPath = null)
     {
         ClosePage();
         pageBack = null;
         CloseLineBubble();
-        pageRoot = Rect("Page", root, 0, 0, W, H);
+
+        pageRoot = Rect("Page", root, 0, 0, RootW, RootH);
+        var pageRootRt = pageRoot.GetComponent<RectTransform>();
+        pageRootRt.anchorMin = Vector2.zero; pageRootRt.anchorMax = Vector2.one;
+        pageRootRt.pivot = new Vector2(0.5f, 0.5f);
+        pageRootRt.offsetMin = Vector2.zero; pageRootRt.offsetMax = Vector2.zero;
         Img(pageRoot, Paper);
-        Img(Rect("PTop", pageRoot.transform, 0, H-160, W, 160), HeaderBg);
-        Img(Rect("PDiv", pageRoot.transform, 0, H-160, W, 3), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f));
+
+        GetSafeMarginsInRoot(out float safeL, out float safeR, out float safeT, out float safeB);
+        float safeW = Mathf.Max(320f, RootW - safeL - safeR);
+        float safeH = Mathf.Max(1400f, RootH - safeT - safeB);
+        float contentX = safeL + (safeW - W) * 0.5f;
+        var pageContent = Rect("PageContent", pageRoot.transform, contentX, safeB, W, safeH);
+        pageContentRect = pageContent.GetComponent<RectTransform>();
+
+        var pTop = Rect("PTop", pageRoot.transform, 0, RootH - safeT - 160f, RootW, safeT + 160f);
+        Img(pTop, HeaderBg);
+        var pDiv = Rect("PDiv", pageRoot.transform, 0, RootH - safeT - 160f, RootW, 3);
+        Img(pDiv, new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f)).raycastTarget = false;
+
         var bb = Btn(pageRoot.transform, "PBack", "←", 40, 24, 0, 94, 94, CardBg, GoBackPage);
         TInk(bb, Ink); SoftShadow(bb.gameObject);
         var home = Btn(pageRoot.transform, "PHome", "主页", 24, 134, 0, 104, 94, CardBg, GoHome);
@@ -31,16 +49,21 @@ public partial class DemoBootstrap
         }
         if (!string.IsNullOrEmpty(backgroundPath)) AddPageBackground(pageRoot, backgroundPath);
         var layout = pageRoot.AddComponent<PageHeaderLayout>();
-        layout.page = pageRoot.GetComponent<RectTransform>(); layout.back = bb.GetComponent<RectTransform>();
-        layout.home = home.GetComponent<RectTransform>(); layout.title = heading.rectTransform; layout.help = helpRect;
+        layout.page = pageRootRt;
+        layout.topBarBg = pTop.GetComponent<RectTransform>();
+        layout.topDivider = pDiv.GetComponent<RectTransform>();
+        layout.back = bb.GetComponent<RectTransform>();
+        layout.home = home.GetComponent<RectTransform>();
+        layout.title = heading.rectTransform;
+        layout.help = helpRect;
         EnsurePreviewBannerOnTop();
-        return pageRoot;
+        return pageContent;
     }
     void AddPageBackground(GameObject page, string path)
     {
         var texture = Resources.Load<Texture2D>(path);
         if (!texture) return;
-        var background = Rect("PageBackground", page.transform, 0, 0, W, H);
+        var background = Rect("PageBackground", page.transform, 0, 0, RootW, RootH);
         var art = background.AddComponent<RawImage>(); art.texture = texture;
         art.color = IsNeonThemeActive() ? new Color(0.28f, 0.38f, 0.86f, 0.16f) : new Color(1, 1, 1, 0.26f);
         art.raycastTarget = false;
@@ -55,7 +78,7 @@ public partial class DemoBootstrap
         ClosePage();
         if (b != null) b();
     }
-    void ClosePage() { if (pageRoot) Destroy(pageRoot); pageRoot = null; }
+    void ClosePage() { if (pageRoot) Destroy(pageRoot); pageRoot = null; pageContentRect = null; }
     void GoHome()
     {
         pageBack = null; fleetBack = null;
@@ -67,8 +90,9 @@ public partial class DemoBootstrap
 
     void HelpPopup(string text)
     {
-        float bodyHeight = Mathf.Clamp(MeasureTextHeight(text, 27, 572) + 10, 50, H - 420);
-        var p = OpenBubble("说明", bodyHeight + 220, 640, new Vector2(130, H - 240));
+        GetSafeMarginsInRoot(out float safeL, out _, out float safeT, out _);
+        float bodyHeight = Mathf.Clamp(MeasureTextHeight(text, 27, 572) + 10, 50, Mathf.Max(300f, PgH - 420f));
+        var p = OpenBubble("说明", bodyHeight + 220, 640, new Vector2(safeL + 130f, RootH - safeT - 240f));
         ScrollableText(p.transform, text, 27, InkSoft, 34, 128, 572, bodyHeight);
         var ok = Btn(p.transform, "Ok", "知道了", 30, 34, 28, 572, 80, new Color(0.92f,0.89f,0.83f), ClosePanel);
         TInk(ok, Ink);
@@ -87,7 +111,7 @@ public partial class DemoBootstrap
     {
         var pg = OpenPage("切换区域", "各区依次解锁。每区线路上限为站点数的一半；交界站计入所连地区。", "PageArt/line_watercolor");
         string[] regions = { "香港", "澳门", "广东" };
-        var content = FleetScroll(pg.transform, 42f, H - 250f, 800f);
+        var content = FleetScroll(pg.transform, 42f, PgH - 250f, 800f);
         float topY = content.sizeDelta.y, cardW = content.sizeDelta.x, cardX = 4f, innerW = cardW - 8f;
         for (int i = 0; i < regions.Length; i++)
         {
@@ -114,12 +138,12 @@ public partial class DemoBootstrap
     void OpenLinesScreen()
     {
         var pg = OpenPage("线路", "在地图按住车站拖向下一站即可开线；自端点拖出为延线，自中间站拖出则开新线。", "PageArt/line_watercolor");
-        StatBox(pg.transform, "预计日利润", FormatSignedNumber(income), 28, H-400, 320, 210, Gold);
-        StatBox(pg.transform, "已连通", ConnectedCount() + "/" + stations.Count, 380, H-400, 320, 210, Matcha);
-        StatBox(pg.transform, "钻石", Mathf.FloorToInt(diamonds).ToString(), 732, H-400, 320, 210, Sakura);
+        StatBox(pg.transform, "预计日利润", FormatSignedNumber(income), 28, PgH-400, 320, 210, Gold);
+        StatBox(pg.transform, "已连通", ConnectedCount() + "/" + stations.Count, 380, PgH-400, 320, 210, Matcha);
+        StatBox(pg.transform, "钻石", Mathf.FloorToInt(diamonds).ToString(), 732, PgH-400, 320, 210, Sakura);
         var regionalLines = lines.FindAll(line => PathTouchesRegion(line.st, currentRegion));
-        Txt(pg.transform, currentRegion + "线路 " + regionalLines.Count + " / " + LineLimit() + " · 当前时段日化旅次 " + Mathf.RoundToInt(traffic != null ? traffic.totalPassengers : 0f), 24, InkSoft, 28, H-465, 1000, 40, TextAnchor.MiddleLeft);
-        var list = FleetScroll(pg.transform, 36, H - 490, Mathf.Max(1, regionalLines.Count) * 188f + 24);
+        Txt(pg.transform, currentRegion + "线路 " + regionalLines.Count + " / " + LineLimit() + " · 当前时段日化旅次 " + Mathf.RoundToInt(traffic != null ? traffic.totalPassengers : 0f), 24, InkSoft, 28, PgH-465, 1000, 40, TextAnchor.MiddleLeft);
+        var list = FleetScroll(pg.transform, 36, PgH - 490, Mathf.Max(1, regionalLines.Count) * 188f + 24);
         float top = list.sizeDelta.y - 184f;
         for (int i = 0; i < regionalLines.Count; i++)
         {
@@ -143,21 +167,21 @@ public partial class DemoBootstrap
         if (line == null) { OpenLinesScreen(); return; }
         var pg = OpenPage(line.name, "沿线客流 · 运力配属 · 日盈亏总览", "PageArt/line_watercolor");
         pageBack = back ?? OpenLinesScreen;
-        StatBox(pg.transform, "客流", Mathf.RoundToInt(LinePassengerFlow(line)) + "", 28, H-440, 320, 200, Matcha);
-        StatBox(pg.transform, "单向区段运力", Mathf.RoundToInt(LineCapacity(line)) + " 人次/日", 380, H-440, 320, 200, Indigo);
-        StatBox(pg.transform, "预计日利润", Mathf.RoundToInt(LineDaily(line)) + "", 732, H-440, 320, 200, Gold);
-        var fleet = Rect("FleetSummary", pg.transform, 28, H-710, W-56, 190); Rounded(fleet, new Color(1,1,1,0.94f)); SoftShadow(fleet);
+        StatBox(pg.transform, "客流", Mathf.RoundToInt(LinePassengerFlow(line)) + "", 28, PgH-440, 320, 200, Matcha);
+        StatBox(pg.transform, "单向区段运力", Mathf.RoundToInt(LineCapacity(line)) + " 人次/日", 380, PgH-440, 320, 200, Indigo);
+        StatBox(pg.transform, "预计日利润", Mathf.RoundToInt(LineDaily(line)) + "", 732, PgH-440, 320, 200, Gold);
+        var fleet = Rect("FleetSummary", pg.transform, 28, PgH-710, W-56, 190); Rounded(fleet, new Color(1,1,1,0.94f)); SoftShadow(fleet);
         Txt(fleet.transform, "配属 " + line.trains + " 列 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line,2)*100) + "%", 28, Ink, 24, 115, 950, 45, TextAnchor.MiddleLeft);
         Txt(fleet.transform, "重联叠加运力，速度与养护成本按车队均值核算。", 21, InkSoft, 24, 70, 950, 35, TextAnchor.MiddleLeft);
         var fleetButton=Btn(fleet.transform,"Fleet","机车配属",25,24,8,450,55,Indigo,()=>OpenLineFleet(line));TInk(fleetButton,Color.white);
         var operations=Btn(fleet.transform,"Operations","票价与调度",25,495,8,450,55,Indigo,()=>OpenLineOperations(line));TInk(operations,Color.white);
-        Txt(pg.transform, "沿线", 28, InkSoft, 28, H-800, 160, 38, TextAnchor.MiddleLeft);
-        Txt(pg.transform, UniquePathText(line.st), 26, Ink, 28, H-870, W-56, 60, TextAnchor.UpperLeft);
+        Txt(pg.transform, "沿线", 28, InkSoft, 28, PgH-800, 160, 38, TextAnchor.MiddleLeft);
+        Txt(pg.transform, UniquePathText(line.st), 26, Ink, 28, PgH-870, W-56, 60, TextAnchor.UpperLeft);
         int curSkin = GetLineSkin(line);
         string skinBtnText = curSkin >= 0
             ? "线路涂装 · " + LineSkinNames[curSkin] + "（" + SkinCategoryName(curSkin) + " · " + SkinPerkSummary(curSkin) + "）"
             : "线路涂装 · 解锁外观与流派加成";
-        var colors=Btn(pg.transform,"LineSkins",skinBtnText,24,28,H-990,W-56,78,Paper2,()=>OpenLineSkins(line));TInk(colors,Ink);
+        var colors=Btn(pg.transform,"LineSkins",skinBtnText,24,28,PgH-990,W-56,78,Paper2,()=>OpenLineSkins(line));TInk(colors,Ink);
         Btn(pg.transform, "Add", "机车商店", 30, 28, 56, 490, 124, Indigo, () => { fleetBack = () => OpenLineScreen(id, back); OpenLocoShop(); });
         Btn(pg.transform, "Del", "拆除线路", 30, 544, 56, 508, 124, Vermilion, () => {
             int refund = Mathf.RoundToInt(120f * (UniqueCount(line.st) - 1) * TrackBuildCostFactor() * DemolishRefundRate());
@@ -213,7 +237,7 @@ public partial class DemoBootstrap
     }
     void BuildShopSidebar(Transform page)
     {
-        var rail = Rect("ShopSidebar", page, 28, H - 550, 136, 304);
+        var rail = Rect("ShopSidebar", page, 28, PgH - 550, 136, 304);
         Rounded(rail, CardBg); SoftShadow(rail);
         string[] cats = { "机车", "涂装", "风格" };
         Color activeBg = new Color(Matcha.r, Matcha.g, Matcha.b, 0.25f);
@@ -229,15 +253,26 @@ public partial class DemoBootstrap
     }
     void BuildFleetNavigation(Transform page, int selected)
     {
-        var bar = Rect("FleetBottomNav", page, 0, 0, W, 154);
+        Transform host = pageRoot ? pageRoot.transform : page;
+        GetSafeMarginsInRoot(out float safeL, out float safeR, out _, out float safeB);
+        float safeW = Mathf.Max(320f, RootW - safeL - safeR);
+        float navSlotX = pageRoot ? (safeL + (safeW - W) * 0.5f) : 0f;
+        float navBaseY = pageRoot ? safeB : 0f;
+
+        var bar = Rect("FleetBottomNav", host, 0, navBaseY, RootW, 154);
         Rounded(bar, CardBg); SoftShadow(bar);
-        bar.AddComponent<FleetBottomEdge>();
+        if (navBaseY > 0.5f)
+        {
+            var skirt = Rect("BottomSafeSkirt", bar.transform, 0, -navBaseY, RootW, navBaseY + 12f);
+            Img(skirt, CardBg).raycastTarget = false;
+        }
+        if (!pageRoot) bar.AddComponent<FleetBottomEdge>();
         string[] labels = { "调度", "车库", "商店" };
         string[] subtitles = { "DISPATCH", "GARAGE", "SHOP" };
         for (int i = 0; i < labels.Length; i++)
         {
             int target = i;
-            var item = Rect("Nav" + i, bar.transform, i * 360, 0, 360, 154);
+            var item = Rect("Nav" + i, bar.transform, navSlotX + i * 360, 0, 360, 154);
             var hit = Img(item, new Color(1, 1, 1, 0));
             if (i == selected) Img(Rect("Selected", item.transform, 105, 144, 150, 6), Gold, spriteRound).raycastTarget = false;
             Txt(item.transform, labels[i], 34, i == selected ? Ink : InkSoft, 0, 57, 360, 52, TextAnchor.MiddleCenter);
@@ -265,7 +300,7 @@ public partial class DemoBootstrap
     }
     void BuildFleetDispatch(Transform page)
     {
-        var content = FleetScroll(page, 172, H - 182, Mathf.Max(1, lines.Count) * 360f + 24);
+        var content = FleetScroll(page, 172, PgH - 182, Mathf.Max(1, lines.Count) * 360f + 24);
         float height = content.sizeDelta.y;
         if (lines.Count == 0) Txt(content, "还没有运营中的线路", 30, InkSoft, 20, height - 180, W - 96, 80, TextAnchor.MiddleCenter);
         for (int i = 0; i < lines.Count; i++)
@@ -287,11 +322,11 @@ public partial class DemoBootstrap
     {
         Button power = null, use = null, region = null;
         float left = tab == 2 ? 178 : 28, width = tab == 2 ? 282 : 326, gap = tab == 2 ? 14 : 23;
-        power = Btn(page, "PowerFilter", "动力：" + FleetPowerFilters[fleetPowerFilter] + "  ▾", 22, left, H - 285, width, 72,
+        power = Btn(page, "PowerFilter", "动力：" + FleetPowerFilters[fleetPowerFilter] + "  ▾", 22, left, PgH - 285, width, 72,
             new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, power.transform, FleetPowerFilters, fleetPowerFilter, value => { fleetPowerFilter = value; OpenFleetTab(tab); }));
-        use = Btn(page, "UseFilter", "用途：" + FleetUseFilters[fleetUseFilter] + "  ▾", 22, left + width + gap, H - 285, width, 72,
+        use = Btn(page, "UseFilter", "用途：" + FleetUseFilters[fleetUseFilter] + "  ▾", 22, left + width + gap, PgH - 285, width, 72,
             new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, use.transform, FleetUseFilters, fleetUseFilter, value => { fleetUseFilter = value; OpenFleetTab(tab); }));
-        region = Btn(page, "RegionFilter", "地区：" + FleetRegionFilters[fleetRegionFilter] + "  ▾", 22, left + 2 * (width + gap), H - 285, width, 72,
+        region = Btn(page, "RegionFilter", "地区：" + FleetRegionFilters[fleetRegionFilter] + "  ▾", 22, left + 2 * (width + gap), PgH - 285, width, 72,
             new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, region.transform, FleetRegionFilters, fleetRegionFilter, value => { fleetRegionFilter = value; OpenFleetTab(tab); }));
         TInk(power, Ink); TInk(use, Ink); TInk(region, Ink);
         power.gameObject.AddComponent<FleetPressFeedback>(); use.gameObject.AddComponent<FleetPressFeedback>(); region.gameObject.AddComponent<FleetPressFeedback>();
@@ -301,16 +336,20 @@ public partial class DemoBootstrap
         var old = page.Find("FleetDropdownOverlay");
         if (old) Destroy(old.gameObject);
         var sourceRect = (RectTransform)source;
+        var pageRect = (RectTransform)page;
         var corners = new Vector3[4]; sourceRect.GetWorldCorners(corners);
         var screen = RectTransformUtility.WorldToScreenPoint(null, corners[0]);
-        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)page, screen, null, out var point)) return;
-        var overlay = Rect("FleetDropdownOverlay", page, 0, 0, W, H);
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(pageRect, screen, null, out var localPt)) return;
+        Vector2 point = localPt - pageRect.rect.min;
+        float ph = Mathf.Max(PgH, pageRect.rect.height);
+        float pw = Mathf.Max(W, pageRect.rect.width);
+        var overlay = Rect("FleetDropdownOverlay", page, 0, 0, pw, ph);
         var overlayImage = Img(overlay, new Color(0, 0, 0, 0));
         var dismiss = overlay.AddComponent<Button>(); dismiss.targetGraphic = overlayImage;
         dismiss.transition = Selectable.Transition.None; dismiss.onClick.AddListener(() => Destroy(overlay));
         float width = 326, rowHeight = 70, height = options.Length * rowHeight + 16;
-        float x = Mathf.Clamp(point.x, 12, W - width - 12);
-        float y = Mathf.Clamp(point.y - height - 8, 160, H - height - 150);
+        float x = Mathf.Clamp(point.x, 12, pw - width - 12);
+        float y = Mathf.Clamp(point.y - height - 8, 160, ph - height - 150);
         var list = Rect("Options", overlay.transform, x, y, width, height);
         Rounded(list, new Color(0.99f, 0.98f, 0.95f, 1)); SoftShadow(list);
         for (int i = 0; i < options.Length; i++)
@@ -334,8 +373,8 @@ public partial class DemoBootstrap
         else for (int i = 0; i < LocoNames.Length; i++) if (FleetMatches(i)) visibleModels.Add(i);
         int count = tab == 1 ? visibleItems.Count : visibleModels.Count;
         float inset = tab == 2 ? 150 : 0;
-        Txt(page, tab == 1 ? "已拥有  " + count + " 辆 · 点击车卡查看详情" : "车型  " + count + " 款 · 点击车卡查看详情", 24, InkSoft, 28 + inset, H - 338, 850 - inset, 34, TextAnchor.MiddleLeft);
-        var content = FleetScroll(page, 172, H - 354, Mathf.Max(1, count) * 218f + 20, inset);
+        Txt(page, tab == 1 ? "已拥有  " + count + " 辆 · 点击车卡查看详情" : "车型  " + count + " 款 · 点击车卡查看详情", 24, InkSoft, 28 + inset, PgH - 338, 850 - inset, 34, TextAnchor.MiddleLeft);
+        var content = FleetScroll(page, 172, PgH - 354, Mathf.Max(1, count) * 218f + 20, inset);
         float height = content.sizeDelta.y;
         float cardWidth = content.sizeDelta.x, artWidth = tab == 2 ? 210f : 270f;
         float textX = tab == 2 ? 240f : 304f, actionWidth = tab == 2 ? 180f : 234f;
@@ -445,18 +484,18 @@ public partial class DemoBootstrap
         var page = OpenPage("票价与调度", "定价权衡客座率与营收；分时调车削减闲置损耗。", "PageArt/line_watercolor");
         pageBack = () => OpenLineScreen(line.id);
         var forecast = ForecastFor(line);
-        Txt(page.transform, line.name + " · 配属 " + line.trains + " 列 · 当前开行 " + RunningTrains(line) + " 列", 28, Ink, 32, H-300, 1000, 45, TextAnchor.MiddleLeft);
-        Txt(page.transform, "预计日收入 ¥" + Mathf.RoundToInt(forecast.gross) + "    成本 ¥" + Mathf.RoundToInt(forecast.vehicle+forecast.track+forecast.tax) + "    利润 ¥" + Mathf.RoundToInt(forecast.Profit), 24, InkSoft, 32, H-360, 1000, 45, TextAnchor.MiddleLeft);
-        var fare = Rect("Fare",page.transform,28,H-535,W-56,145); Rounded(fare,new Color(1,1,1,0.94f));
+        Txt(page.transform, line.name + " · 配属 " + line.trains + " 列 · 当前开行 " + RunningTrains(line) + " 列", 28, Ink, 32, PgH-300, 1000, 45, TextAnchor.MiddleLeft);
+        Txt(page.transform, "预计日收入 ¥" + Mathf.RoundToInt(forecast.gross) + "    成本 ¥" + Mathf.RoundToInt(forecast.vehicle+forecast.track+forecast.tax) + "    利润 ¥" + Mathf.RoundToInt(forecast.Profit), 24, InkSoft, 32, PgH-360, 1000, 45, TextAnchor.MiddleLeft);
+        var fare = Rect("Fare",page.transform,28,PgH-535,W-56,145); Rounded(fare,new Color(1,1,1,0.94f));
         Txt(fare.transform, "起步票价  ¥" + line.fare.ToString("0.0") + " / 人", 30, Ink, 26, 72, 570, 44, TextAnchor.MiddleLeft);
         Txt(fare.transform, techDone.Contains("fare_policy") ? "起步价叠加跨站里程费 · 票款按 10:1 计入金币" : "研究「客运票价制度」后可自主调价", 20, InkSoft, 26, 25, 650, 34, TextAnchor.MiddleLeft);
         var fm=Btn(fare.transform,"FareMinus","−",35,720,30,110,80,Paper2,()=>ChangeLineFare(line,-0.1f));TInk(fm,Ink);
         var fp=Btn(fare.transform,"FarePlus","+",35,850,30,110,80,Paper2,()=>ChangeLineFare(line,0.1f));TInk(fp,Ink);
         bool basic=techDone.Contains("dispatch_basic"), peak=techDone.Contains("dispatch_peak");
-        Txt(page.transform, !basic ? "研究「铁路时刻表」解锁统一调度" : !peak ? "统一调度已就绪；研究「分时列车计划」可分时段增减" : "分时调度 · 高峰与夜间独立发班", 23, InkSoft, 32, H-590, 1000, 36, TextAnchor.MiddleLeft);
+        Txt(page.transform, !basic ? "研究「铁路时刻表」解锁统一调度" : !peak ? "统一调度已就绪；研究「分时列车计划」可分时段增减" : "分时调度 · 高峰与夜间独立发班", 23, InkSoft, 32, PgH-590, 1000, 36, TextAnchor.MiddleLeft);
         int rows=peak?4:1;
         for(int i=0;i<rows;i++) {
-            int slot=i; var row=Rect("DispatchSlot"+i,page.transform,28,H-740-i*130,W-56,115); Rounded(row,new Color(1,1,1,0.94f));
+            int slot=i; var row=Rect("DispatchSlot"+i,page.transform,28,PgH-740-i*130,W-56,115); Rounded(row,new Color(1,1,1,0.94f));
             Txt(row.transform,peak?DispatchNames[i]:"全天统一",26,Ink,24,68,400,36,TextAnchor.MiddleLeft);
             Txt(row.transform,line.dispatch[i]+" 列",30,Indigo,510,44,130,40,TextAnchor.MiddleCenter);
             int sampleSlot = peak ? i : DispatchSlot();
@@ -472,18 +511,18 @@ public partial class DemoBootstrap
             var minus=Btn(row.transform,"Minus","−",34,720,18,110,80,Paper2,()=>SetLineDispatch(line,slot,line.dispatch[slot]-1)); TInk(minus,Ink);
             var plus=Btn(row.transform,"Plus","+",34,850,18,110,80,Paper2,()=>SetLineDispatch(line,slot,line.dispatch[slot]+1)); TInk(plus,Ink);
         }
-        Txt(page.transform, "高阶机车优先上线；各时段数据按全日口径折算，税费于每日结算扣除。", 22, InkSoft, 32, H-1320, 1000, 100, TextAnchor.UpperLeft);
+        Txt(page.transform, "高阶机车优先上线；各时段数据按全日口径折算，税费于每日结算扣除。", 22, InkSoft, 32, Mathf.Max(70f, PgH-1320), 1000, 100, TextAnchor.UpperLeft);
     }
     void OpenLineFleet(Line line)
     {
         if (line == null || !lines.Contains(line)) { OpenLinesScreen(); return; }
         var page=OpenPage("机车配属", "统筹本线牵引动力与编制配属。", "FleetArt/garage_watercolor");
         pageBack=()=>OpenLineScreen(line.id);
-        Txt(page.transform, line.name + " · 已配属 " + line.trains + " 列", 32, Ink, 32, H-300, 1000, 44, TextAnchor.MiddleLeft);
-        Txt(page.transform, "当前单向区段运力 " + Mathf.RoundToInt(FleetCapacity(line)) + " 人次/日 · 中途上下车可复用座位", 24, InkSoft, 32, H-360, 1000, 45, TextAnchor.MiddleLeft);
-        Txt(page.transform, "平均速度 " + Mathf.RoundToInt(FleetTrait(line,2)*100) + "% · 平均维护 " + Mathf.RoundToInt(FleetTrait(line,0)*100) + "%", 24, InkSoft, 32, H-410, 1000, 45, TextAnchor.MiddleLeft);
-        Txt(page.transform,"配属车辆：线路基础车辆 ×1",27,Ink,32,H-500,1000,40,TextAnchor.MiddleLeft);
-        float y=H-555; foreach(var v in researchVehicles) if(v.lineId==line.id) { Txt(page.transform,LocoNames[v.node] + " · 运力 " + Mathf.RoundToInt(FleetCapacityTraits[v.node]*100) + "% · 成本 " + Mathf.RoundToInt(FleetMaintenanceTraits[v.node]*100) + "% · 速度 " + Mathf.RoundToInt(FleetSpeedTraits[v.node]*100) + "%",22,InkSoft,48,y,970,36,TextAnchor.MiddleLeft); y-=46; }
+        Txt(page.transform, line.name + " · 已配属 " + line.trains + " 列", 32, Ink, 32, PgH-300, 1000, 44, TextAnchor.MiddleLeft);
+        Txt(page.transform, "当前单向区段运力 " + Mathf.RoundToInt(FleetCapacity(line)) + " 人次/日 · 中途上下车可复用座位", 24, InkSoft, 32, PgH-360, 1000, 45, TextAnchor.MiddleLeft);
+        Txt(page.transform, "平均速度 " + Mathf.RoundToInt(FleetTrait(line,2)*100) + "% · 平均维护 " + Mathf.RoundToInt(FleetTrait(line,0)*100) + "%", 24, InkSoft, 32, PgH-410, 1000, 45, TextAnchor.MiddleLeft);
+        Txt(page.transform,"配属车辆：线路基础车辆 ×1",27,Ink,32,PgH-500,1000,40,TextAnchor.MiddleLeft);
+        float y=PgH-555; foreach(var v in researchVehicles) if(v.lineId==line.id) { Txt(page.transform,LocoNames[v.node] + " · 运力 " + Mathf.RoundToInt(FleetCapacityTraits[v.node]*100) + "% · 成本 " + Mathf.RoundToInt(FleetMaintenanceTraits[v.node]*100) + "% · 速度 " + Mathf.RoundToInt(FleetSpeedTraits[v.node]*100) + "%",22,InkSoft,48,y,970,36,TextAnchor.MiddleLeft); y-=46; }
         var add=Btn(page.transform,"AddVehicle","调入或购买机车",26,28,260,W-56,84,Indigo,()=>{if(line.trains>=8){Toast("该线路最多配属 8 列车");return;}OpenLineFleetSupply(line,-1,0);}); TInk(add,Color.white);
         Txt(page.transform,"研发新机车后可自车库调拨或直购增编。",22,InkSoft,32,195,1000,45,TextAnchor.MiddleLeft);
     }
@@ -495,7 +534,7 @@ public partial class DemoBootstrap
         pageBack=()=> { if(slot<0) OpenLineFleet(line); else OpenLineOperations(line); };
         var free=new List<ResearchVehicle>(); foreach(var v in researchVehicles) if(v.lineId==0) free.Add(v);
         var models=new List<int>(); for(int i=0;i<LocoNames.Length;i++) if(techDone.Contains(LocoKey(i))) models.Add(i);
-        int count=free.Count+models.Count; var content=FleetScroll(page.transform,72,H-235,Mathf.Max(180,count*128+20)); float h=content.sizeDelta.y; int rowIndex=0;
+        int count=free.Count+models.Count; var content=FleetScroll(page.transform,72,PgH-235,Mathf.Max(180,count*128+20)); float h=content.sizeDelta.y; int rowIndex=0;
         if(count==0) Txt(content,"没有空闲或已解锁的机车，请先研究机车节点。",26,InkSoft,20,h-100,960,60,TextAnchor.MiddleCenter);
         foreach(var v in free) { var item=v; int row=rowIndex++; var button=Btn(content,"Free"+row,"调入  "+LocoNames[item.node],25,12,h-120-row*128,940,100,Paper2,()=>{
             BeginUndo("调入机车"); item.lineId=line.id; SyncLineFleet(line); if(slot>=0) { if(!techDone.Contains("dispatch_peak")) for(int k=0;k<4;k++)line.dispatch[k]=amount; else line.dispatch[slot]=amount; }
@@ -656,8 +695,8 @@ public partial class DemoBootstrap
 
     void BuildShopLiveries(Transform page)
     {
-        Txt(page, "线路涂装馆 · 15 款双色涂装（含流派增益 · 可看片免费领）", 22, InkSoft, 178, H - 235, 860, 36, TextAnchor.MiddleLeft);
-        var content = FleetScroll(page, 172, H - 255, LineSkinNames.Length * 158f + 24, 150f);
+        Txt(page, "线路涂装馆 · 15 款双色涂装（含流派增益 · 可看片免费领）", 22, InkSoft, 178, PgH - 235, 860, 36, TextAnchor.MiddleLeft);
+        var content = FleetScroll(page, 172, PgH - 255, LineSkinNames.Length * 158f + 24, 150f);
         float height = content.sizeDelta.y;
         float cardWidth = content.sizeDelta.x;
         for (int i = 0; i < LineSkinNames.Length; i++)
@@ -698,8 +737,8 @@ public partial class DemoBootstrap
 
     void BuildShopThemes(Transform page)
     {
-        Txt(page, "全局界面风格馆 · 更换纸面、夜图与 UI 色系；购买前可免费实机预览", 22, InkSoft, 178, H - 235, 860, 36, TextAnchor.MiddleLeft);
-        var content = FleetScroll(page, 172, H - 255, Themes.Length * 256f + 24, 150f);
+        Txt(page, "全局界面风格馆 · 更换纸面、夜图与 UI 色系；购买前可免费实机预览", 22, InkSoft, 178, PgH - 235, 860, 36, TextAnchor.MiddleLeft);
+        var content = FleetScroll(page, 172, PgH - 255, Themes.Length * 256f + 24, 150f);
         float height = content.sizeDelta.y;
         float cardWidth = content.sizeDelta.x;
         for (int i = 0; i < Themes.Length; i++)
@@ -847,9 +886,9 @@ public partial class DemoBootstrap
     void OpenDailyTasks()
     {
         var page = OpenPage("每日任务", "每日零点刷新；今日净增连通 2 站即可领奖。", "PageArt/album_watercolor");
-        Txt(page.transform, "今日旅程", 38, Ink, 36, H-245, 600, 54, TextAnchor.MiddleLeft);
-        Txt(page.transform, "DAY " + day + "  ·  每日零点刷新", 22, InkSoft, 38, H-287, 700, 34, TextAnchor.MiddleLeft);
-        var card = Rect("DailyTaskCard", page.transform, 28, H-760, W-56, 420);
+        Txt(page.transform, "今日旅程", 38, Ink, 36, PgH-245, 600, 54, TextAnchor.MiddleLeft);
+        Txt(page.transform, "DAY " + day + "  ·  每日零点刷新", 22, InkSoft, 38, PgH-287, 700, 34, TextAnchor.MiddleLeft);
+        var card = Rect("DailyTaskCard", page.transform, 28, PgH-760, W-56, 420);
         Rounded(card, CardBg); SoftShadow(card); JournalTape(card.transform, 440, 403, 144);
         int progress = Mathf.Clamp(DailyConnectedCount() - dailyStationBaseline, 0, 2);
         bool claimedToday = dailyTaskClaimedDay == day;
@@ -907,10 +946,10 @@ public partial class DemoBootstrap
     void OpenLeaderboard()
     {
         var page = OpenPage("排行榜", "查看湾区铁路建设规模与个人运营档案。", "PageArt/album_watercolor");
-        Txt(page.transform, "路网名录", 38, Ink, 36, H - 245, 800, 54, TextAnchor.MiddleLeft);
-        Txt(page.transform, "RAILWAY ARCHIVES", 22, InkSoft, 38, H - 287, 700, 34, TextAnchor.MiddleLeft);
+        Txt(page.transform, "路网名录", 38, Ink, 36, PgH - 245, 800, 54, TextAnchor.MiddleLeft);
+        Txt(page.transform, "RAILWAY ARCHIVES", 22, InkSoft, 38, PgH - 287, 700, 34, TextAnchor.MiddleLeft);
         float cardW = W - 56f;
-        var note = Rect("RankingNote", page.transform, 28, H - 880, cardW, 540);
+        var note = Rect("RankingNote", page.transform, 28, PgH - 880, cardW, 540);
         Rounded(note, CardBg); SoftShadow(note); JournalTape(note.transform, cardW * 0.5f - 72f, 523, 144);
 
         int palette = currentRegion == "澳门" ? 2 : currentRegion == "广东" ? 1 : 0;
@@ -1123,7 +1162,7 @@ public partial class DemoBootstrap
         {
             int tabIdx = i;
             bool active = companyTab == tabIdx;
-            var tBtn = Btn(pg.transform, "CompanyTab_" + i, tabNames[i], 23, 28f + i * 260f, H - 252f, 244f, 64f,
+            var tBtn = Btn(pg.transform, "CompanyTab_" + i, tabNames[i], 23, 28f + i * 260f, PgH - 252f, 244f, 64f,
                 active ? Indigo : CardBg, () => { companyTab = tabIdx; OpenCompanyScreen(); });
             TInk(tBtn, active ? Color.white : Ink);
             if (!active) SoftShadow(tBtn.gameObject);
@@ -1139,7 +1178,7 @@ public partial class DemoBootstrap
     void BuildCompanyOverviewTab(Transform page, float cardW)
     {
         float totalH = 1500f;
-        var content = FleetScroll(page, 36f, H - 270f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 270f, totalH);
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
@@ -1288,7 +1327,7 @@ public partial class DemoBootstrap
     void BuildCompanyBoardTab(Transform page, float cardW)
     {
         float totalH = 1412f;
-        var content = FleetScroll(page, 36f, H - 270f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 270f, totalH);
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
@@ -1422,7 +1461,7 @@ public partial class DemoBootstrap
     void BuildCompanyFinanceTab(Transform page, float cardW)
     {
         float totalH = 1280f;
-        var content = FleetScroll(page, 36f, H - 270f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 270f, totalH);
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
@@ -1593,7 +1632,7 @@ public partial class DemoBootstrap
     void BuildCompanyPrivilegeTab(Transform page, float cardW)
     {
         float totalH = 1210f;
-        var content = FleetScroll(page, 36f, H - 270f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 270f, totalH);
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
@@ -1865,23 +1904,23 @@ public partial class DemoBootstrap
     void OpenSceneryScreen()
     {
         var pg = OpenPage("旅行手帐", "铁路通达风物所在站即入画；展开大图留存沿途印记。", "PageArt/album_watercolor");
-        Txt(pg.transform, "沿途记忆", 36, Ink, 34, H-238, 440, 52, TextAnchor.MiddleLeft);
+        Txt(pg.transform, "沿途记忆", 36, Ink, 34, PgH-238, 440, 52, TextAnchor.MiddleLeft);
         int regionTotal = 0, regionFound = 0;
         foreach (var item in sceneries) if (sceneryRegionFilter == 0 || item.region == SceneryRegions[sceneryRegionFilter]) { regionTotal++; if (item.found) regionFound++; }
-        Txt(pg.transform, "TRAVEL JOURNAL  ·  " + regionFound + " / " + regionTotal, 21, InkSoft, 36, H-278, 410, 32, TextAnchor.MiddleLeft);
+        Txt(pg.transform, "TRAVEL JOURNAL  ·  " + regionFound + " / " + regionTotal, 21, InkSoft, 36, PgH-278, 410, 32, TextAnchor.MiddleLeft);
         if (regionTotal > 0 && regionFound == regionTotal)
         {
             var clearTex = EraPosterGenerator.GetCustomPoster("scenery_clear_" + sceneryRegionFilter, "CLEAR!", sceneryRegionFilter % 4, 5, 512, 184, 0);
-            var clearSeal = CreateNeonPosterFrame(pg.transform, "SceneryClearSeal", 456f, H - 274f, 214f, 78f, clearTex, 4f);
+            var clearSeal = CreateNeonPosterFrame(pg.transform, "SceneryClearSeal", 456f, PgH - 274f, 214f, 78f, clearTex, 4f);
             clearSeal.transform.localRotation = Quaternion.Euler(0, 0, -3.5f);
         }
         Button filter = null;
-        filter = Btn(pg.transform, "SceneryFilter", SceneryCategories[sceneryCategory] + "  ▾", 25, 694, H-264, 330, 72,
+        filter = Btn(pg.transform, "SceneryFilter", SceneryCategories[sceneryCategory] + "  ▾", 25, 694, PgH-264, 330, 72,
             new Color(0.91f,0.88f,0.80f,0.98f), () => ShowFleetDropdown(pg.transform, filter.transform, SceneryCategories, sceneryCategory, value => { sceneryCategory = value; OpenSceneryScreen(); }));
         TInk(filter, Ink); filter.gameObject.AddComponent<FleetPressFeedback>();
         for (int i = 0; i < SceneryRegions.Length; i++) {
             int region = i;
-            var tab = Btn(pg.transform, "SceneryRegion" + i, SceneryRegions[i], 24, 28 + i * 258, H - 360, 246, 60,
+            var tab = Btn(pg.transform, "SceneryRegion" + i, SceneryRegions[i], 24, 28 + i * 258, PgH - 360, 246, 60,
                 i == sceneryRegionFilter ? new Color(0.75f,0.82f,0.68f,0.98f) : new Color(0.96f,0.94f,0.88f,0.98f),
                 () => { sceneryRegionFilter = region; OpenSceneryScreen(); });
             TInk(tab, Ink);
@@ -1890,7 +1929,7 @@ public partial class DemoBootstrap
         foreach (var item in sceneries)
             if ((sceneryRegionFilter == 0 || item.region == SceneryRegions[sceneryRegionFilter]) &&
                 (sceneryCategory == 0 || (sceneryCategory == 1 && item.natural) || (sceneryCategory == 2 && !item.natural))) count++;
-        var content = FleetScroll(pg.transform, 72, H - 390, Mathf.CeilToInt(count / 2f) * 440f + 20);
+        var content = FleetScroll(pg.transform, 72, PgH - 390, Mathf.CeilToInt(count / 2f) * 440f + 20);
         float contentHeight = content.sizeDelta.y;
         int visible = 0;
         if (count == 0) Txt(content, "这里还没有旅行记忆\n换个分类看看吧", 30, InkSoft, 40, contentHeight - 240, W - 136, 150, TextAnchor.MiddleCenter);

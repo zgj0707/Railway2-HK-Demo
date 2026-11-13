@@ -85,6 +85,10 @@ public partial class DemoBootstrap : MonoBehaviour
     GameObject paperBgGo, topBarGo, stationFilterGo, speedBoardGo, noticeBoardGo, noticeUnreadDot;
     bool noticeReadThisSession;
     RawImage hkMapRaw, macauMapRaw, guangdongMapRaw, topFadeImg, botFadeImg;
+    RawImage[] mapEdgeFeathers;
+    RectTransform topBarCoinRt, topBarCapRt, topBarDiaRt, topBarGearRt, topBarHelpRt;
+    float lastRespW = -1f, lastRespH = -1f;
+    Rect lastRespSafe;
     MapBackdropGraphic backdropGraphic;
     readonly List<GameObject> leftRailGos = new List<GameObject>();
     int currentTheme = 0;
@@ -357,21 +361,20 @@ public partial class DemoBootstrap : MonoBehaviour
         backdropGraphic = backdrop.AddComponent<MapBackdropGraphic>();
         backdropGraphic.raycastTarget = false;
 
-        // 设计画布 1080x1920 居中；所有 UI 都挂在它下面，内部坐标不用改
+        // 主舞台自适应铺满整个 Canvas（兼容 9:16、20:9 全面屏、3:4 平板与刘海安全区）
         var stage = Rect("Stage", cgo.transform, 0, 0, W, H);
         var stageRt = stage.GetComponent<RectTransform>();
-        stageRt.anchorMin = stageRt.anchorMax = new Vector2(0.5f, 0.5f);
+        stageRt.anchorMin = Vector2.zero; stageRt.anchorMax = Vector2.one;
         stageRt.pivot = new Vector2(0.5f, 0.5f);
-        stageRt.anchoredPosition = Vector2.zero;
-        stageRt.sizeDelta = new Vector2(W, H);
+        stageRt.offsetMin = Vector2.zero;
+        stageRt.offsetMax = Vector2.zero;
         root = stageRt;
 
-        // 画布边缘淡投影，宽屏下让纸面像浮在海面上的图
-        var stageShadow = Rect("StageShadow", root, -26, -26, W + 52, H + 52);
-        Rounded(stageShadow, new Color(0.10f, 0.14f, 0.16f, 0.22f));
-        stageShadow.GetComponent<Image>().raycastTarget = false;
-
         var bg = Rect("Paper", root, 0, 0, W, H); Img(bg, Sea);
+        var bgRt = bg.GetComponent<RectTransform>();
+        bgRt.anchorMin = Vector2.zero; bgRt.anchorMax = Vector2.one;
+        bgRt.pivot = new Vector2(0.5f, 0.5f);
+        bgRt.offsetMin = Vector2.zero; bgRt.offsetMax = Vector2.zero;
         paperBgGo = bg;
 
         BuildMap();
@@ -387,6 +390,8 @@ public partial class DemoBootstrap : MonoBehaviour
         BuildDragCostBadge();
         CreateLineVisuals();
         RefreshAllLines();
+        Canvas.ForceUpdateCanvases();
+        ApplyResponsiveLayout(true);
 
     }
 
@@ -412,6 +417,7 @@ public partial class DemoBootstrap : MonoBehaviour
         topBarGo = bar;
 
         var c1 = Rect("Coin", bar.transform, 24, 46, 318, 92); Rounded(c1, CardBg); SoftShadow(c1);
+        topBarCoinRt = c1.GetComponent<RectTransform>();
         var coinBtn = c1.AddComponent<Button>(); coinBtn.targetGraphic = c1.GetComponent<Image>();
         coinBtn.onClick.AddListener(() => Toast("当前账面资金：¥" + Math.Floor(coins).ToString("N0")));
         var coinRing = Rect("CoinRing", c1.transform, 12, 18, 56, 56); Img(coinRing, new Color(0.25f,0.21f,0.17f,0.88f), spriteStationRing).raycastTarget = false;
@@ -422,6 +428,7 @@ public partial class DemoBootstrap : MonoBehaviour
         incomeTxt.resizeTextForBestFit = true; incomeTxt.resizeTextMinSize = 15; incomeTxt.resizeTextMaxSize = 23; incomeTxt.raycastTarget = false;
 
         var cap = Rect("Cap", bar.transform, 354, 26, 400, 162); Rounded(cap, CardBg); SoftShadow(cap);
+        topBarCapRt = cap.GetComponent<RectTransform>();
         var tape = Rect("CapTape", cap.transform, 130, 150, 140, 24);
         var tapeIm = Img(tape, new Color(0.88f, 0.78f, 0.62f, 0.75f), spriteRound); tapeIm.type = Image.Type.Sliced; tapeIm.raycastTarget = false;
         tape.transform.localRotation = Quaternion.Euler(0, 0, -1.5f);
@@ -435,13 +442,16 @@ public partial class DemoBootstrap : MonoBehaviour
         dayTxt = Txt(cap.transform, "第 1 日", 23, InkSoft, 0, 20, 400, 32, TextAnchor.MiddleCenter);
 
         var c3 = Rect("Dia", bar.transform, 768, 46, 226, 92); Rounded(c3, CardBg); SoftShadow(c3);
+        topBarDiaRt = c3.GetComponent<RectTransform>();
         var diaIcon = Rect("Icon", c3.transform, 12, 18, 52, 52); Img(diaIcon, Sakura, spriteDiamond);
         diamondTxt = Txt(c3.transform, "20", 42, Ink, 66, 19, 100, 54, TextAnchor.MiddleCenter);
         Btn(c3.transform, "DiamondInfo", "?", 30, 168, 23, 52, 52, Matcha, () => Toast("钻石可通过名胜打卡和机车里程碑获得"));
 
         var gb = Btn(bar.transform, "Gear", "设", 26, 24, -24, 60, 60, CardBg, OpenAudioSettings);
+        topBarGearRt = gb.GetComponent<RectTransform>();
         gb.GetComponentInChildren<Text>().color = Ink;
         var hb = Btn(bar.transform, "Help", "?", 30, 94, -24, 60, 60, CardBg, () => HelpPopup("长按车站拖到下一站即可铺线，拖回起点成环。\n已有线路端点拖出可延线，中间站拖出可建新线；长按线路拖至新站可插站。\n点开图鉴大图即完成名胜打卡；交界站可跨区衔接。\n右上可调运行倍速（1× 下 6 分钟为一游戏日）。"));
+        topBarHelpRt = hb.GetComponent<RectTransform>();
         hb.GetComponentInChildren<Text>().color = InkSoft;
         lastDisplayedMinute = -1; lastDisplayedDay = -1;
         lastHudCoinsText = ""; lastHudIncomeText = ""; lastHudDiamonds = int.MinValue; lastHudProgress = int.MinValue;
@@ -476,6 +486,27 @@ public partial class DemoBootstrap : MonoBehaviour
         guangdongMapArt = BuildGuangdongMap(map.transform);
         macauMapArt = BuildMacauMap(map.transform);
         guangdongMapArt.SetActive(false); macauMapArt.SetActive(false);
+
+        // 底图四缘海面渐隐羽化带：仅柔化底图矩形接缝到全屏 Paper 海面，不遮挡线网与站点
+        var fade = MakeFadeTexture();
+        var featherGo = Rect("MapEdgeFeather", mapRect, 0, 0, W, H);
+        var featherCol = new Color(Sea.r, Sea.g, Sea.b, 0.90f);
+        var themeFadeCol = Themes[Mathf.Clamp(currentTheme, 0, Themes.Length - 1)].fade;
+        var featherTopCol = new Color(themeFadeCol.r, themeFadeCol.g, themeFadeCol.b, 0.85f);
+        var fTop = Rect("FeatherTop", featherGo.transform, 0, H - 72f, W, 72f).AddComponent<RawImage>();
+        fTop.texture = fade; fTop.color = featherTopCol; fTop.raycastTarget = false;
+        var fBot = Rect("FeatherBot", featherGo.transform, 0, 0, W, 72f).AddComponent<RawImage>();
+        fBot.texture = fade; fBot.color = featherCol; fBot.raycastTarget = false; fBot.uvRect = new Rect(0, 1, 1, -1);
+        var fLeftGo = Rect("FeatherLeft", featherGo.transform, 0, H, H, 56f);
+        fLeftGo.transform.localRotation = Quaternion.Euler(0, 0, -90f);
+        var fLeft = fLeftGo.AddComponent<RawImage>();
+        fLeft.texture = fade; fLeft.color = featherCol; fLeft.raycastTarget = false; fLeft.uvRect = new Rect(0, 1, 1, -1);
+        var fRightGo = Rect("FeatherRight", featherGo.transform, W - 56f, H, H, 56f);
+        fRightGo.transform.localRotation = Quaternion.Euler(0, 0, -90f);
+        var fRight = fRightGo.AddComponent<RawImage>();
+        fRight.texture = fade; fRight.color = featherCol; fRight.raycastTarget = false;
+        mapEdgeFeathers = new[] { fTop, fBot, fLeft, fRight };
+
         lineLayer = Rect("Lines", mapRect, 0, 0, W, H).GetComponent<RectTransform>();
         previewLayer = Rect("Preview", mapRect, 0, 0, W, H).GetComponent<RectTransform>();
         var pv = Rect("PreviewLine", previewLayer, 0, 0, 1, 12);
@@ -499,7 +530,6 @@ public partial class DemoBootstrap : MonoBehaviour
         PortalLabel(hkMapArt.GetComponent<RectTransform>(), 0.25f, 0.505f, "→ 珠海 / 澳门");
 
         // 顶部/底部奶油渐隐，让悬浮 UI 压得住地图
-        var fade = MakeFadeTexture();
         Color fadeCol = Themes[Mathf.Clamp(currentTheme, 0, Themes.Length - 1)].fade;
         var top = Rect("TopFade", root, 0, H-320, W, 320);
         var tri = top.AddComponent<RawImage>(); tri.texture = fade; tri.color = new Color(fadeCol.r, fadeCol.g, fadeCol.b, 0.92f); tri.raycastTarget = false;
@@ -518,7 +548,8 @@ public partial class DemoBootstrap : MonoBehaviour
         ClosePage(); CloseLineBubble(); CancelDraft(); ClearFloaters(); currentRegion = destination;
         hkMapArt.SetActive(currentRegion == "香港"); macauMapArt.SetActive(currentRegion == "澳门");
         guangdongMapArt.SetActive(currentRegion == "广东");
-        mapRect.localScale = Vector3.one; mapRect.anchoredPosition = Vector2.zero;
+        mapRect.localScale = Vector3.one;
+        mapRect.anchoredPosition = mapWheelZoom ? mapWheelZoom.CenterPosition(1f) : Vector2.zero;
         foreach (var kv in stationImgs)
         {
             int i = kv.Key; var marker = kv.Value.transform.parent;
@@ -816,7 +847,8 @@ public partial class DemoBootstrap : MonoBehaviour
             int i = markerOrder[k];
             int rank = MarkerRank(i);
             Vector2 sp = pan + Pos(i) * scale;                 // 相对 Stage 左下角的屏幕坐标
-            bool inView = sp.x >= -48f && sp.x <= W + 48f && sp.y >= -48f && sp.y <= H + 48f;
+            float viewW = RootW, viewH = RootH;
+            bool inView = sp.x >= -48f && sp.x <= viewW + 48f && sp.y >= -48f && sp.y <= viewH + 48f;
             // 间距与圆点尺寸匹配：主干 44、普通 34、县区 26（屏幕像素），避免两点相切成一片
             float gap = rank <= 0 ? 44f : rank == 2 ? 26f : 34f;
             bool show = inView;
@@ -969,6 +1001,140 @@ public partial class DemoBootstrap : MonoBehaviour
         Img(Rect("Sep1", dock.transform, 268, 30, 1, 96), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f));
         Img(Rect("Sep2", dock.transform, 522, 30, 1, 96), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f));
         Img(Rect("Sep3", dock.transform, 776, 30, 1, 96), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f));
+    }
+
+    float RootW => root ? Mathf.Max(W, root.rect.width) : W;
+    float RootH => root ? Mathf.Max(H, root.rect.height) : H;
+    float PageSafeHeight
+    {
+        get
+        {
+            GetSafeMarginsInRoot(out _, out _, out float safeT, out float safeB);
+            return Mathf.Max(1400f, RootH - safeT - safeB);
+        }
+    }
+
+    void GetSafeMarginsInRoot(out float left, out float right, out float top, out float bottom)
+    {
+        left = right = top = bottom = 0f;
+        if (!root) return;
+        Rect r = root.rect;
+        if (r.width < 1f || r.height < 1f) return;
+        Rect safe = Screen.safeArea;
+        if (safe.width <= 0f || safe.height <= 0f) return;
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(root, new Vector2(safe.xMin, safe.yMin), null, out var pMin) ||
+            !RectTransformUtility.ScreenPointToLocalPointInRectangle(root, new Vector2(safe.xMax, safe.yMax), null, out var pMax))
+            return;
+        left = Mathf.Clamp(pMin.x - r.xMin, 0f, r.width * 0.25f);
+        right = Mathf.Clamp(r.xMax - pMax.x, 0f, r.width * 0.25f);
+        bottom = Mathf.Clamp(pMin.y - r.yMin, 0f, r.height * 0.25f);
+        top = Mathf.Clamp(r.yMax - pMax.y, 0f, r.height * 0.25f);
+    }
+
+    void EnsureResponsiveLayout()
+    {
+        if (!root) return;
+        float rw = root.rect.width, rh = root.rect.height;
+        Rect safe = Screen.safeArea;
+        if (Mathf.Approximately(rw, lastRespW) && Mathf.Approximately(rh, lastRespH) && safe == lastRespSafe) return;
+        ApplyResponsiveLayout(true);
+    }
+
+    void ApplyResponsiveLayout(bool recenterAtMinZoom = false)
+    {
+        if (!root) return;
+        float rw = RootW, rh = RootH;
+        Rect safe = Screen.safeArea;
+        lastRespW = root.rect.width; lastRespH = root.rect.height; lastRespSafe = safe;
+        GetSafeMarginsInRoot(out float safeL, out float safeR, out float safeT, out float safeB);
+        float safeW = Mathf.Max(320f, rw - safeL - safeR);
+
+        if (topFadeImg)
+        {
+            var rt = topFadeImg.rectTransform;
+            rt.anchoredPosition = new Vector2(0f, rh - safeT - 320f);
+            rt.sizeDelta = new Vector2(rw, safeT + 320f);
+        }
+        if (botFadeImg)
+        {
+            var rt = botFadeImg.rectTransform;
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(rw, safeB + 240f);
+        }
+
+        float barY = rh - Mathf.Max(310f, safeT + 226f);
+        if (topBarGo)
+        {
+            var barRt = topBarGo.GetComponent<RectTransform>();
+            barRt.anchoredPosition = new Vector2(0f, barY);
+            barRt.sizeDelta = new Vector2(rw, 280f);
+            float coinX, capX, diaX;
+            if (safeW <= 1140f)
+            {
+                coinX = safeL + 24f;
+                capX = safeL + 354f + (safeW - W) * 0.5f;
+                diaX = safeL + safeW - 86f - 226f;
+            }
+            else
+            {
+                coinX = safeL + 40f;
+                capX = safeL + (safeW - 400f) * 0.5f;
+                diaX = safeL + safeW - 40f - 226f;
+            }
+            if (topBarCoinRt) topBarCoinRt.anchoredPosition = new Vector2(coinX, 46f);
+            if (topBarCapRt) topBarCapRt.anchoredPosition = new Vector2(capX, 26f);
+            if (topBarDiaRt) topBarDiaRt.anchoredPosition = new Vector2(diaX, 46f);
+            if (topBarGearRt) topBarGearRt.anchoredPosition = new Vector2(coinX, -24f);
+            if (topBarHelpRt) topBarHelpRt.anchoredPosition = new Vector2(coinX + 70f, -24f);
+        }
+
+        if (zoomNotice)
+            zoomNotice.GetComponent<RectTransform>().anchoredPosition = new Vector2(safeL + (safeW - 480f) * 0.5f, barY - 152f);
+
+        float dockY = safeB + 16f;
+        if (dock)
+            dock.GetComponent<RectTransform>().anchoredPosition = new Vector2(safeL + (safeW - 1036f) * 0.5f, dockY);
+
+        if (undoButton)
+            undoButton.GetComponent<RectTransform>().anchoredPosition = new Vector2(rw - safeR - 110f, dockY + 174f);
+
+        if (themePreviewBannerGo)
+            themePreviewBannerGo.GetComponent<RectTransform>().anchoredPosition = new Vector2(safeL + (safeW - 860f) * 0.5f, dockY + 170f);
+
+        float railMin = dockY + 188f;
+        float railMax = Mathf.Max(railMin + 240f, barY - 40f);
+        float railMidY = Mathf.Lerp(railMin, railMax, 0.48f);
+        for (int i = 0; i < leftRailGos.Count; i++)
+            if (leftRailGos[i])
+                leftRailGos[i].GetComponent<RectTransform>().anchoredPosition = new Vector2(safeL, Mathf.Min(railMax - 96f, railMidY + 210f - i * 106f));
+        if (stationFilterGo)
+            stationFilterGo.GetComponent<RectTransform>().anchoredPosition = new Vector2(safeL, Mathf.Max(dockY + 178f, railMidY - 108f));
+
+        float rightRailX = rw - safeR - 94f;
+        if (speedBoardGo)
+            speedBoardGo.GetComponent<RectTransform>().anchoredPosition = new Vector2(rightRailX, Mathf.Min(railMax - 106f, railMidY + 308f));
+        if (noticeBoardGo)
+            noticeBoardGo.GetComponent<RectTransform>().anchoredPosition = new Vector2(rightRailX, Mathf.Min(railMax - 220f, railMidY + 194f));
+
+        if (mapRect && mapWheelZoom)
+        {
+            float scale = mapRect.localScale.x;
+            if (recenterAtMinZoom && scale <= 1.01f)
+                mapRect.anchoredPosition = mapWheelZoom.CenterPosition(scale);
+            else
+                mapRect.anchoredPosition = mapWheelZoom.ClampPosition(mapRect.anchoredPosition, scale);
+            UpdateRegionalMarkers(true);
+        }
+
+        if (mapEdgeFeathers != null && mapEdgeFeathers.Length == 4)
+        {
+            bool showVert = rh > H + 2f;
+            bool showHoriz = rw > W + 2f;
+            if (mapEdgeFeathers[0]) mapEdgeFeathers[0].gameObject.SetActive(showVert);
+            if (mapEdgeFeathers[1]) mapEdgeFeathers[1].gameObject.SetActive(showVert);
+            if (mapEdgeFeathers[2]) mapEdgeFeathers[2].gameObject.SetActive(showHoriz);
+            if (mapEdgeFeathers[3]) mapEdgeFeathers[3].gameObject.SetActive(showHoriz);
+        }
     }
 
     // ---------- tabs ----------
@@ -1473,6 +1639,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void Update()
     {
+        EnsureResponsiveLayout();
         float dt = Time.deltaTime;
         TickAutosave();
         UpdateRegionalMarkers(false);
@@ -1855,15 +2022,33 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         CloseLineBubble();
         ClosePanel(true);
-        scrim = Rect("BubbleDismiss", root, 0, 0, W, H);
+        scrim = Rect("BubbleDismiss", root, 0, 0, RootW, RootH);
+        var srt = scrim.GetComponent<RectTransform>();
+        srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
+        srt.offsetMin = Vector2.zero; srt.offsetMax = Vector2.zero;
         var bg = Img(scrim, new Color(0, 0, 0, 0));
         var dismiss = scrim.AddComponent<Button>(); dismiss.targetGraphic = bg;
         dismiss.transition = Selectable.Transition.None; dismiss.onClick.AddListener(ClosePanel);
-        float x = Mathf.Clamp(anchor.x - w / 2f, 20, W - w - 20);
-        float y = anchor.y + 60;
-        if (y + h > H - 230) y = anchor.y - h - 60;
-        y = Mathf.Clamp(y, 190, H - h - 200);
+
+        GetSafeMarginsInRoot(out float safeL, out float safeR, out float safeT, out float safeB);
+        float rw = RootW, rh = RootH;
+        float safeW = Mathf.Max(320f, rw - safeL - safeR);
+        float safeH = Mathf.Max(420f, rh - safeT - safeB);
+        if (Mathf.Abs(anchor.x - W * 0.5f) < 1f && Mathf.Abs(anchor.y - H * 0.5f) < 1f)
+            anchor = new Vector2(safeL + safeW * 0.5f, safeB + safeH * 0.5f);
+
+        float scale = Mathf.Min(1f, (safeW - 36f) / Mathf.Max(1f, w), (safeH - 36f) / Mathf.Max(1f, h));
+        float sw = w * scale, sh = h * scale;
+        float minX = safeL + 20f, maxX = Mathf.Max(minX, rw - safeR - sw - 20f);
+        float minY = safeB + 170f, maxY = Mathf.Max(minY, rh - safeT - sh - 180f);
+        if (minY > rh - safeT - sh - 20f) minY = Mathf.Max(safeB + 18f, rh - safeT - sh - 20f);
+        float x = Mathf.Clamp(anchor.x - sw / 2f, minX, maxX);
+        float y = anchor.y + 60f;
+        if (y + sh > rh - safeT - 180f) y = anchor.y - sh - 60f;
+        y = Mathf.Clamp(y, minY, maxY);
+
         activePanel = Rect("Bubble", root, x, y, w, h);
+        activePanel.GetComponent<RectTransform>().localScale = Vector3.one * scale;
         Rounded(activePanel, new Color(CardBg.r, CardBg.g, CardBg.b, 0.985f)); SoftShadow(activePanel);
         var heading = Txt(activePanel.transform, title, 32, Ink, 26, h-64, w-110, 46, TextAnchor.MiddleLeft);
         FitSingleLine(heading, 32);
@@ -1876,11 +2061,25 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         CloseLineBubble();
         ClosePanel(true);
-        scrim = Rect("Scrim", root, 0, 0, W, H); Img(scrim, new Color(0.12f,0.10f,0.09f,0.30f));
+        scrim = Rect("Scrim", root, 0, 0, RootW, RootH); Img(scrim, new Color(0.12f,0.10f,0.09f,0.30f));
+        var srt = scrim.GetComponent<RectTransform>();
+        srt.anchorMin = Vector2.zero; srt.anchorMax = Vector2.one;
+        srt.offsetMin = Vector2.zero; srt.offsetMax = Vector2.zero;
         var sb = scrim.AddComponent<Button>(); sb.transition = Selectable.Transition.None; sb.onClick.AddListener(ClosePanel);
-        float x = (W - w) / 2f, y = (H - h) / 2f;
-        panelShadow = Rect("PShadow", root, x+8, y-10, w, h); Rounded(panelShadow, new Color(0.10f,0.08f,0.06f,0.16f)); panelShadow.GetComponent<Image>().raycastTarget = false;
+
+        GetSafeMarginsInRoot(out float safeL, out float safeR, out float safeT, out float safeB);
+        float rw = RootW, rh = RootH;
+        float safeW = Mathf.Max(320f, rw - safeL - safeR);
+        float safeH = Mathf.Max(420f, rh - safeT - safeB);
+        float scale = Mathf.Min(1f, (safeW - 36f) / Mathf.Max(1f, w), (safeH - 36f) / Mathf.Max(1f, h));
+        float x = safeL + (safeW - w * scale) * 0.5f;
+        float y = safeB + (safeH - h * scale) * 0.5f;
+
+        panelShadow = Rect("PShadow", root, x + 8f * scale, y - 10f * scale, w, h);
+        panelShadow.GetComponent<RectTransform>().localScale = Vector3.one * scale;
+        Rounded(panelShadow, new Color(0.10f,0.08f,0.06f,0.16f)); panelShadow.GetComponent<Image>().raycastTarget = false;
         activePanel = Rect("Popup", root, x, y, w, h);
+        activePanel.GetComponent<RectTransform>().localScale = Vector3.one * scale;
         Rounded(activePanel, new Color(CardBg.r, CardBg.g, CardBg.b, 0.965f));
         var heading = Txt(activePanel.transform, title, 34, Ink, 26, h-64, w-110, 46, TextAnchor.MiddleLeft);
         FitSingleLine(heading, 34);
@@ -1955,7 +2154,11 @@ public partial class DemoBootstrap : MonoBehaviour
     void Toast(string msg)
     {
         if (toastGo) Destroy(toastGo);
-        toastGo = Rect("Toast", root, 230, zoomNotice && zoomNotice.activeSelf ? 1508 : 1572, 620, 68);
+        GetSafeMarginsInRoot(out float safeL, out float safeR, out _, out _);
+        float safeW = Mathf.Max(320f, RootW - safeL - safeR);
+        float barY = topBarGo ? topBarGo.GetComponent<RectTransform>().anchoredPosition.y : (RootH - 310f);
+        float toastY = barY - (zoomNotice && zoomNotice.activeSelf ? 102f : 38f);
+        toastGo = Rect("Toast", root, safeL + (safeW - 620f) * 0.5f, toastY, 620, 68);
         var toastCanvas = toastGo.AddComponent<Canvas>(); toastCanvas.overrideSorting = true; toastCanvas.sortingOrder = 200;
         Rounded(toastGo, new Color(0.17f,0.15f,0.13f,0.88f)); SoftShadow(toastGo);
         toastGo.GetComponent<Image>().raycastTarget = false;
@@ -2275,6 +2478,13 @@ public partial class DemoBootstrap : MonoBehaviour
         if (guangdongMapRaw) guangdongMapRaw.color = spec.mapTint;
         if (topFadeImg) topFadeImg.color = new Color(spec.fade.r, spec.fade.g, spec.fade.b, 0.92f);
         if (botFadeImg) botFadeImg.color = new Color(spec.fade.r, spec.fade.g, spec.fade.b, 0.85f);
+        if (mapEdgeFeathers != null)
+        {
+            var fc = new Color(spec.sea.r, spec.sea.g, spec.sea.b, 0.90f);
+            var fcTop = new Color(spec.fade.r, spec.fade.g, spec.fade.b, 0.85f);
+            for (int i = 0; i < mapEdgeFeathers.Length; i++)
+                if (mapEdgeFeathers[i]) mapEdgeFeathers[i].color = i == 0 ? fcTop : fc;
+        }
         RefreshMapThemeLabels();
         if (rebuildUI && root) RebuildChromeUI();
     }
@@ -2333,7 +2543,9 @@ public partial class DemoBootstrap : MonoBehaviour
         DestroyThemePreviewBanner();
         if (!root) return;
         float bw = 860f, bh = 86f;
-        themePreviewBannerGo = Rect("ThemePreviewBanner", root, (W - bw) * 0.5f, 186f, bw, bh);
+        GetSafeMarginsInRoot(out float safeL, out float safeR, out _, out float safeB);
+        float safeW = Mathf.Max(320f, RootW - safeL - safeR);
+        themePreviewBannerGo = Rect("ThemePreviewBanner", root, safeL + (safeW - bw) * 0.5f, safeB + 186f, bw, bh);
         Rounded(themePreviewBannerGo, new Color(0.05f, 0.06f, 0.14f, 0.94f));
         SoftShadow(themePreviewBannerGo);
         var bImg = themePreviewBannerGo.GetComponent<Image>();
@@ -2379,6 +2591,7 @@ public partial class DemoBootstrap : MonoBehaviour
         BuildRightRail();
         BuildBottomNav();
         BuildUndoButton();
+        ApplyResponsiveLayout(false);
         RefreshHUD();
         UpdateTimeText();
         RefreshPendingBadge();
