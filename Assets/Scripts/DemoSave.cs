@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,6 +8,52 @@ public partial class DemoBootstrap
 {
     const string SaveKey = "railway2_local_v1";
     const string BundledTestSaveResource = "TestSaves/railway2_local_v1";
+#if UNITY_EDITOR
+    const string DevTestSaveSyncPref = "Railway2.DevTestSaveSync";
+    const string BundledTestSaveAssetPath = "Assets/Resources/TestSaves/railway2_local_v1.json";
+    public static bool DevTestSaveSyncEnabled
+    {
+        get { return UnityEditor.EditorPrefs.GetBool(DevTestSaveSyncPref, true); }
+        set { UnityEditor.EditorPrefs.SetBool(DevTestSaveSyncPref, value); }
+    }
+    public static bool DevTestSaveDirty;
+
+    static string ReadDevTestSaveFromDisk()
+    {
+        try
+        {
+            if (File.Exists(BundledTestSaveAssetPath))
+                return File.ReadAllText(BundledTestSaveAssetPath, System.Text.Encoding.UTF8);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[Railway2] 读取开发测试存档文件失败：" + e.Message);
+        }
+        return null;
+    }
+
+    static void WriteDevTestSaveToDisk(SaveData data)
+    {
+        if (data == null) return;
+        try
+        {
+            string prettyJson = JsonUtility.ToJson(data, true) + "\n";
+            string dir = Path.GetDirectoryName(BundledTestSaveAssetPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            if (File.Exists(BundledTestSaveAssetPath))
+            {
+                string prev = File.ReadAllText(BundledTestSaveAssetPath, System.Text.Encoding.UTF8);
+                if (prev == prettyJson) return;
+            }
+            File.WriteAllText(BundledTestSaveAssetPath, prettyJson, new System.Text.UTF8Encoding(false));
+            DevTestSaveDirty = true;
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("[Railway2] 写入开发测试存档文件失败：" + e.Message);
+        }
+    }
+#endif
     [Serializable] sealed class SavedStation { public string key; public int level, trafficEvent; public bool built, closed; public float riderBonus; public int facLevel; }
     [Serializable] sealed class SavedScenery { public string key; public bool found, unlocked; }
     [Serializable] sealed class SavedLine { public int id, trains, todayRevenue; public int skin = -1; public string name; public Color color; public List<string> stations; public int[] dispatch; public float fare, todayGross, todayMaintenance, todayTrack; public List<int> recent; }
@@ -26,16 +73,40 @@ public partial class DemoBootstrap
         public bool bondSubsidized;
         public List<int> boardPartners = new List<int>();
         public List<MunicipalContract> contracts = new List<MunicipalContract>();
+        // M1-M3 新增向后兼容字段
+        public int storyStage;
+        public bool tutorialSkipped;
+        public List<string> coTech = new List<string>();
+        public List<SavedTalent> talents = new List<SavedTalent>();
+        public List<SavedTalent> talentPool = new List<SavedTalent>();
+        public int nextTalentId = 1, lastTalentRefreshDay = -1;
+        public int lastReadNoticeDay = -1;
     }
     bool saveReady, saveBlocked; float autosaveTimer;
     string StationSaveKey(Station station) { return station.region + ":" + station.name; }
     string ScenerySaveKey(Scenery scenery) { return scenery.region + ":" + scenery.name; }
     bool RestoreGame()
     {
-        if (!PlayerPrefs.HasKey(SaveKey)) return false;
+        string rawJson = null;
+#if UNITY_EDITOR
+        if (DevTestSaveSyncEnabled)
+        {
+            string diskJson = ReadDevTestSaveFromDisk();
+            if (!string.IsNullOrEmpty(diskJson))
+            {
+                rawJson = diskJson;
+                PlayerPrefs.SetString(SaveKey, diskJson);
+            }
+        }
+#endif
+        if (string.IsNullOrEmpty(rawJson))
+        {
+            if (!PlayerPrefs.HasKey(SaveKey)) return false;
+            rawJson = PlayerPrefs.GetString(SaveKey);
+        }
         if (stations == null || stations.Count == 0) BuildData();
         try {
-            var data = JsonUtility.FromJson<SaveData>(PlayerPrefs.GetString(SaveKey));
+            var data = JsonUtility.FromJson<SaveData>(rawJson);
             if (data == null || data.version != 1 || data.stations == null || data.lines == null || data.scenery == null || data.tech == null || data.vehicles == null || data.story == null || data.skins == null) throw new Exception("invalid save");
             var byKey = new Dictionary<string,int>(); for (int i=0;i<stations.Count;i++) byKey[StationSaveKey(stations[i])] = i;
             var restoredLines = new List<Line>(); var ids = new HashSet<int>();
@@ -100,7 +171,20 @@ public partial class DemoBootstrap
                 foreach (var mc in data.contracts)
                     if (mc != null && !mc.claimed) { activeContracts.Add(mc); nextContractId = Mathf.Max(nextContractId, mc.id + 1); }
             }
+            companyTechDone.Clear();
+            if (data.coTech != null) foreach (string ct in data.coTech) if (!string.IsNullOrEmpty(ct) && !companyTechDone.Contains(ct)) companyTechDone.Add(ct);
+            talents.Clear();
+            if (data.talents != null) foreach (var t in data.talents) if (t != null && !string.IsNullOrEmpty(t.name)) talents.Add(t);
+            talentPool.Clear();
+            if (data.talentPool != null) foreach (var tp in data.talentPool) if (tp != null && !string.IsNullOrEmpty(tp.name)) talentPool.Add(tp);
+            nextTalentId = Mathf.Max(1, data.nextTalentId);
+            lastTalentRefreshDay = data.lastTalentRefreshDay;
+            lastReadNoticeDay = data.lastReadNoticeDay;
+            storyStage = Mathf.Max(0, data.storyStage);
+            tutorialSkipped = data.tutorialSkipped;
             EnsureCompanyInitialized();
+            EnsureTalentsInitialized();
+            SyncStoryProgression(false);
             lastPolicyDay = data.lastPolicyDay; lastAdSubsidyDay = data.lastAdSubsidyDay; dailyTaskClaimedDay = data.dailyTaskClaimedDay;
             savedRegion=data.region;
             saveBlocked = false;
@@ -125,9 +209,12 @@ public partial class DemoBootstrap
             } catch {}
         }
         try {
-            var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=(previewRestoreTheme >= 0 ? previewRestoreTheme : currentTheme), companyName=companyName, companySeal=companySeal, companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, bondPrincipal=bondPrincipal, bondDailyDue=bondDailyDue, bondsRepaid=bondsRepaid, bondSubsidized=bondSubsidized, consultantId=consultantId, consultantDaysLeft=consultantDaysLeft, economyCycle=economyCycle, nextEconomyCycle=nextEconomyCycle, turboDaysLeft=turboDaysLeft, autoDispatchDaysLeft=autoDispatchDaysLeft, lastAwardDay=lastAwardDay, lastPolicyDay=lastPolicyDay, lastAdSubsidyDay=lastAdSubsidyDay, dailyTaskClaimedDay=dailyTaskClaimedDay };
+            var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=(previewRestoreTheme >= 0 ? previewRestoreTheme : currentTheme), companyName=companyName, companySeal=companySeal, companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, bondPrincipal=bondPrincipal, bondDailyDue=bondDailyDue, bondsRepaid=bondsRepaid, bondSubsidized=bondSubsidized, consultantId=consultantId, consultantDaysLeft=consultantDaysLeft, economyCycle=economyCycle, nextEconomyCycle=nextEconomyCycle, turboDaysLeft=turboDaysLeft, autoDispatchDaysLeft=autoDispatchDaysLeft, lastAwardDay=lastAwardDay, lastPolicyDay=lastPolicyDay, lastAdSubsidyDay=lastAdSubsidyDay, dailyTaskClaimedDay=dailyTaskClaimedDay, storyStage=storyStage, tutorialSkipped=tutorialSkipped, nextTalentId=nextTalentId, lastTalentRefreshDay=lastTalentRefreshDay, lastReadNoticeDay=lastReadNoticeDay };
             data.boardPartners.AddRange(boardPartners);
             data.contracts.AddRange(activeContracts);
+            data.coTech.AddRange(companyTechDone);
+            data.talents.AddRange(talents);
+            data.talentPool.AddRange(talentPool);
             foreach(var s in stations) data.stations.Add(new SavedStation { key=StationSaveKey(s), level=s.level, trafficEvent=s.trafficEvent, built=s.built, closed=s.closed, riderBonus=s.riderBonus, facLevel=s.facLevel });
             foreach(var s in sceneries) data.scenery.Add(new SavedScenery { key=ScenerySaveKey(s), found=s.found, unlocked=s.unlocked });
             foreach(var l in lines) { var record=new SavedLine { id=l.id, name=l.name, color=l.color, skin=l.skin, trains=l.trains, dispatch=(int[])l.dispatch.Clone(), fare=l.fare, todayGross=l.todayGross, todayMaintenance=l.todayMaintenance, todayTrack=l.todayTrack, todayRevenue=l.todayRevenue, recent=new List<int>(l.recent), stations=new List<string>() }; foreach(int i in l.st) record.stations.Add(StationSaveKey(stations[i])); data.lines.Add(record); }
@@ -137,16 +224,44 @@ public partial class DemoBootstrap
             foreach (var kv in adWatchCounts) { data.adKeys.Add(kv.Key); data.adCounts.Add(kv.Value); }
             foreach (var kv in themeTrialUntil) { data.trialThemes.Add(kv.Key); data.trialEnds.Add(kv.Value); }
             PlayerPrefs.SetString(SaveKey,JsonUtility.ToJson(data)); PlayerPrefs.Save();
+#if UNITY_EDITOR
+            if (DevTestSaveSyncEnabled) WriteDevTestSaveToDisk(data);
+#endif
         } catch(Exception e) { Debug.LogError("本地存档保存失败：" + e.Message); }
     }
     void TickAutosave() { autosaveTimer += Time.unscaledDeltaTime; if (autosaveTimer >= 5f) { autosaveTimer=0; SaveGame(); } }
-    bool HasBundledTestSave() { return Resources.Load<TextAsset>(BundledTestSaveResource) != null; }
+    string ReadBundledTestSaveRaw()
+    {
+#if UNITY_EDITOR
+        string diskJson = ReadDevTestSaveFromDisk();
+        if (!string.IsNullOrEmpty(diskJson)) return diskJson;
+#endif
+        var asset = Resources.Load<TextAsset>(BundledTestSaveResource);
+        return asset ? asset.text : null;
+    }
+    bool HasBundledTestSave() { return !string.IsNullOrEmpty(ReadBundledTestSaveRaw()); }
+    string DescribeBundledTestSave()
+    {
+        string raw = ReadBundledTestSaveRaw();
+        if (string.IsNullOrEmpty(raw)) return "预置测试存档";
+        try {
+            var check = JsonUtility.FromJson<SaveData>(raw);
+            if (check != null && check.version == 1)
+            {
+                string reg = string.IsNullOrEmpty(check.region) ? "香港" : DisplayPlaceAliases(check.region);
+                int lc = check.lines != null ? check.lines.Count : 0;
+                int tc = check.tech != null ? check.tech.Count : 0;
+                return "第 " + Mathf.Max(1, check.day) + " 日" + reg + "测试存档（" + lc + " 条线路 · " + tc + " 项科技 · " + FormatCoins(check.coins) + " 资金）";
+            }
+        } catch {}
+        return "预置测试存档";
+    }
     bool LoadBundledTestSave()
     {
-        var asset = Resources.Load<TextAsset>(BundledTestSaveResource);
-        if (!asset || string.IsNullOrEmpty(asset.text)) { Toast("未找到内置测试存档"); return false; }
+        string raw = ReadBundledTestSaveRaw();
+        if (string.IsNullOrEmpty(raw)) { Toast("未找到内置测试存档"); return false; }
         try {
-            var check = JsonUtility.FromJson<SaveData>(asset.text);
+            var check = JsonUtility.FromJson<SaveData>(raw);
             if (check == null || check.version != 1 || check.lines == null || check.stations == null)
             {
                 Toast("内置测试存档格式校验失败");
@@ -159,11 +274,11 @@ public partial class DemoBootstrap
 
         ClosePanel(true); CloseLineBubble(); ClosePage(); CancelDraft(); ClearFloaters();
         EndThemePreview(false);
-        pendingUndo = null; lastUndo = null;
+        ClearUndoHistory();
         techCollapseDone = true; techSessionUnlocked.Clear();
         lines.Clear();
         BuildData();
-        PlayerPrefs.SetString(SaveKey, asset.text);
+        PlayerPrefs.SetString(SaveKey, raw);
         PlayerPrefs.Save();
         saveBlocked = false;
         saveReady = false;
@@ -209,15 +324,22 @@ public partial class DemoBootstrap
         UpdateTimeText();
         RefreshHUD();
         RefreshPendingBadge();
+        RefreshNoticeUnreadDot();
         RefreshUndoButton();
-        if (music) { if (musicEnabled && music.clip) { if (!music.isPlaying) music.Play(); } else music.Stop(); }
+        SyncStoryProgression(false);
+        UpdateStoryObjectiveBanner();
+        SyncRegionalMusic(true);
         saveReady = true;
         SaveGame();
         Toast("已载入测试存档：第 " + day + " 日 · " + DisplayPlaceAliases(currentRegion));
         return true;
     }
     void OnApplicationPause(bool paused) { if(paused) SaveGame(); }
-    void OnApplicationFocus(bool focused) { if (!focused) { if (lineInsertActive) CancelLineInsert(); SaveGame(); } }
+    void OnApplicationFocus(bool focused)
+    {
+        if (!focused) { if (lineInsertActive) CancelLineInsert(); SaveGame(); }
+        else ApplyFrameRate();
+    }
     void OnApplicationQuit() { SaveGame(); }
     void OnDisable() { SaveGame(); }
 }

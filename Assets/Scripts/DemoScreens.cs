@@ -8,15 +8,21 @@ public partial class DemoBootstrap
     GameObject pageRoot;
     RectTransform pageContentRect;
     Action pageBack;
+    string activePageKey = "";
     float PgH => pageContentRect ? Mathf.Max(1400f, pageContentRect.rect.height) : PageSafeHeight;
 
-    GameObject OpenPage(string title, string help, string backgroundPath = null)
+    GameObject OpenPage(string title, string help, string backgroundPath = null, string pageKey = null)
     {
-        ClosePage();
+        string effectiveKey = !string.IsNullOrEmpty(pageKey) ? pageKey : title;
+        bool isRefresh = pageRoot != null && !string.IsNullOrEmpty(effectiveKey) && activePageKey == effectiveKey;
+
+        ClosePage(false);
         pageBack = null;
         CloseLineBubble();
+        ClearStationOdArcs();
 
         pageRoot = Rect("Page", root, 0, 0, RootW, RootH);
+        activePageKey = effectiveKey ?? "";
         var pageRootRt = pageRoot.GetComponent<RectTransform>();
         pageRootRt.anchorMin = Vector2.zero; pageRootRt.anchorMax = Vector2.one;
         pageRootRt.pivot = new Vector2(0.5f, 0.5f);
@@ -57,6 +63,12 @@ public partial class DemoBootstrap
         layout.title = heading.rectTransform;
         layout.help = helpRect;
         EnsurePreviewBannerOnTop();
+        if (!isRefresh)
+        {
+            PlayPageOpenSfx();
+            AnimatePageEnter(pageRoot);
+        }
+        SyncRegionalMusic(false);
         return pageContent;
     }
     void AddPageBackground(GameObject page, string path)
@@ -74,34 +86,51 @@ public partial class DemoBootstrap
     }
     void GoBackPage()
     {
+        PlayCloseSfx();
         var b = pageBack; pageBack = null;
-        ClosePage();
+        ClosePage(false);
         if (b != null) b();
+        if (pageRoot == null && sceneryViewer == null) SyncRegionalMusic(false);
     }
-    void ClosePage() { if (pageRoot) Destroy(pageRoot); pageRoot = null; pageContentRect = null; }
+    void ClosePage() => ClosePage(true);
+    void ClosePage(bool syncAudio)
+    {
+        StopPageAnim();
+        bool hadHeavyPage = pageRoot != null && (activePageKey == "fleet_shop" || activePageKey == "company" || activePageKey == "scenery" || activePageKey == "line_info" || activePageKey == "tech");
+        if (pageRoot) Destroy(pageRoot);
+        pageRoot = null; pageContentRect = null; activePageKey = "";
+        if (hadHeavyPage && syncAudio) RequestResourceTrim(false);
+        if (pageRoot == null && sceneryViewer == null)
+        {
+            MarkRingsDirty();
+            trainsDirty = true;
+        }
+        if (syncAudio) SyncRegionalMusic(false);
+    }
     void GoHome()
     {
+        PlayCloseSfx();
         pageBack = null; fleetBack = null;
         if (sceneryViewer) Destroy(sceneryViewer);
         sceneryViewer = null;
         panelClosed = null;
         ClosePanel(true); CloseLineBubble(); ClosePage();
+        RequestResourceTrim(false);
     }
 
     void HelpPopup(string text)
     {
-        GetSafeMarginsInRoot(out float safeL, out _, out float safeT, out _);
-        float bodyHeight = Mathf.Clamp(MeasureTextHeight(text, 27, 572) + 10, 50, Mathf.Max(300f, PgH - 420f));
-        var p = OpenBubble("说明", bodyHeight + 220, 640, new Vector2(safeL + 130f, RootH - safeT - 240f));
-        ScrollableText(p.transform, text, 27, InkSoft, 34, 128, 572, bodyHeight);
-        var ok = Btn(p.transform, "Ok", "知道了", 30, 34, 28, 572, 80, new Color(0.92f,0.89f,0.83f), ClosePanel);
+        float bodyHeight = Mathf.Clamp(MeasureTextHeight(text, 27, 652) + 10, 60, Mathf.Max(320f, PgH - 420f));
+        var p = OpenPopup("说明", bodyHeight + 220, 720);
+        ScrollableText(p.transform, text, 27, InkSoft, 34, 128, 652, bodyHeight);
+        var ok = Btn(p.transform, "Ok", "知道了", 30, 34, 28, 652, 80, new Color(0.92f,0.89f,0.83f), ClosePanel);
         TInk(ok, Ink);
     }
 
     void StatBox(Transform p, string label, string value, float x, float y, float w, float h, Color c)
     {
-        var g = Rect("Stat", p, x, y, w, h); Rounded(g, CardBg); SoftShadow(g);
-        Img(Rect("Bar", g.transform, 0, 24, 7, h-48), c, spriteRound);
+        var g = Rect("Stat", p, x, y, w, h); Rounded(g, CardBg); SoftShadow(g); g.GetComponent<Image>().raycastTarget = false;
+        Img(Rect("Bar", g.transform, 0, 24, 7, h-48), c, spriteRound).raycastTarget = false;
         Txt(g.transform, label, 26, InkSoft, 30, h-66, w-56, 34, TextAnchor.MiddleLeft);
         Txt(g.transform, value, 46, Ink, 30, 26, w-56, 54, TextAnchor.MiddleLeft);
     }
@@ -165,14 +194,18 @@ public partial class DemoBootstrap
     {
         var line = lines.Find(l => l.id == id);
         if (line == null) { OpenLinesScreen(); return; }
-        var pg = OpenPage(line.name, "沿线客流 · 运力配属 · 日盈亏总览", "PageArt/line_watercolor");
+        var pg = OpenPage(line.name, "沿线客流 · 运力配属 · 日盈亏总览", "PageArt/line_watercolor", "line_screen_" + line.id);
         pageBack = back ?? OpenLinesScreen;
         StatBox(pg.transform, "客流", Mathf.RoundToInt(LinePassengerFlow(line)) + "", 28, PgH-440, 320, 200, Matcha);
         StatBox(pg.transform, "单向区段运力", Mathf.RoundToInt(LineCapacity(line)) + " 人次/日", 380, PgH-440, 320, 200, Indigo);
         StatBox(pg.transform, "预计日利润", Mathf.RoundToInt(LineDaily(line)) + "", 732, PgH-440, 320, 200, Gold);
         var fleet = Rect("FleetSummary", pg.transform, 28, PgH-710, W-56, 190); Rounded(fleet, new Color(1,1,1,0.94f)); SoftShadow(fleet);
-        Txt(fleet.transform, "配属 " + line.trains + " 列 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line,2)*100) + "%", 28, Ink, 24, 115, 950, 45, TextAnchor.MiddleLeft);
-        Txt(fleet.transform, "重联叠加运力，速度与养护成本按车队均值核算。", 21, InkSoft, 24, 70, 950, 35, TextAnchor.MiddleLeft);
+        float peakRatio = LinePeakLoadRatio(line);
+        string loadTag = peakRatio >= 0.98f ? " · 峰段爆满 " + Mathf.RoundToInt(peakRatio * 100f) + "%（建议增车/分流）"
+            : peakRatio >= 0.78f ? " · 峰段繁忙 " + Mathf.RoundToInt(peakRatio * 100f) + "%"
+            : " · 峰段负荷 " + Mathf.RoundToInt(peakRatio * 100f) + "%";
+        Txt(fleet.transform, "配属 " + line.trains + " 列 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line,2)*100) + "%" + loadTag, 26, Ink, 24, 115, 950, 45, TextAnchor.MiddleLeft);
+        Txt(fleet.transform, "重联叠加运力，速度与养护成本按车队均值核算。", 23, InkSoft, 24, 68, 950, 38, TextAnchor.MiddleLeft);
         var fleetButton=Btn(fleet.transform,"Fleet","机车配属",25,24,8,450,55,Indigo,()=>OpenLineFleet(line));TInk(fleetButton,Color.white);
         var operations=Btn(fleet.transform,"Operations","票价与调度",25,495,8,450,55,Indigo,()=>OpenLineOperations(line));TInk(operations,Color.white);
         Txt(pg.transform, "沿线", 28, InkSoft, 28, PgH-800, 160, 38, TextAnchor.MiddleLeft);
@@ -198,17 +231,19 @@ public partial class DemoBootstrap
     Action fleetBack;
     static readonly string[] FleetPowerFilters = { "全部动力", "蒸汽", "内燃", "电力", "氢能", "双动力", "其他" };
     static readonly string[] FleetUseFilters = { "全部用途", "客运优先", "货运优先", "客货兼顾" };
-    static readonly string[] FleetRegionFilters = { "全部地区", "英国", "美国", "德国", "印度" };
-    // 分类沿用一代目录的用途划分；地区表示目录展示地区。
-    static readonly int[] FleetUses = { 3, 2, 3, 3, 3, 2, 3, 3, 1 };
-    static readonly int[] FleetRegions = { 1, 1, 1, 1, 1, 2, 3, 4, 2 };
+    static readonly string[] FleetRegionFilters = { "全部地区", "英国", "美国", "德国", "印度", "法国", "中国" };
+    // 分类沿用目录用途划分；地区与动力覆盖 19/20/21 世纪全部 16 款机车。
+    static readonly int[] FleetPowers =  { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 3, 3 };
+    static readonly int[] FleetUses =    { 3, 2, 3, 3, 3, 2, 3, 3, 1, 1, 1, 2, 3, 1, 1, 1 };
+    static readonly int[] FleetRegions = { 1, 1, 1, 1, 1, 2, 3, 4, 2, 1, 1, 2, 6, 5, 6, 6 };
     void OpenGarageScreen() { fleetBack = null; OpenFleetTab(0); }
     void OpenResearchInventory() { OpenFleetTab(1); }
     void OpenLocoShop() { shopCategory = 0; OpenFleetTab(2); }
     void OpenThemeShopScreen() { fleetBack = null; shopCategory = 2; OpenFleetTab(2); }
     bool FleetMatches(int index)
     {
-        return (fleetPowerFilter == 0 || fleetPowerFilter == 1) &&
+        if (index < 0 || index >= FleetPowers.Length) return false;
+        return (fleetPowerFilter == 0 || FleetPowers[index] == fleetPowerFilter) &&
                (fleetUseFilter == 0 || FleetUses[index] == fleetUseFilter) &&
                (fleetRegionFilter == 0 || FleetRegions[index] == fleetRegionFilter);
     }
@@ -222,7 +257,7 @@ public partial class DemoBootstrap
             "选购机车、复线涂装与全局手账主题；多款外观可在映像馆抢先试用。"
         };
         string[] backgrounds = { "dispatch_watercolor", "garage_watercolor", "shop_watercolor" };
-        var pg = OpenPage(titles[tab], help[tab], "FleetArt/" + backgrounds[tab]);
+        var pg = OpenPage(titles[tab], help[tab], "FleetArt/" + backgrounds[tab], "fleet_shop");
         pageBack = fleetBack;
         if (tab == 0) BuildFleetDispatch(pg.transform);
         else if (tab == 1) BuildFleetCollection(pg.transform, tab);
@@ -276,7 +311,7 @@ public partial class DemoBootstrap
             var hit = Img(item, new Color(1, 1, 1, 0));
             if (i == selected) Img(Rect("Selected", item.transform, 105, 144, 150, 6), Gold, spriteRound).raycastTarget = false;
             Txt(item.transform, labels[i], 34, i == selected ? Ink : InkSoft, 0, 57, 360, 52, TextAnchor.MiddleCenter);
-            Txt(item.transform, subtitles[i], 15, InkSoft, 0, 28, 360, 24, TextAnchor.MiddleCenter);
+            Txt(item.transform, subtitles[i], 20, InkSoft, 0, 22, 360, 30, TextAnchor.MiddleCenter);
             var button = item.AddComponent<Button>(); button.targetGraphic = hit;
             button.onClick.AddListener(() => { if (target != selected) OpenFleetTab(target); });
             item.AddComponent<FleetPressFeedback>();
@@ -315,7 +350,7 @@ public partial class DemoBootstrap
             Txt(card.transform, "配置：" + (assigned == null ? "默认机车" : LocoNames[assigned.node]), 24, InkSoft, 28, 156, 940, 34, TextAnchor.MiddleLeft);
             var fleetButton = Btn(card.transform, "Fleet", "机车配属", 25, 28, 38, 450, 88, Indigo, () => OpenLineFleet(line)); TInk(fleetButton, Color.white);
             var operations = Btn(card.transform, "Operations", "票价与调度", 25, 495, 38, 450, 88, Indigo, () => OpenLineOperations(line)); TInk(operations, Color.white);
-            if (qualityTier > 0) { var entry = card.AddComponent<FleetCardEntrance>(); entry.delay = Mathf.Min(i, 5) * 0.035f; }
+            { var entry = card.AddComponent<FleetCardEntrance>(); entry.delay = Mathf.Min(i, 6) * 0.032f; }
         }
     }
     void BuildFleetFilters(Transform page, int tab)
@@ -329,7 +364,9 @@ public partial class DemoBootstrap
         region = Btn(page, "RegionFilter", "地区：" + FleetRegionFilters[fleetRegionFilter] + "  ▾", 22, left + 2 * (width + gap), PgH - 285, width, 72,
             new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, region.transform, FleetRegionFilters, fleetRegionFilter, value => { fleetRegionFilter = value; OpenFleetTab(tab); }));
         TInk(power, Ink); TInk(use, Ink); TInk(region, Ink);
-        power.gameObject.AddComponent<FleetPressFeedback>(); use.gameObject.AddComponent<FleetPressFeedback>(); region.gameObject.AddComponent<FleetPressFeedback>();
+        if (!power.GetComponent<FleetPressFeedback>()) power.gameObject.AddComponent<FleetPressFeedback>();
+        if (!use.GetComponent<FleetPressFeedback>()) use.gameObject.AddComponent<FleetPressFeedback>();
+        if (!region.GetComponent<FleetPressFeedback>()) region.gameObject.AddComponent<FleetPressFeedback>();
     }
     void ShowFleetDropdown(Transform page, Transform source, string[] options, int selected, Action<int> choose)
     {
@@ -358,7 +395,7 @@ public partial class DemoBootstrap
             var color = i == selected ? new Color(0.91f, 0.91f, 0.83f, 1) : new Color(1, 1, 1, 0.98f);
             var button = Btn(list.transform, "Option" + i, options[i] + (i == selected ? "  ✓" : ""), 24,
                 8, height - 8 - (i + 1) * rowHeight, width - 16, rowHeight - 4, color, () => { Destroy(overlay); choose(index); });
-            TInk(button, Ink); button.gameObject.AddComponent<FleetPressFeedback>();
+            TInk(button, Ink); if (!button.GetComponent<FleetPressFeedback>()) button.gameObject.AddComponent<FleetPressFeedback>();
         }
     }
     void BuildFleetCollection(Transform page, int tab)
@@ -405,9 +442,9 @@ public partial class DemoBootstrap
                 art.rectTransform.anchoredPosition = new Vector2(16 + (artWidth - aw) / 2, 35 + (116 - ah) / 2);
                 art.color = tab == 2 && !unlocked ? new Color(0.65f, 0.65f, 0.65f, 0.75f) : Color.white;
             }
-            var name = Txt(card.transform, LocoNames[index], 31, Ink, textX, 135, infoWidth, 42, TextAnchor.MiddleLeft); name.resizeTextForBestFit = true; name.resizeTextMinSize = 18; name.resizeTextMaxSize = ScaledFontSize(31);
-            var stats = Txt(card.transform, LocoYears[index] + " · 运力" + Mathf.RoundToInt(FleetCapacityTraits[index]*100) + "% · 维护" + Mathf.RoundToInt(FleetMaintenanceTraits[index]*100) + "% · 速度" + Mathf.RoundToInt(FleetSpeedTraits[index]*100) + "%", 19, InkSoft, textX, 96, infoWidth, 30, TextAnchor.MiddleLeft);
-            stats.resizeTextForBestFit = true; stats.resizeTextMinSize = 13; stats.resizeTextMaxSize = ScaledFontSize(19);
+            var name = Txt(card.transform, LocoNames[index], 31, Ink, textX, 138, infoWidth, 44, TextAnchor.MiddleLeft); name.resizeTextForBestFit = true; name.resizeTextMinSize = 20; name.resizeTextMaxSize = ScaledFontSize(31);
+            var stats = Txt(card.transform, LocoYears[index] + " · 运力" + Mathf.RoundToInt(FleetCapacityTraits[index]*100) + "% · 维护" + Mathf.RoundToInt(FleetMaintenanceTraits[index]*100) + "% · 速度" + Mathf.RoundToInt(FleetSpeedTraits[index]*100) + "%", 22, InkSoft, textX, 94, infoWidth, 36, TextAnchor.MiddleLeft);
+            stats.resizeTextForBestFit = true; stats.resizeTextMinSize = 16; stats.resizeTextMaxSize = ScaledFontSize(22);
             string state = tab == 1 ? (assigned == null ? "未配置" : "已配置至 " + assigned.name) : unlocked ? "已解锁" : "科技树未解锁";
             Txt(card.transform, state, 22, InkSoft, textX, 48, infoWidth, 32, TextAnchor.MiddleLeft);
             var button = Btn(card.transform, "Action", tab == 1 ? "配置线路" : unlocked ? "购买 ¥" + LocoPrice(index) : "未解锁", 23,
@@ -415,8 +452,8 @@ public partial class DemoBootstrap
                     if (tab == 1) ChooseResearchVehicleLine(item);
                     else PurchaseLoco(index);
                 });
-            TInk(button, Ink); button.gameObject.AddComponent<FleetPressFeedback>();
-            if (qualityTier > 0) { var entry = card.AddComponent<FleetCardEntrance>(); entry.delay = Mathf.Min(i, 5) * 0.035f; }
+            TInk(button, Ink); if (!button.GetComponent<FleetPressFeedback>()) button.gameObject.AddComponent<FleetPressFeedback>();
+            { var entry = card.AddComponent<FleetCardEntrance>(); entry.delay = Mathf.Min(i, 6) * 0.032f; }
         }
     }
     void ChooseResearchVehicleLine(ResearchVehicle item)
@@ -424,7 +461,7 @@ public partial class DemoBootstrap
         var availableLines = lines.FindAll(line => PathTouchesRegion(line.st, currentRegion));
         int rows = availableLines.Count + (item.lineId != 0 ? 1 : 0);
         float h = 230 + Mathf.Max(1, Mathf.Min(rows, 8)) * 78;
-        var bubble = OpenBubble("配置 " + LocoNames[item.node], h, 760, new Vector2(W / 2, H / 2));
+        var bubble = OpenPopup("配置 " + LocoNames[item.node], h, 760);
         var view = Rect("LineViewport", bubble.transform, 30, 70, 700, h - 200);
         Img(view, new Color(1,1,1,0.01f)); var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = false;
         var scroll = view.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 90f;
@@ -487,12 +524,12 @@ public partial class DemoBootstrap
         Txt(page.transform, line.name + " · 配属 " + line.trains + " 列 · 当前开行 " + RunningTrains(line) + " 列", 28, Ink, 32, PgH-300, 1000, 45, TextAnchor.MiddleLeft);
         Txt(page.transform, "预计日收入 ¥" + Mathf.RoundToInt(forecast.gross) + "    成本 ¥" + Mathf.RoundToInt(forecast.vehicle+forecast.track+forecast.tax) + "    利润 ¥" + Mathf.RoundToInt(forecast.Profit), 24, InkSoft, 32, PgH-360, 1000, 45, TextAnchor.MiddleLeft);
         var fare = Rect("Fare",page.transform,28,PgH-535,W-56,145); Rounded(fare,new Color(1,1,1,0.94f));
-        Txt(fare.transform, "起步票价  ¥" + line.fare.ToString("0.0") + " / 人", 30, Ink, 26, 72, 570, 44, TextAnchor.MiddleLeft);
-        Txt(fare.transform, techDone.Contains("fare_policy") ? "起步价叠加跨站里程费 · 票款按 10:1 计入金币" : "研究「客运票价制度」后可自主调价", 20, InkSoft, 26, 25, 650, 34, TextAnchor.MiddleLeft);
+        Txt(fare.transform, "起步票价  ¥" + line.fare.ToString("0.0") + " / 人", 30, Ink, 26, 74, 570, 44, TextAnchor.MiddleLeft);
+        Txt(fare.transform, techDone.Contains("fare_policy") ? "起步价叠加跨站里程费 · 票款按 10:1 计入金币" : "研究「客运票价制度」后可自主调价", 22, InkSoft, 26, 22, 660, 38, TextAnchor.MiddleLeft);
         var fm=Btn(fare.transform,"FareMinus","−",35,720,30,110,80,Paper2,()=>ChangeLineFare(line,-0.1f));TInk(fm,Ink);
         var fp=Btn(fare.transform,"FarePlus","+",35,850,30,110,80,Paper2,()=>ChangeLineFare(line,0.1f));TInk(fp,Ink);
         bool basic=techDone.Contains("dispatch_basic"), peak=techDone.Contains("dispatch_peak");
-        Txt(page.transform, !basic ? "研究「铁路时刻表」解锁统一调度" : !peak ? "统一调度已就绪；研究「分时列车计划」可分时段增减" : "分时调度 · 高峰与夜间独立发班", 23, InkSoft, 32, PgH-590, 1000, 36, TextAnchor.MiddleLeft);
+        Txt(page.transform, !basic ? "研究「铁路时刻表」解锁统一调度" : !peak ? "统一调度已就绪；研究「分时列车计划」可分时段增减" : "分时调度 · 高峰与夜间独立发班", 24, InkSoft, 32, PgH-590, 1000, 38, TextAnchor.MiddleLeft);
         int rows=peak?4:1;
         for(int i=0;i<rows;i++) {
             int slot=i; var row=Rect("DispatchSlot"+i,page.transform,28,PgH-740-i*130,W-56,115); Rounded(row,new Color(1,1,1,0.94f));
@@ -506,7 +543,7 @@ public partial class DemoBootstrap
                 var sample = trafficSlots[sampleSlot];
                 float requested = sample != null && sample.linePeakDemand.TryGetValue(line, out var d) ? d : 0f;
                 float gross = sample != null ? TrafficRevenue(line,sample) : 0f;
-                Txt(row.transform, "最高区段需求 " + Mathf.RoundToInt(requested) + " · 运力 " + Mathf.RoundToInt(LineCapacity(line)) + " · 收入 ¥" + Mathf.RoundToInt(gross) + " · 运维 ¥" + Mathf.RoundToInt(VehicleMaintenance(line)+TrackMaintenance(line)), 18, InkSoft, 24, 12, 670, 34, TextAnchor.MiddleLeft);
+                Txt(row.transform, "最高区段需求 " + Mathf.RoundToInt(requested) + " · 运力 " + Mathf.RoundToInt(LineCapacity(line)) + " · 收入 ¥" + Mathf.RoundToInt(gross) + " · 运维 ¥" + Mathf.RoundToInt(VehicleMaintenance(line)+TrackMaintenance(line)), 22, InkSoft, 24, 10, 680, 38, TextAnchor.MiddleLeft);
             } finally { dayClock = oldClock; }
             var minus=Btn(row.transform,"Minus","−",34,720,18,110,80,Paper2,()=>SetLineDispatch(line,slot,line.dispatch[slot]-1)); TInk(minus,Ink);
             var plus=Btn(row.transform,"Plus","+",34,850,18,110,80,Paper2,()=>SetLineDispatch(line,slot,line.dispatch[slot]+1)); TInk(plus,Ink);
@@ -595,7 +632,7 @@ public partial class DemoBootstrap
         string desc = requiredCount <= 1
             ? "观看 1 段赞助铁道宣传短片，即可免费永久解锁\n「" + itemName + "」"
             : "观看赞助宣传片可立即免费试用「" + itemName + "」24小时\n累计观影进度：" + watched + " / " + requiredCount + " 次（满次即永久拥有）";
-        var bubble = OpenBubble("铁道映像馆 · 赞助放映", 400, 740, new Vector2(W / 2, H / 2));
+        var bubble = OpenPopup("铁道映像馆 · 赞助放映", 400, 740);
         Txt(bubble.transform, desc, 25, InkSoft, 34, 146, 672, 160, TextAnchor.MiddleLeft);
         var watch = Btn(bubble.transform, "WatchAd", "观看赞助短片（领权益）", 26, 34, 34, 420, 84, Matcha, () => {
             ClosePanel(true);
@@ -615,7 +652,7 @@ public partial class DemoBootstrap
     {
         if (line == null || !lines.Contains(line)) return;
         const float h = 920f, rowHeight = 118f;
-        var bubble = OpenBubble("线路涂装", h, 800, new Vector2(W / 2, H / 2));
+        var bubble = OpenPopup("线路涂装", h, 800);
         Txt(bubble.transform, "双色专属涂装 · 附带流派加成 · 全网通用", 22, InkSoft, 30, h - 126, 740, 36, TextAnchor.MiddleLeft);
         var view = Rect("SkinViewport", bubble.transform, 28, 36, 744, 725);
         Img(view, new Color(1, 1, 1, 0.01f)); var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = false;
@@ -637,11 +674,11 @@ public partial class DemoBootstrap
             Img(Rect("Swatch", row.transform, 18, 26, 56, 56), LineSkinColors[i], spriteCircle).raycastTarget = false;
             Img(Rect("SwatchTrim", row.transform, 33, 41, 26, 26), LineSkinTrimColors[i], spriteCircle).raycastTarget = false;
             Txt(row.transform, LineSkinNames[i] + " · " + SkinCategoryName(i), 25, Ink, 88, 56, 360, 38, TextAnchor.MiddleLeft);
-            Txt(row.transform, SkinPerkSummary(i), 20, InkSoft, 88, 18, 360, 30, TextAnchor.MiddleLeft);
+            Txt(row.transform, SkinPerkSummary(i), 22, InkSoft, 88, 16, 360, 34, TextAnchor.MiddleLeft);
 
             if (owned)
             {
-                var btn = Btn(row.transform, "Skin" + i, selected ? "使用中 ✓" : "换装", 24, 520, 18, 204, 72, selected ? Matcha : Paper2, () => {
+                var btn = Btn(row.transform, "Skin" + i, selected ? "使用中 ✓" : "换装", 25, 520, 18, 204, 74, selected ? Matcha : Paper2, () => {
                     if (selected) { Toast("当前已使用此涂装"); return; }
                     ApplySkinToLine(line, skin, false);
                     ClosePanel(true); OpenLineScreen(line.id);
@@ -650,12 +687,12 @@ public partial class DemoBootstrap
             }
             else
             {
-                var buyBtn = Btn(row.transform, "SkinBuy" + i, freeScenery ? "名胜免费领" : "¥" + LineSkinPrices[i], 21, 444, 18, 148, 72, freeScenery ? Matcha : Paper2, () => {
+                var buyBtn = Btn(row.transform, "SkinBuy" + i, freeScenery ? "名胜免费领" : "¥" + LineSkinPrices[i], 23, 444, 18, 148, 74, freeScenery ? Matcha : Paper2, () => {
                     ApplySkinToLine(line, skin, true);
                     if (ownedLineSkins.Contains(skin)) { ClosePanel(true); OpenLineScreen(line.id); }
                 });
                 TInk(buyBtn, freeScenery ? Color.white : Ink);
-                var adBtn = Btn(row.transform, "SkinAd" + i, "看片领", 21, 602, 18, 122, 72, Indigo, () => {
+                var adBtn = Btn(row.transform, "SkinAd" + i, "看片领", 23, 602, 18, 122, 74, Indigo, () => {
                     PromptRewardedAd("skin_" + skin, 1, LineSkinNames[skin], () => {
                         ownedLineSkins.Add(skin);
                         ApplySkinToLine(line, skin, false);
@@ -671,7 +708,7 @@ public partial class DemoBootstrap
     {
         if (lines.Count == 0) { Toast("请先修建一条铁路线路"); return; }
         float h = 230 + Mathf.Clamp(lines.Count, 1, 7) * 84f;
-        var bubble = OpenBubble("将「" + LineSkinNames[skin] + "」应用于", h, 720, new Vector2(W / 2, H / 2));
+        var bubble = OpenPopup("将「" + LineSkinNames[skin] + "」应用于", h, 720);
         var view = Rect("LineViewport", bubble.transform, 28, 36, 664, h - 140);
         Img(view, new Color(1, 1, 1, 0.01f)); var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = false;
         var scroll = view.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true;
@@ -695,7 +732,7 @@ public partial class DemoBootstrap
 
     void BuildShopLiveries(Transform page)
     {
-        Txt(page, "线路涂装馆 · 15 款双色涂装（含流派增益 · 可看片免费领）", 22, InkSoft, 178, PgH - 235, 860, 36, TextAnchor.MiddleLeft);
+        Txt(page, "线路涂装馆 · 15 款双色涂装（含流派增益 · 可看片免费领）", 23, InkSoft, 178, PgH - 235, 860, 38, TextAnchor.MiddleLeft);
         var content = FleetScroll(page, 172, PgH - 255, LineSkinNames.Length * 158f + 24, 150f);
         float height = content.sizeDelta.y;
         float cardWidth = content.sizeDelta.x;
@@ -709,7 +746,7 @@ public partial class DemoBootstrap
             Img(Rect("Swatch", card.transform, 20, 41, 60, 60), LineSkinColors[i], spriteCircle).raycastTarget = false;
             Img(Rect("Trim", card.transform, 36, 57, 28, 28), LineSkinTrimColors[i], spriteCircle).raycastTarget = false;
             Txt(card.transform, LineSkinNames[i] + "  ·  " + SkinCategoryName(i), 27, Ink, 98, 76, 430, 40, TextAnchor.MiddleLeft);
-            Txt(card.transform, SkinPerkSummary(i) + (freeScenery ? "（已达成名胜打卡免费领）" : ""), 21, InkSoft, 98, 28, 430, 34, TextAnchor.MiddleLeft);
+            Txt(card.transform, SkinPerkSummary(i) + (freeScenery ? "（已达成名胜打卡免费领）" : ""), 23, InkSoft, 98, 26, 430, 38, TextAnchor.MiddleLeft);
             if (owned)
             {
                 var apply = Btn(card.transform, "Apply" + i, "装配到线路", 23, cardWidth - 220, 33, 196, 76, Matcha, () => ChooseLineForSkin(skin));
@@ -765,19 +802,19 @@ public partial class DemoBootstrap
             {
                 var miniTex = EraPosterGenerator.GetCustomPoster("shop_theme_3d", "3D", 0, 4, 256, 112, 0);
                 CreateNeonPosterFrame(card.transform, "NeonThemeThumb", cardWidth - 224f, 100f, 196f, 88f, miniTex, 4f);
-                Txt(card.transform, statusTag, 21, active ? Matcha : InkSoft, cardWidth - 450, 152, 210, 36, TextAnchor.MiddleRight);
-                Txt(card.transform, spec.subtitle, 21, InkSoft, 28, 96, cardWidth - 266, 40, TextAnchor.MiddleLeft);
+                Txt(card.transform, statusTag, 23, active ? Matcha : InkSoft, cardWidth - 450, 152, 210, 38, TextAnchor.MiddleRight);
+                Txt(card.transform, spec.subtitle, 23, InkSoft, 28, 94, cardWidth - 266, 42, TextAnchor.MiddleLeft);
             }
             else
             {
-                Txt(card.transform, statusTag, 22, active ? Matcha : InkSoft, cardWidth - 270, 152, 240, 36, TextAnchor.MiddleRight);
-                Txt(card.transform, spec.subtitle, 22, InkSoft, 28, 96, cardWidth - 56, 40, TextAnchor.MiddleLeft);
+                Txt(card.transform, statusTag, 23, active ? Matcha : InkSoft, cardWidth - 270, 152, 240, 38, TextAnchor.MiddleRight);
+                Txt(card.transform, spec.subtitle, 23, InkSoft, 28, 94, cardWidth - 56, 42, TextAnchor.MiddleLeft);
             }
 
             if (avail)
             {
                 float btnW = owned ? cardWidth - 56 : 360f;
-                var useBtn = Btn(card.transform, "UseTheme" + i, active ? "当前正在使用" : "立即应用此风格", 24, 28, 18, btnW, 64, active ? Matcha : Indigo, () => {
+                var useBtn = Btn(card.transform, "UseTheme" + i, active ? "当前正在使用" : "立即应用此风格", 25, 28, 16, btnW, 68, active ? Matcha : Indigo, () => {
                     if (active) { Toast("当前已经是该风格"); return; }
                     ApplyTheme(t); SaveGame(); OpenFleetTab(2); Toast("已切换为「" + spec.name + "」");
                 });
@@ -793,7 +830,7 @@ public partial class DemoBootstrap
                 if (!avail)
                 {
                     float pvW = 176f;
-                    var pvBtn = Btn(card.transform, "PreviewTheme" + i, "预览效果", 21, 28, 18, pvW, 64, new Color(0.12f, 0.50f, 0.64f), () => {
+                    var pvBtn = Btn(card.transform, "PreviewTheme" + i, "预览效果", 23, 28, 16, pvW, 68, new Color(0.12f, 0.50f, 0.64f), () => {
                         StartThemePreview(t);
                     });
                     TInk(pvBtn, Color.white);
@@ -801,7 +838,7 @@ public partial class DemoBootstrap
                     float adX = 28f + pvW + 14f;
                     float adW = 344f;
                     string adTxt = "看片试用24h (" + watched + "/" + req + " 永久)";
-                    var adBtn = Btn(card.transform, "AdTheme" + i, adTxt, 20, adX, 18, adW, 64, Indigo, () => {
+                    var adBtn = Btn(card.transform, "AdTheme" + i, adTxt, 22, adX, 16, adW, 68, Indigo, () => {
                         PromptRewardedAd(adKey, req, spec.name,
                             () => {
                                 ownedThemes.Add(t);
@@ -821,7 +858,7 @@ public partial class DemoBootstrap
                     bool techFree = t == 2 && techDone.Count >= 5;
                     int diamondCost = t == 4 ? 50 : 30;
                     string altLabel = t == 1 ? "¥800 解锁" : t == 2 ? (techFree ? "免费领(科技≥5)" : "¥800 或 5科技") : (diamondCost + " 钻解锁");
-                    var altBtn = Btn(card.transform, "AltTheme" + i, altLabel, 20, altX, 18, altW, 64, techFree ? Matcha : Paper2, () => {
+                    var altBtn = Btn(card.transform, "AltTheme" + i, altLabel, 22, altX, 16, altW, 68, techFree ? Matcha : Paper2, () => {
                         if (t == 1)
                         {
                             if (coins < 800) { Toast("金币不足，还差 ¥" + FormatShortfall(800 - coins)); return; }
@@ -851,7 +888,7 @@ public partial class DemoBootstrap
                     float adX = 404f;
                     float adW = cardWidth - 432f;
                     string adTxt = "看片续期/永久 (" + watched + "/" + req + ")";
-                    var adBtn = Btn(card.transform, "AdTheme" + i, adTxt, 21, adX, 18, adW, 64, Indigo, () => {
+                    var adBtn = Btn(card.transform, "AdTheme" + i, adTxt, 23, adX, 16, adW, 68, Indigo, () => {
                         PromptRewardedAd(adKey, req, spec.name,
                             () => {
                                 ownedThemes.Add(t);
@@ -914,6 +951,7 @@ public partial class DemoBootstrap
             var claimBtn = Btn(card.transform, "ClaimNormal", "领取  +¥600 · +12 RP · +2 钻", 24, 40, 34, 444, 90, Matcha, () => {
                 if (dailyTaskClaimedDay == day) return;
                 coins += 600; rp += 12; diamonds += 2; dailyTaskClaimedDay = day;
+                PlayCoinSfx(); SpawnConfettiBurst(new Vector2(RootW * 0.5f, RootH * 0.45f), Matcha, Gold, 12);
                 SaveGame(); RefreshHUD(); OpenDailyTasks();
                 Toast("每日补贴到账 +¥600 · +12 RP · +2 钻");
             });
@@ -943,166 +981,7 @@ public partial class DemoBootstrap
         return frame;
     }
 
-    void OpenLeaderboard()
-    {
-        var page = OpenPage("排行榜", "查看湾区铁路建设规模与个人运营档案。", "PageArt/album_watercolor");
-        Txt(page.transform, "路网名录", 38, Ink, 36, PgH - 245, 800, 54, TextAnchor.MiddleLeft);
-        Txt(page.transform, "RAILWAY ARCHIVES", 22, InkSoft, 38, PgH - 287, 700, 34, TextAnchor.MiddleLeft);
-        float cardW = W - 56f;
-        var note = Rect("RankingNote", page.transform, 28, PgH - 880, cardW, 540);
-        Rounded(note, CardBg); SoftShadow(note); JournalTape(note.transform, cardW * 0.5f - 72f, 523, 144);
-
-        int palette = currentRegion == "澳门" ? 2 : currentRegion == "广东" ? 1 : 0;
-        var posterTex = EraPosterGenerator.GetCustomPoster("rank_" + currentRegion, "RAILWAY", palette, 4, 768, 248, 1);
-        var posterFrame = CreateNeonPosterFrame(note.transform, "RankingNeonPoster", 26f, 224f, cardW - 52f, 284f, posterTex, 9f);
-        var badge = Rect("RegionTag", posterFrame.transform, 20f, 18f, 198f, 34f);
-        Rounded(badge, new Color(0.04f, 0.04f, 0.08f, 0.78f));
-        badge.GetComponent<Image>().raycastTarget = false;
-        Txt(badge.transform, "版图 · " + DisplayPlaceAliases(currentRegion), 18, new Color(0.96f, 0.97f, 1f, 0.95f), 0f, 0f, 198f, 34f, TextAnchor.MiddleCenter).raycastTarget = false;
-
-        Txt(note.transform, companyName + " · 荣誉档案", 36, Ink, 36, 152, cardW - 72f, 52, TextAnchor.MiddleLeft);
-        Txt(note.transform, "全网榜单筹备中，每一次扩线与日利润增长都会记入公司史册。", 24, InkSoft, 38, 96, cardW - 76f, 40, TextAnchor.MiddleLeft);
-        Txt(note.transform, "当前版图  " + DisplayPlaceAliases(currentRegion) + "   ·   已连通  " + DailyConnectedCount() + " 站   ·   预期日利  ¥" + Mathf.RoundToInt(income), 25, Matcha, 38, 34, cardW - 76f, 42, TextAnchor.MiddleLeft);
-    }
-
-    struct NoticeEntry
-    {
-        public string title;
-        public string body;
-        public string date;
-    }
-
-    // 公告数据列表（约定最新公告置于索引 0，打开时默认仅展开索引 0 且全局互斥同时只开一条）
-    static readonly NoticeEntry[] Announcements =
-    {
-        new NoticeEntry
-        {
-            title = "1号公告",
-            date = "2026年11月13日",
-            body = "暂无公告\n特此公告\n2026年11月13日"
-        }
-    };
-
-    void OpenNoticeBoard()
-    {
-        noticeReadThisSession = true;
-        if (noticeUnreadDot) noticeUnreadDot.SetActive(false);
-
-        const float popupW = 860f;
-        const float popupH = 920f;
-        var panel = OpenPopup("公司公告", popupH, popupW);
-        int total = Announcements != null ? Announcements.Length : 0;
-        Txt(panel.transform, "铁路运营部告示 · 共 " + total + " 则", 22, InkSoft, 28, popupH - 108, popupW - 56, 30, TextAnchor.MiddleLeft);
-        Img(Rect("NoticeHeaderLine", panel.transform, 28, popupH - 118, popupW - 56, 2), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f)).raycastTarget = false;
-
-        float viewW = popupW - 56f;
-        float viewH = popupH - 148f;
-        var view = Rect("NoticeScrollView", panel.transform, 28, 22, viewW, viewH);
-        Img(view, new Color(1, 1, 1, 0)).raycastTarget = true;
-        view.AddComponent<RectMask2D>();
-        var content = Rect("NoticeListContent", view.transform, 0, 0, viewW, viewH);
-        var contentRt = content.GetComponent<RectTransform>();
-        contentRt.anchorMin = new Vector2(0, 1); contentRt.anchorMax = new Vector2(0, 1);
-        contentRt.pivot = new Vector2(0, 1); contentRt.anchoredPosition = Vector2.zero;
-        var scroll = view.AddComponent<ScrollRect>();
-        scroll.viewport = view.GetComponent<RectTransform>();
-        scroll.content = contentRt;
-        scroll.horizontal = false; scroll.vertical = true;
-        scroll.scrollSensitivity = 90f; scroll.movementType = ScrollRect.MovementType.Elastic;
-
-        int expandedIndex = total > 0 ? 0 : -1;
-
-        void RebuildNoticeList()
-        {
-            for (int c = content.transform.childCount - 1; c >= 0; c--)
-                Destroy(content.transform.GetChild(c).gameObject);
-
-            if (total == 0)
-            {
-                var emptyCard = Rect("NoticeEmpty", content.transform, 0, -140, viewW, 140);
-                Rounded(emptyCard, new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f));
-                Txt(emptyCard.transform, "当前暂无公司公告", 26, InkSoft, 24, 0, viewW - 48, 140, TextAnchor.MiddleCenter);
-                contentRt.sizeDelta = new Vector2(viewW, viewH);
-                return;
-            }
-
-            const float headerH = 88f;
-            const float gap = 16f;
-            float cursorY = 8f;
-
-            for (int i = 0; i < total; i++)
-            {
-                int idx = i;
-                var item = Announcements[i];
-                bool isExpanded = idx == expandedIndex;
-                float bodyTextW = viewW - 84f;
-                float bodyH = 0f;
-                if (isExpanded)
-                {
-                    float rawH = MeasureTextHeight(item.body, 26, bodyTextW) * 1.32f + 28f;
-                    bodyH = Mathf.Max(136f, rawH);
-                }
-                float cardH = headerH + (isExpanded ? bodyH + 28f : 0f);
-                cursorY += cardH;
-
-                var card = Rect("NoticeItem_" + idx, content.transform, 0, -cursorY, viewW, cardH);
-                var cardRt = card.GetComponent<RectTransform>();
-                cardRt.anchorMin = new Vector2(0, 1); cardRt.anchorMax = new Vector2(0, 1);
-                cardRt.pivot = new Vector2(0, 0);
-                Rounded(card, isExpanded ? new Color(1f, 0.995f, 0.97f, 0.99f) : new Color(Paper2.r, Paper2.g, Paper2.b, 0.72f));
-                if (isExpanded) SoftShadow(card);
-
-                var accentCol = idx == 0 ? Vermilion : (isExpanded ? Indigo : InkSoft);
-                var ribbon = Rect("Ribbon", card.transform, 0, 8, 6, cardH - 16);
-                Img(ribbon, accentCol, spriteRound).raycastTarget = false;
-
-                var headerGo = Rect("Header", card.transform, 0, cardH - headerH, viewW, headerH);
-                var headerBg = Img(headerGo, new Color(1, 1, 1, 0));
-                var headerBtn = headerGo.AddComponent<Button>();
-                headerBtn.targetGraphic = headerBg;
-                headerBtn.onClick.AddListener(() => {
-                    expandedIndex = (expandedIndex == idx) ? -1 : idx;
-                    RebuildNoticeList();
-                });
-
-                float titleX = 28f;
-                if (idx == 0)
-                {
-                    var latestPill = Rect("LatestTag", headerGo.transform, titleX, (headerH - 34f) * 0.5f, 70f, 34f);
-                    Rounded(latestPill, new Color(Vermilion.r, Vermilion.g, Vermilion.b, 0.14f));
-                    var latestTxt = Txt(latestPill.transform, "最新", 18, Vermilion, 0, 0, 70f, 34f, TextAnchor.MiddleCenter);
-                    latestTxt.fontStyle = FontStyle.Normal;
-                    titleX += 84f;
-                }
-
-                var titleTxt = Txt(headerGo.transform, item.title, 30, Ink, titleX, 0, viewW - titleX - 240f, headerH, TextAnchor.MiddleLeft);
-                titleTxt.fontStyle = FontStyle.Normal;
-                FitSingleLine(titleTxt, 30);
-
-                if (!string.IsNullOrEmpty(item.date))
-                {
-                    Txt(headerGo.transform, item.date, 20, InkSoft, viewW - 235f, 0, 175f, headerH, TextAnchor.MiddleRight);
-                }
-                Txt(headerGo.transform, isExpanded ? "▾" : "▸", 26, isExpanded ? Ink : InkSoft, viewW - 56f, 0, 36f, headerH, TextAnchor.MiddleCenter);
-
-                if (isExpanded)
-                {
-                    Img(Rect("Sep", card.transform, 28, cardH - headerH - 2f, viewW - 56f, 2f), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.14f)).raycastTarget = false;
-                    var bodyBg = Rect("BodyPaper", card.transform, 24, 16, viewW - 48f, bodyH);
-                    Rounded(bodyBg, new Color(0.965f, 0.945f, 0.905f, 0.72f));
-                    bodyBg.GetComponent<Image>().raycastTarget = false;
-                    var bodyTxt = Txt(bodyBg.transform, item.body, 26, Ink, 20, 10, bodyTextW, bodyH - 20f, TextAnchor.UpperLeft);
-                    bodyTxt.lineSpacing = 1.32f;
-                }
-
-                cursorY += gap;
-            }
-
-            contentRt.sizeDelta = new Vector2(viewW, Mathf.Max(viewH, cursorY + 8f));
-        }
-
-        RebuildNoticeList();
-    }
+    // 排行榜与湾区铁道驿报已迁至 DemoBulletin.cs。
     void OpenVehicleDetails(int index)
     {
         if (index < 0 || index >= LocoNames.Length) return;
@@ -1154,30 +1033,59 @@ public partial class DemoBootstrap
     void OpenCompanyScreen()
     {
         EnsureCompanyInitialized();
+        EnsureTalentsInitialized();
         companyTab = Mathf.Clamp(companyTab, 0, 3);
-        var pg = OpenPage("公司", "总社运营台 · 统筹董事任命、周期风向、债券招标与效能特权。", "PageArt/company_watercolor");
+        var pg = OpenPage("公司", "总社运营台 · 统筹董事任命、人才猎聘培养、周期风向、债券招标与效能特权。", "PageArt/company_watercolor", "company_screen");
 
-        string[] tabNames = { "总览 · 社务", "高管 · 董事会", "资本 · 招投标", "特权 · 效率厅" };
+        string[] tabNames = { "总览 · 社务", "高管 · 人才", "资本 · 招投标", "特权 · 效率厅" };
         for (int i = 0; i < tabNames.Length; i++)
         {
             int tabIdx = i;
             bool active = companyTab == tabIdx;
-            var tBtn = Btn(pg.transform, "CompanyTab_" + i, tabNames[i], 23, 28f + i * 260f, PgH - 252f, 244f, 64f,
-                active ? Indigo : CardBg, () => { companyTab = tabIdx; OpenCompanyScreen(); });
-            TInk(tBtn, active ? Color.white : Ink);
+            bool tabLocked = tabIdx == 2 && !IsFeatureUnlocked(GameFeature.CompanyFinanceAndBoard);
+            string label = tabLocked ? tabNames[i] + " 🔒" : tabNames[i];
+            var tBtn = Btn(pg.transform, "CompanyTab_" + i, label, 22, 28f + i * 260f, PgH - 252f, 244f, 64f,
+                active ? Indigo : CardBg, () => {
+                    if (tabIdx == 2 && !IsFeatureUnlocked(GameFeature.CompanyFinanceAndBoard))
+                    {
+                        PlayErrorSfx();
+                        Toast(FeatureLockHint(GameFeature.CompanyFinanceAndBoard));
+                        return;
+                    }
+                    companyTab = tabIdx; OpenCompanyScreen();
+                });
+            TInk(tBtn, active ? Color.white : tabLocked ? InkSoft : Ink);
             if (!active) SoftShadow(tBtn.gameObject);
         }
 
         float cardW = W - 56f;
         if (companyTab == 0) BuildCompanyOverviewTab(pg.transform, cardW);
-        else if (companyTab == 1) BuildCompanyBoardTab(pg.transform, cardW);
+        else if (companyTab == 1) BuildCompanyBoardOrTalentTab(pg.transform, cardW);
         else if (companyTab == 2) BuildCompanyFinanceTab(pg.transform, cardW);
         else BuildCompanyPrivilegeTab(pg.transform, cardW);
     }
 
+    void BuildCompanyBoardOrTalentTab(Transform page, float cardW)
+    {
+        companyBoardSubTab = Mathf.Clamp(companyBoardSubTab, 0, 1);
+        float subY = PgH - 332f;
+        var b1 = Btn(page, "BoardSub0", "董事会名宿 (" + boardPartners.Count + "/" + BoardSeatCapacity() + ")", 22, 28f, subY, 502f, 58f,
+            companyBoardSubTab == 0 ? Matcha : CardBg, () => { companyBoardSubTab = 0; OpenCompanyScreen(); });
+        TInk(b1, companyBoardSubTab == 0 ? Color.white : Ink);
+        if (companyBoardSubTab != 0) SoftShadow(b1.gameObject);
+
+        var b2 = Btn(page, "BoardSub1", "才俊招募与培养 (" + talents.Count + "/" + TalentRosterCapacity() + ")", 22, 550f, subY, 502f, 58f,
+            companyBoardSubTab == 1 ? Matcha : CardBg, () => { companyBoardSubTab = 1; OpenCompanyScreen(); });
+        TInk(b2, companyBoardSubTab == 1 ? Color.white : Ink);
+        if (companyBoardSubTab != 1) SoftShadow(b2.gameObject);
+
+        if (companyBoardSubTab == 0) BuildCompanyBoardTab(page, cardW);
+        else BuildTalentManagementView(page, cardW);
+    }
+
     void BuildCompanyOverviewTab(Transform page, float cardW)
     {
-        float totalH = 1500f;
+        float totalH = 1790f;
         var content = FleetScroll(page, 36f, PgH - 270f, totalH);
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
@@ -1191,7 +1099,7 @@ public partial class DemoBootstrap
         Color sealBg = sealIdx >= 6 ? new Color(0.76f, 0.50f, 0.16f) : Vermilion;
         var sealBtn = Btn(brandCard.transform, "SealButton", CompanySealChars[sealIdx], 68, 32f, 182f, 138f, 138f, sealBg, OpenCompanySealPicker);
         TInk(sealBtn, Color.white);
-        Txt(brandCard.transform, "换印", 20, sealBg, 32f, 144f, 138f, 32f, TextAnchor.MiddleCenter);
+        Txt(brandCard.transform, "换印", 23, sealBg, 32f, 142f, 138f, 34f, TextAnchor.MiddleCenter);
 
         Txt(brandCard.transform, "头衔 · " + CompanyTitle() + "  ·  " + CreditTierLabels[CompanyCreditTier()] + "信用（已连 " + DailyConnectedCount() + " 站）",
             22, Matcha, 196f, 298f, 788f, 36f, TextAnchor.MiddleLeft);
@@ -1221,7 +1129,7 @@ public partial class DemoBootstrap
         int activePartners = boardPartners.Count + (consultantDaysLeft > 0 ? 1 : 0);
         Txt(brandCard.transform, "高管 " + activePartners + " 人   ·   运营 " + lines.Count + " 线   ·   名胜 " + FoundCount() + " 处   ·   科技 " + techDone.Count + " 项",
             22, InkSoft, 196f, 160f, 788f, 38f, TextAnchor.MiddleLeft);
-        Txt(brandCard.transform, NextCompanyRankHint(), 20, Indigo, 196f, 120f, 788f, 34f, TextAnchor.MiddleLeft);
+        Txt(brandCard.transform, NextCompanyRankHint(), 23, Indigo, 196f, 118f, 788f, 38f, TextAnchor.MiddleLeft);
 
         float halfStatW = (cW - 20f) * 0.5f;
         var statLeft = Rect("StatProfit", brandCard.transform, 32f, 24f, halfStatW, 68f);
@@ -1272,9 +1180,9 @@ public partial class DemoBootstrap
                 EndUndo(); SaveGame(); RefreshHUD(); OpenCompanyScreen();
                 Toast("已切换为「" + CompanyPolicyNames[idx] + "」方针");
             });
-            var titleTxt = Txt(pBtn.transform, CompanyPolicyNames[idx] + (active ? "  ✓ 生效中" : ""), 26, active ? Indigo : Ink, 18f, 102f, halfStatW - 36f, 42f, TextAnchor.MiddleLeft);
+            var titleTxt = Txt(pBtn.transform, CompanyPolicyNames[idx] + (active ? "  ✓ 生效中" : ""), 26, active ? Indigo : Ink, 18f, 104f, halfStatW - 36f, 42f, TextAnchor.MiddleLeft);
             titleTxt.raycastTarget = false;
-            var descTxt = Txt(pBtn.transform, CompanyPolicyDescs[idx], 20, InkSoft, 18f, 12f, halfStatW - 36f, 84f, TextAnchor.UpperLeft);
+            var descTxt = Txt(pBtn.transform, CompanyPolicyDescs[idx], 22, InkSoft, 18f, 10f, halfStatW - 36f, 90f, TextAnchor.UpperLeft);
             descTxt.raycastTarget = false;
         }
 
@@ -1287,12 +1195,12 @@ public partial class DemoBootstrap
         bool awardReady = day >= 15 && lastAwardDay < awardCycle;
         var awardRow = Rect("AnnualAwardRow", honorCard.transform, 32f, 212f, cW, 106f);
         Rounded(awardRow, awardReady ? Color.Lerp(CardBg, new Color(0.95f, 0.72f, 0.20f), 0.25f) : Color.Lerp(CardBg, Ink, 0.04f));
-        Txt(awardRow.transform, "大湾区年度铁道大赏（每 15 日授勋）", 25, Ink, 18f, 58f, 620f, 36f, TextAnchor.MiddleLeft);
+        Txt(awardRow.transform, "大湾区年度铁道大赏（每 15 日授勋）", 25, Ink, 18f, 58f, 620f, 38f, TextAnchor.MiddleLeft);
         string awardHint = awardReady
             ? "第 " + awardCycle + " 日大赏揭晓，贺礼待领取"
             : "距下届评比还有 " + (15 - (day % 15)) + " 日";
-        Txt(awardRow.transform, awardHint, 20, awardReady ? Vermilion : InkSoft, 18f, 14f, 620f, 36f, TextAnchor.MiddleLeft);
-        var awardBtn = Btn(awardRow.transform, "OpenAwardBtn", awardReady ? "立即领赏" : "查看评比", 22, cW - 280f, 17f, 260f, 72f,
+        Txt(awardRow.transform, awardHint, 23, awardReady ? Vermilion : InkSoft, 18f, 12f, 620f, 38f, TextAnchor.MiddleLeft);
+        var awardBtn = Btn(awardRow.transform, "OpenAwardBtn", awardReady ? "立即领赏" : "查看评比", 24, cW - 280f, 17f, 260f, 72f,
             awardReady ? new Color(0.76f, 0.50f, 0.16f) : Indigo, OpenAnnualAwardPopup);
         TInk(awardBtn, Color.white);
 
@@ -1315,42 +1223,62 @@ public partial class DemoBootstrap
         }
         if (shown > 3) propSummary += " 等共 " + shown + " 处";
         if (shown == 0) propSummary = "暂未开发物业。点选地图车站「详情」可投资商铺、商业街或都会广场。";
-        Txt(honorCard.transform, propSummary, 21, InkSoft, 32f, 94f, cW, 56f, TextAnchor.UpperLeft);
+        Txt(honorCard.transform, propSummary, 23, InkSoft, 32f, 92f, cW, 58f, TextAnchor.UpperLeft);
 
-        var goMapBtn = Btn(honorCard.transform, "GoBuildCommercial", "返回地图挑选车站开发物业", 23, 32f, 20f, cW, 64f, Matcha, () => {
+        var goMapBtn = Btn(honorCard.transform, "GoBuildCommercial", "返回地图挑选车站开发物业", 25, 32f, 20f, cW, 66f, Matcha, () => {
             ClosePage();
             Toast("点开任意已建车站「详情」即可投资站前物业");
         });
         TInk(goMapBtn, Color.white);
+
+        // 5. 三地口岸联运协同卡
+        float y5 = y4 - 22f - 266f;
+        var bayCard = Rect("CrossBaySynergyCard", content, cardX, y5, innerW, 266f);
+        Rounded(bayCard, CardBg); SoftShadow(bayCard); JournalTape(bayCard.transform, innerW * 0.5f - 72f, 249f, 144f);
+        int bayLinks = CrossBaySynergyLinkCount();
+        Txt(bayCard.transform, "三地口岸联运协同（" + bayLinks + " / 3 走廊）", 28, Ink, 32f, 202f, 600f, 42f, TextAnchor.MiddleLeft);
+        Txt(bayCard.transform, bayLinks > 0 ? "+¥" + Mathf.RoundToInt(CrossBaySynergyDailyBonus()) + "/日" : "待贯通", 24, bayLinks > 0 ? Matcha : InkSoft, 640f, 204f, 344f, 38f, TextAnchor.MiddleRight);
+        for (int b = 0; b < 3; b++)
+        {
+            bool active = CrossBayCorridorActive(b);
+            float ry = 140f - b * 56f;
+            var rowBg = Rect("BayRow_" + b, bayCard.transform, 32f, ry, cW, 48f);
+            Rounded(rowBg, active ? Color.Lerp(CardBg, Matcha, 0.14f) : Color.Lerp(CardBg, Ink, 0.04f));
+            Txt(rowBg.transform, (active ? "✓ " : "○ ") + CrossBayCorridorNames[b], 22, active ? Matcha : Ink, 16f, 0f, 250f, 48f, TextAnchor.MiddleLeft);
+            Txt(rowBg.transform, CrossBayCorridorDescs[b], 20, InkSoft, 272f, 0f, cW - 288f, 48f, TextAnchor.MiddleLeft);
+        }
     }
 
     void BuildCompanyBoardTab(Transform page, float cardW)
     {
         float totalH = 1412f;
-        var content = FleetScroll(page, 36f, PgH - 270f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 350f, totalH);
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
-        // 1. 董事会席位总览（1~3 常驻席 + 1 IAA 特聘席）
+        // 1. 董事会席位总览（随企业治理树可扩充至最多 5 常驻席 + 1 IAA 特聘席）
         float y1 = topY - 12f - 246f;
         var seatCard = Rect("BoardSeatSummary", content, cardX, y1, innerW, 246f);
         Rounded(seatCard, CardBg); SoftShadow(seatCard);
         int seats = BoardSeatCapacity();
         Txt(seatCard.transform, "湾区铁路董事会 · 常驻席位 " + boardPartners.Count + " / " + seats, 30, Ink, 32f, 182f, 580f, 44f, TextAnchor.MiddleLeft);
-        Txt(seatCard.transform, "随公司头衔解锁第 2 / 第 3 席", 21, InkSoft, 594f, 186f, 390f, 38f, TextAnchor.MiddleRight);
+        Txt(seatCard.transform, "头衔与企业治理树可扩充席位", 23, InkSoft, 584f, 186f, 400f, 38f, TextAnchor.MiddleRight);
 
-        float slotW = (cW - 48f) * 0.25f;
-        for (int i = 0; i < 4; i++)
+        int permSlots = Mathf.Max(3, seats);
+        int totalCols = permSlots + 1;
+        float gap = 12f;
+        float slotW = (cW - gap * (totalCols - 1)) / totalCols;
+        for (int i = 0; i < totalCols; i++)
         {
-            float sx = 32f + i * (slotW + 16f);
-            if (i < 3)
+            float sx = 32f + i * (slotW + gap);
+            if (i < permSlots)
             {
                 bool unlocked = i < seats;
                 bool occupied = i < boardPartners.Count;
                 int pid = occupied ? boardPartners[i] : -1;
                 Color bg = !unlocked ? Color.Lerp(CardBg, Ink, 0.08f) : occupied ? Color.Lerp(CardBg, Indigo, 0.14f) : Color.Lerp(CardBg, Matcha, 0.10f);
-                var sBtn = Btn(seatCard.transform, "SeatSlot_" + i, "", 20, sx, 22f, slotW, 140f, bg, () => {
-                    if (!unlocked) { Toast(i == 1 ? "升至「城市干线局」（8站或3线）解锁" : "升至「跨海铁道社」（16站且日利润¥600）解锁"); return; }
+                var sBtn = Btn(seatCard.transform, "SeatSlot_" + i, "", 22, sx, 22f, slotW, 140f, bg, () => {
+                    if (!unlocked) { Toast(i == 1 ? "升至「城市干线局」（8站或3线）解锁" : i == 2 ? "升至「跨海铁道社」（16站且日利润¥600）解锁" : "可在「企业治理树」继续扩充董事席位"); return; }
                     if (occupied)
                     {
                         BeginUndo("卸任高管");
@@ -1362,17 +1290,17 @@ public partial class DemoBootstrap
                     else Toast("请在下方名宿档案选择任命人选");
                 });
                 string topT = !unlocked ? "未解锁" : occupied ? PartnerNames[pid] : "空缺常驻席";
-                string subT = !unlocked ? (i == 1 ? "干线局解锁" : "跨海社解锁") : occupied ? PartnerTitles[pid] + "\n(点击卸任)" : "待从下方任命";
-                var t1 = Txt(sBtn.transform, topT, 24, !unlocked ? InkSoft : occupied ? Indigo : Matcha, 10f, 82f, slotW - 20f, 40f, TextAnchor.MiddleCenter);
-                t1.raycastTarget = false;
-                var t2 = Txt(sBtn.transform, subT, 19, InkSoft, 10f, 14f, slotW - 20f, 64f, TextAnchor.UpperCenter);
+                string subT = !unlocked ? (i == 1 ? "干线局解锁" : i == 2 ? "跨海社解锁" : "治理树解锁") : occupied ? PartnerTitles[pid] + "\n(点击卸任)" : "待从下方任命";
+                var t1 = Txt(sBtn.transform, topT, permSlots > 3 ? 22 : 25, !unlocked ? InkSoft : occupied ? Indigo : Matcha, 6f, 84f, slotW - 12f, 42f, TextAnchor.MiddleCenter);
+                FitSingleLine(t1, permSlots > 3 ? 22 : 25); t1.raycastTarget = false;
+                var t2 = Txt(sBtn.transform, subT, permSlots > 3 ? 19 : 21, InkSoft, 6f, 10f, slotW - 12f, 70f, TextAnchor.UpperCenter);
                 t2.raycastTarget = false;
             }
             else
             {
                 bool hasCons = consultantDaysLeft > 0 && consultantId >= 0 && consultantId < PartnerNames.Length;
                 Color cBg = hasCons ? Color.Lerp(CardBg, new Color(0.95f, 0.70f, 0.15f), 0.25f) : Color.Lerp(CardBg, new Color(0.76f, 0.50f, 0.16f), 0.12f);
-                var cBtn = Btn(seatCard.transform, "ConsultantSlot", "", 20, sx, 22f, slotW, 140f, cBg, () => {
+                var cBtn = Btn(seatCard.transform, "ConsultantSlot", "", 22, sx, 22f, slotW, 140f, cBg, () => {
                     PromptRewardedAd("hire_huo_" + day, 1, "特聘传奇顾问·霍老督办（3日全能零负面）", () => {
                         consultantId = 6;
                         consultantDaysLeft += 3;
@@ -1381,9 +1309,9 @@ public partial class DemoBootstrap
                         Toast("霍老督办已赴第 4 特聘席（剩余 " + consultantDaysLeft + " 天）");
                     });
                 });
-                var ct1 = Txt(cBtn.transform, hasCons ? PartnerNames[consultantId] : "特聘第 4 席", 23, new Color(0.65f, 0.38f, 0.05f), 8f, 82f, slotW - 16f, 40f, TextAnchor.MiddleCenter);
-                ct1.raycastTarget = false;
-                var ct2 = Txt(cBtn.transform, hasCons ? "驻席加持中\n剩 " + consultantDaysLeft + " 天（点延）" : "看片空降霍老\n全增益 0 负面", 19, InkSoft, 8f, 14f, slotW - 16f, 64f, TextAnchor.UpperCenter);
+                var ct1 = Txt(cBtn.transform, hasCons ? PartnerNames[consultantId] : "特聘席", permSlots > 3 ? 22 : 25, new Color(0.65f, 0.38f, 0.05f), 6f, 84f, slotW - 12f, 42f, TextAnchor.MiddleCenter);
+                FitSingleLine(ct1, permSlots > 3 ? 22 : 25); ct1.raycastTarget = false;
+                var ct2 = Txt(cBtn.transform, hasCons ? "驻席加持\n剩 " + consultantDaysLeft + " 天" : "看片空降霍老\n全增益0负面", permSlots > 3 ? 19 : 21, InkSoft, 6f, 10f, slotW - 12f, 70f, TextAnchor.UpperCenter);
                 ct2.raycastTarget = false;
             }
         }
@@ -1412,13 +1340,13 @@ public partial class DemoBootstrap
             Rounded(avatar, avatarColors[pid]);
             Txt(avatar.transform, PartnerNames[pid].Substring(0, 1), 44, Color.white, 0f, 0f, 92f, 92f, TextAnchor.MiddleCenter);
 
-            Txt(row.transform, PartnerNames[pid] + " · " + PartnerTitles[pid], 24, Ink, 126f, 88f, 560f, 36f, TextAnchor.MiddleLeft);
-            Txt(row.transform, "✓ " + PartnerPros[pid], 20, Matcha, 126f, 50f, 560f, 34f, TextAnchor.MiddleLeft);
-            Txt(row.transform, "• " + PartnerCons[pid], 19, isSpecial ? Indigo : Vermilion, 126f, 14f, 560f, 32f, TextAnchor.MiddleLeft);
+            Txt(row.transform, PartnerNames[pid] + " · " + PartnerTitles[pid], 25, Ink, 126f, 90f, 560f, 36f, TextAnchor.MiddleLeft);
+            Txt(row.transform, "✓ " + PartnerPros[pid], 23, Matcha, 126f, 50f, 560f, 36f, TextAnchor.MiddleLeft);
+            Txt(row.transform, "• " + PartnerCons[pid], 22, isSpecial ? Indigo : Vermilion, 126f, 12f, 560f, 34f, TextAnchor.MiddleLeft);
 
             if (isSpecial)
             {
-                var pBtn = Btn(row.transform, "HireSpecial", hired ? "在岗 " + consultantDaysLeft + "天(延)" : "看片特聘 3 天", 21, cW - 252f, 31f, 232f, 72f, new Color(0.76f, 0.50f, 0.16f), () => {
+                var pBtn = Btn(row.transform, "HireSpecial", hired ? "在岗 " + consultantDaysLeft + "天(延)" : "看片特聘 3 天", 23, cW - 252f, 31f, 232f, 72f, new Color(0.76f, 0.50f, 0.16f), () => {
                     PromptRewardedAd("hire_huo_" + day, 1, "特聘传奇顾问·霍老督办（3日全能零负面）", () => {
                         consultantId = 6;
                         consultantDaysLeft += 3;
@@ -1534,9 +1462,9 @@ public partial class DemoBootstrap
         // 1.2 无息应急周转金
         var loanRow = Rect("LoanRow", finCard.transform, 32f, 28f, cW, 114f);
         Rounded(loanRow, Color.Lerp(CardBg, Ink, 0.04f));
-        Txt(loanRow.transform, "无息应急周转金（破产保底）", 24, Ink, 18f, 64f, 620f, 36f, TextAnchor.MiddleLeft);
-        Txt(loanRow.transform, loanOutstanding ? "尚欠周转金 ¥500（归还即恢复信用分）" : "金币低于 ¥100 且未盈利时可领 ¥500", 20, InkSoft, 18f, 16f, 636f, 40f, TextAnchor.MiddleLeft);
-        var loanBtn = Btn(loanRow.transform, "LoanBtn", loanOutstanding ? "归还 ¥500" : "申请 ¥500", 23, cW - 282f, 21f, 262f, 72f, Indigo, () => {
+        Txt(loanRow.transform, "无息应急周转金（破产保底）", 25, Ink, 18f, 66f, 620f, 36f, TextAnchor.MiddleLeft);
+        Txt(loanRow.transform, loanOutstanding ? "尚欠周转金 ¥500（归还即恢复信用分）" : "金币低于 ¥100 且未盈利时可领 ¥500", 23, InkSoft, 18f, 14f, 636f, 42f, TextAnchor.MiddleLeft);
+        var loanBtn = Btn(loanRow.transform, "LoanBtn", loanOutstanding ? "归还 ¥500" : "申请 ¥500", 24, cW - 282f, 21f, 262f, 72f, Indigo, () => {
             if (loanOutstanding)
             {
                 if (coins < 500) { Toast("金币不足，暂无法还款"); return; }
@@ -1582,19 +1510,19 @@ public partial class DemoBootstrap
 
             Txt(box.transform, ContractTitle(c), 26, Ink, 20f, 212f, 580f, 40f, TextAnchor.MiddleLeft);
             int daysRem = Mathf.Max(0, c.deadlineDay - day);
-            Txt(box.transform, ready ? "✓ 待验收" : "剩 " + daysRem + " 天截止", 21, ready ? Matcha : Vermilion, 616f, 214f, 316f, 36f, TextAnchor.MiddleRight);
-            Txt(box.transform, ContractDesc(c), 22, InkSoft, 20f, 162f, 900f, 38f, TextAnchor.MiddleLeft);
+            Txt(box.transform, ready ? "✓ 待验收" : "剩 " + daysRem + " 天截止", 23, ready ? Matcha : Vermilion, 616f, 214f, 316f, 38f, TextAnchor.MiddleRight);
+            Txt(box.transform, ContractDesc(c), 23, InkSoft, 20f, 162f, 900f, 40f, TextAnchor.MiddleLeft);
 
             float ratio = c.targetValue > 0 ? Mathf.Clamp01(ContractCurrentValue(c) / (float)c.targetValue) : 1f;
             Img(Rect("CTrack", box.transform, 20f, 134f, 912f, 14f), new Color(0.86f, 0.84f, 0.78f), spriteRound).raycastTarget = false;
             if (ratio > 0f) Img(Rect("CFill", box.transform, 20f, 134f, 912f * ratio, 14f), ready ? Matcha : Indigo, spriteRound).raycastTarget = false;
 
             Txt(box.transform, "中标赏金：+¥" + c.rewardCoins + " · +" + c.rewardRp + " RP · +" + c.rewardDiamonds + " 钻",
-                21, Indigo, 20f, 90f, 900f, 34f, TextAnchor.MiddleLeft);
+                23, Indigo, 20f, 88f, 900f, 38f, TextAnchor.MiddleLeft);
 
             if (ready)
             {
-                var claimBtn = Btn(box.transform, "ClaimContract_" + c.id, "验收领奖", 23, 20f, 16f, 446f, 64f, Matcha, () => {
+                var claimBtn = Btn(box.transform, "ClaimContract_" + c.id, "验收领奖", 24, 20f, 16f, 446f, 64f, Matcha, () => {
                     if (c.claimed) return;
                     c.claimed = true;
                     coins += c.rewardCoins; rp += c.rewardRp; diamonds += c.rewardDiamonds;
@@ -1608,7 +1536,7 @@ public partial class DemoBootstrap
                 int xCoins = Mathf.RoundToInt(c.rewardCoins * 1.5f);
                 int xRp = Mathf.RoundToInt(c.rewardRp * 1.5f);
                 int xGems = Mathf.RoundToInt(c.rewardDiamonds * 1.5f);
-                var vipBtn = Btn(box.transform, "ClaimContractVip_" + c.id, "看片专访 · ×1.5 领 ¥" + xCoins, 22, 486f, 16f, 446f, 64f, new Color(0.76f, 0.50f, 0.16f), () => {
+                var vipBtn = Btn(box.transform, "ClaimContractVip_" + c.id, "看片专访 · ×1.5 领 ¥" + xCoins, 23, 486f, 16f, 446f, 64f, new Color(0.76f, 0.50f, 0.16f), () => {
                     PromptRewardedAd("contract_vip_" + c.id, 1, "媒体头版专访（赏金/RP/钻石全额 ×1.5）", () => {
                         if (c.claimed) return;
                         c.claimed = true;
@@ -1623,7 +1551,7 @@ public partial class DemoBootstrap
             }
             else
             {
-                var todoBtn = Btn(box.transform, "ContractTodo_" + c.id, "工程推进中（达标后回来验收）", 21, 20f, 16f, 912f, 64f, new Color(0.86f, 0.85f, 0.80f), () => Toast("达成标书目标后即可在此验收领奖"));
+                var todoBtn = Btn(box.transform, "ContractTodo_" + c.id, "工程推进中（达标后回来验收）", 23, 20f, 16f, 912f, 64f, new Color(0.86f, 0.85f, 0.80f), () => Toast("达成标书目标后即可在此验收领奖"));
                 TInk(todoBtn, InkSoft);
             }
         }
@@ -1644,7 +1572,7 @@ public partial class DemoBootstrap
         Txt(dispCard.transform, "AI 智能调度总控台 · 一键黄金配班", 29, Ink, 32f, 184f, 640f, 42f, TextAnchor.MiddleLeft);
         Txt(dispCard.transform, hasAuto ? "剩余 " + autoDispatchDaysLeft + " 天" : "未激活", 22, hasAuto ? Matcha : Vermilion, 694f, 186f, 290f, 38f, TextAnchor.MiddleRight);
         Txt(dispCard.transform, "依据全网真实客流一键优化四时段配车，消灭空跑亏钱，并享全网维护费 -10%。",
-            21, InkSoft, 32f, 114f, cW, 56f, TextAnchor.UpperLeft);
+            23, InkSoft, 32f, 112f, cW, 60f, TextAnchor.UpperLeft);
 
         if (hasAuto)
         {
@@ -1709,9 +1637,9 @@ public partial class DemoBootstrap
         Rounded(subCard, CardBg); SoftShadow(subCard);
         int grant = AdTourismSubsidyAmount();
         bool adClaimed = lastAdSubsidyDay == day;
-        Txt(subCard.transform, "每日文旅财政补贴", 25, Ink, 26f, 168f, halfW - 52f, 38f, TextAnchor.MiddleLeft);
-        Txt(subCard.transform, "基础 ¥500 + 连通 " + DailyConnectedCount() + " 站×¥60（封顶 ¥5,000）\n今日可领 ¥" + grant, 20, InkSoft, 26f, 100f, halfW - 52f, 62f, TextAnchor.UpperLeft);
-        var subBtn = Btn(subCard.transform, "SubsidyQuickBtn", adClaimed ? "今日补贴已领 ✓" : "看片立领 ¥" + grant, 22, 26f, 22f, halfW - 52f, 68f,
+        Txt(subCard.transform, "每日文旅财政补贴", 26, Ink, 26f, 170f, halfW - 52f, 38f, TextAnchor.MiddleLeft);
+        Txt(subCard.transform, "基础 ¥500 + 连通 " + DailyConnectedCount() + " 站×¥60（封顶 ¥5,000）\n今日可领 ¥" + grant, 22, InkSoft, 26f, 96f, halfW - 52f, 68f, TextAnchor.UpperLeft);
+        var subBtn = Btn(subCard.transform, "SubsidyQuickBtn", adClaimed ? "今日补贴已领 ✓" : "看片立领 ¥" + grant, 24, 26f, 20f, halfW - 52f, 68f,
             adClaimed ? new Color(0.84f, 0.85f, 0.81f) : Matcha, () => {
                 if (lastAdSubsidyDay == day) { Toast("今日补贴已领，明日再来"); return; }
                 PromptRewardedAd("company_subsidy_" + day, 1, "文旅专项财政补贴 ¥" + grant, () => {
@@ -1726,9 +1654,9 @@ public partial class DemoBootstrap
         var huoCard = Rect("HuoPrivCard", content, cardX + halfW + 20f, y3, halfW, 230f);
         Rounded(huoCard, CardBg); SoftShadow(huoCard);
         bool hasHuo = consultantDaysLeft > 0 && consultantId == 6;
-        Txt(huoCard.transform, "特聘传奇 · 霍老督办", 25, Ink, 26f, 168f, halfW - 52f, 38f, TextAnchor.MiddleLeft);
-        Txt(huoCard.transform, "独立第 4 高管席：客流+10% · 车速+8%\n建线-10% · 维保-10%（零负面特质）", 20, InkSoft, 26f, 100f, halfW - 52f, 62f, TextAnchor.UpperLeft);
-        var huoBtn = Btn(huoCard.transform, "HuoQuickBtn", hasHuo ? "已在岗(剩" + consultantDaysLeft + "天)点延" : "看片特聘 3 天", 22, 26f, 22f, halfW - 52f, 68f,
+        Txt(huoCard.transform, "特聘传奇 · 霍老督办", 26, Ink, 26f, 170f, halfW - 52f, 38f, TextAnchor.MiddleLeft);
+        Txt(huoCard.transform, "独立第 4 高管席：客流+10% · 车速+8%\n建线-10% · 维保-10%（零负面特质）", 22, InkSoft, 26f, 96f, halfW - 52f, 68f, TextAnchor.UpperLeft);
+        var huoBtn = Btn(huoCard.transform, "HuoQuickBtn", hasHuo ? "已在岗(剩" + consultantDaysLeft + "天)点延" : "看片特聘 3 天", 23, 26f, 20f, halfW - 52f, 68f,
             new Color(0.76f, 0.50f, 0.16f), () => {
                 PromptRewardedAd("hire_huo_" + day, 1, "特聘传奇顾问·霍老督办（3日全能零负面）", () => {
                     consultantId = 6; consultantDaysLeft += 3;
@@ -1745,7 +1673,7 @@ public partial class DemoBootstrap
         Rounded(lookCard, CardBg); SoftShadow(lookCard);
         Txt(lookCard.transform, "外观定制工坊 · 社徽与线网涂装", 28, Ink, 32f, 336f, 920f, 42f, TextAnchor.MiddleLeft);
         Txt(lookCard.transform, "共轨复线支持双色涂装并排呈现；典藏御印、线网涂装与手账主题均支持映像馆解锁。",
-            21, InkSoft, 32f, 276f, cW, 48f, TextAnchor.MiddleLeft);
+            23, InkSoft, 32f, 274f, cW, 52f, TextAnchor.MiddleLeft);
 
         float halfLookW = (cW - 20f) * 0.5f;
         for (int s = 6; s <= 7; s++)
@@ -1754,7 +1682,7 @@ public partial class DemoBootstrap
             bool owned = IsSealUnlocked(sealIndex);
             float sx = 32f + (s - 6) * (halfLookW + 20f);
             Color scBg = Color.Lerp(CardBg, new Color(0.76f, 0.50f, 0.16f), 0.12f);
-            var sBtn = Btn(lookCard.transform, "SealVipBtn_" + s, "", 20, sx, 130f, halfLookW, 124f, scBg, () => {
+            var sBtn = Btn(lookCard.transform, "SealVipBtn_" + s, "", 22, sx, 130f, halfLookW, 124f, scBg, () => {
                 if (owned)
                 {
                     companySeal = sealIndex; SaveGame(); companyTab = 0; OpenCompanyScreen();
@@ -1772,11 +1700,11 @@ public partial class DemoBootstrap
             var stamp = Rect("Stamp", sBtn.transform, 16f, 18f, 88f, 88f);
             Rounded(stamp, new Color(0.76f, 0.50f, 0.16f));
             Txt(stamp.transform, CompanySealChars[sealIndex], 46, Color.white, 0f, 0f, 88f, 88f, TextAnchor.MiddleCenter).raycastTarget = false;
-            Txt(sBtn.transform, CompanySealNames[sealIndex] + (companySeal == sealIndex ? " ✓" : ""), 24, Ink, 122f, 68f, halfLookW - 140f, 38f, TextAnchor.MiddleLeft).raycastTarget = false;
-            Txt(sBtn.transform, owned ? "已永久解锁 · 点此佩戴" : SealUnlockHint(sealIndex), 20, owned ? Matcha : Vermilion, 122f, 22f, halfLookW - 140f, 36f, TextAnchor.MiddleLeft).raycastTarget = false;
+            Txt(sBtn.transform, CompanySealNames[sealIndex] + (companySeal == sealIndex ? " ✓" : ""), 25, Ink, 122f, 68f, halfLookW - 140f, 38f, TextAnchor.MiddleLeft).raycastTarget = false;
+            Txt(sBtn.transform, owned ? "已永久解锁 · 点此佩戴" : SealUnlockHint(sealIndex), 22, owned ? Matcha : Vermilion, 122f, 20f, halfLookW - 140f, 40f, TextAnchor.MiddleLeft).raycastTarget = false;
         }
 
-        var liveryBtn = Btn(lookCard.transform, "GoLiveryShop", "进入「涂装工坊」（15 款双色复线涂装）", 22, 32f, 24f, halfLookW, 82f, Indigo, () => {
+        var liveryBtn = Btn(lookCard.transform, "GoLiveryShop", "进入「涂装工坊」（15 款双色复线涂装）", 23, 32f, 24f, halfLookW, 82f, Indigo, () => {
             ClosePage();
             fleetBack = () => { companyTab = 3; OpenCompanyScreen(); };
             shopCategory = 1;
@@ -1784,7 +1712,7 @@ public partial class DemoBootstrap
         });
         TInk(liveryBtn, Color.white);
 
-        var themeBtn = Btn(lookCard.transform, "GoThemeShop", "进入「主题工坊」（" + Themes.Length + " 套全局风格）", 22, 32f + halfLookW + 20f, 24f, halfLookW, 82f, Vermilion, () => {
+        var themeBtn = Btn(lookCard.transform, "GoThemeShop", "进入「主题工坊」（" + Themes.Length + " 套全局风格）", 23, 32f + halfLookW + 20f, 24f, halfLookW, 82f, Vermilion, () => {
             ClosePage();
             fleetBack = () => { companyTab = 3; OpenCompanyScreen(); };
             shopCategory = 2;
@@ -1804,16 +1732,16 @@ public partial class DemoBootstrap
         int awardPalette = (awardCycle / 15) % 4;
         var awardTex = EraPosterGenerator.GetCustomPoster("annual_" + posterTitle, posterTitle, awardPalette, 3, 768, 248, 0);
         var posterFrame = CreateNeonPosterFrame(p.transform, "AwardNeonPoster", 36f, 396f, 848f, 258f, awardTex, 8f);
-        var cornerTag = Rect("AwardCyclePill", posterFrame.transform, 598f, 16f, 232f, 34f);
+        var cornerTag = Rect("AwardCyclePill", posterFrame.transform, 578f, 16f, 252f, 38f);
         Rounded(cornerTag, new Color(0.04f, 0.04f, 0.08f, 0.78f));
         cornerTag.GetComponent<Image>().raycastTarget = false;
-        Txt(cornerTag.transform, awardCycle >= 15 ? ("第 " + awardCycle + " 日纪念刊") : "首届大赏筹备", 18, new Color(1f, 0.95f, 0.86f, 0.96f), 0f, 0f, 232f, 34f, TextAnchor.MiddleCenter).raycastTarget = false;
+        Txt(cornerTag.transform, awardCycle >= 15 ? ("第 " + awardCycle + " 日纪念刊") : "首届大赏筹备", 21, new Color(1f, 0.95f, 0.86f, 0.96f), 0f, 0f, 252f, 38f, TextAnchor.MiddleCenter).raycastTarget = false;
 
         var banner = Rect("AwardBanner", p.transform, 36f, 286f, 848f, 96f);
         Rounded(banner, Color.Lerp(CardBg, new Color(0.95f, 0.72f, 0.20f), 0.16f));
         Img(Rect("Accent", banner.transform, 0, 12, 8, 72), new Color(0.86f, 0.56f, 0.12f), spriteRound).raycastTarget = false;
         Txt(banner.transform, "本期拟授勋：" + medalName, 30, Ink, 24f, 48f, 800f, 40f, TextAnchor.MiddleLeft);
-        Txt(banner.transform, reason, 21, InkSoft, 24f, 10f, 800f, 36f, TextAnchor.MiddleLeft);
+        Txt(banner.transform, reason, 23, InkSoft, 24f, 8f, 800f, 38f, TextAnchor.MiddleLeft);
 
         Txt(p.transform, "评比贺礼：+¥" + grantCoins + "   ·   +" + grantDiamonds + " 钻", 25, Indigo, 36f, 230f, 848f, 40f, TextAnchor.MiddleCenter);
         Txt(p.transform, canClaim
@@ -1852,7 +1780,7 @@ public partial class DemoBootstrap
 
     void OpenCompanySealPicker()
     {
-        var panel = OpenPopup("选择公司朱红印章", 720f, 960f);
+        var panel = OpenPopup("选择公司朱红印章", 720f, 960f, "company_seal_picker");
         Txt(panel.transform, "随公司成就或激励视频解锁 8 枚专属印章，点选立即生效", 23, InkSoft, 34f, 616f, 892f, 38f, TextAnchor.MiddleLeft);
         for (int i = 0; i < CompanySealChars.Length; i++)
         {
@@ -1891,8 +1819,9 @@ public partial class DemoBootstrap
             var stamp = Rect("Stamp", btn.transform, 52f, 114f, 108f, 108f);
             Rounded(stamp, sealColor);
             Txt(stamp.transform, CompanySealChars[idx], 56, Color.white, 0f, 0f, 108f, 108f, TextAnchor.MiddleCenter).raycastTarget = false;
-            Txt(btn.transform, CompanySealNames[idx] + (selected ? " ✓" : ""), 22, unlocked ? Ink : InkSoft, 8f, 60f, 196f, 38f, TextAnchor.MiddleCenter).raycastTarget = false;
-            Txt(btn.transform, unlocked ? (selected ? "当前印章" : "点击选用") : SealUnlockHint(idx), 18, unlocked ? (selected ? sealColor : Matcha) : (isVip ? new Color(0.76f, 0.50f, 0.16f) : InkSoft), 8f, 14f, 196f, 40f, TextAnchor.MiddleCenter).raycastTarget = false;
+            Txt(btn.transform, CompanySealNames[idx] + (selected ? " ✓" : ""), 24, unlocked ? Ink : InkSoft, 8f, 62f, 196f, 38f, TextAnchor.MiddleCenter).raycastTarget = false;
+            var sealSub = Txt(btn.transform, unlocked ? (selected ? "当前印章" : "点击选用") : SealUnlockHint(idx), 21, unlocked ? (selected ? sealColor : Matcha) : (isVip ? new Color(0.76f, 0.50f, 0.16f) : InkSoft), 8f, 12f, 196f, 44f, TextAnchor.MiddleCenter);
+            sealSub.resizeTextForBestFit = true; sealSub.resizeTextMinSize = 16; sealSub.resizeTextMaxSize = ScaledFontSize(21); sealSub.raycastTarget = false;
         }
     }
 
@@ -1907,7 +1836,7 @@ public partial class DemoBootstrap
         Txt(pg.transform, "沿途记忆", 36, Ink, 34, PgH-238, 440, 52, TextAnchor.MiddleLeft);
         int regionTotal = 0, regionFound = 0;
         foreach (var item in sceneries) if (sceneryRegionFilter == 0 || item.region == SceneryRegions[sceneryRegionFilter]) { regionTotal++; if (item.found) regionFound++; }
-        Txt(pg.transform, "TRAVEL JOURNAL  ·  " + regionFound + " / " + regionTotal, 21, InkSoft, 36, PgH-278, 410, 32, TextAnchor.MiddleLeft);
+        Txt(pg.transform, "TRAVEL JOURNAL  ·  " + regionFound + " / " + regionTotal, 23, InkSoft, 36, PgH-280, 420, 34, TextAnchor.MiddleLeft);
         if (regionTotal > 0 && regionFound == regionTotal)
         {
             var clearTex = EraPosterGenerator.GetCustomPoster("scenery_clear_" + sceneryRegionFilter, "CLEAR!", sceneryRegionFilter % 4, 5, 512, 184, 0);
@@ -1917,7 +1846,7 @@ public partial class DemoBootstrap
         Button filter = null;
         filter = Btn(pg.transform, "SceneryFilter", SceneryCategories[sceneryCategory] + "  ▾", 25, 694, PgH-264, 330, 72,
             new Color(0.91f,0.88f,0.80f,0.98f), () => ShowFleetDropdown(pg.transform, filter.transform, SceneryCategories, sceneryCategory, value => { sceneryCategory = value; OpenSceneryScreen(); }));
-        TInk(filter, Ink); filter.gameObject.AddComponent<FleetPressFeedback>();
+        TInk(filter, Ink); if (!filter.GetComponent<FleetPressFeedback>()) filter.gameObject.AddComponent<FleetPressFeedback>();
         for (int i = 0; i < SceneryRegions.Length; i++) {
             int region = i;
             var tab = Btn(pg.transform, "SceneryRegion" + i, SceneryRegions[i], 24, 28 + i * 258, PgH - 360, 246, 60,
@@ -1964,16 +1893,16 @@ public partial class DemoBootstrap
             Txt(card.transform, sc.region + (sc.natural ? "  ·  自然" : "  ·  人文"), 22, InkSoft, 26, 79, 310, 30, TextAnchor.MiddleLeft);
             string status = sc.found ? "已打卡" : !RegionUnlocked(sc.region) ? "先解锁" + sc.region : !sc.unlocked ? "连通" + sc.triggerStation + "站" : hasPicture ? "点击打卡" : "图片筹备中";
             Txt(card.transform, status, 22, sc.found ? Matcha : pending ? Vermilion : InkSoft, 24, 28, 440, 35, TextAnchor.MiddleLeft);
-            var stamp = Rect("Stamp", card.transform, 364, 89, 102, 58); Rounded(stamp, sc.found ? new Color(0.72f,0.82f,0.67f,0.65f) : pending ? new Color(0.96f,0.78f,0.72f,0.75f) : new Color(0.89f,0.87f,0.81f,0.85f));
+            var stamp = Rect("Stamp", card.transform, 354, 86, 118, 64); Rounded(stamp, sc.found ? new Color(0.72f,0.82f,0.67f,0.65f) : pending ? new Color(0.96f,0.78f,0.72f,0.75f) : new Color(0.89f,0.87f,0.81f,0.85f));
             stamp.GetComponent<Image>().raycastTarget = false; stamp.transform.localRotation = Quaternion.Euler(0,0,7);
-            Txt(stamp.transform, sc.found ? "已到访" : pending ? "待打卡" : "未到访", 20, sc.found ? Matcha : pending ? Vermilion : InkSoft, 0, 0, 102, 58, TextAnchor.MiddleCenter);
+            Txt(stamp.transform, sc.found ? "已到访" : pending ? "待打卡" : "未到访", 23, sc.found ? Matcha : pending ? Vermilion : InkSoft, 0, 0, 118, 64, TextAnchor.MiddleCenter);
             if (sc.unlocked && hasPicture)
             {
                 var scLocal = sc;
                 var btn = card.AddComponent<Button>(); btn.targetGraphic = card.GetComponent<Image>();
                 btn.onClick.AddListener(() => OpenSceneryViewer(scLocal, () => { ClosePage(); OpenSceneryScreen(); }));
             }
-            if (qualityTier > 0) { var entry = card.AddComponent<FleetCardEntrance>(); entry.delay = Mathf.Min(visible - 1, 4) * 0.025f; }
+            { var entry = card.AddComponent<FleetCardEntrance>(); entry.delay = Mathf.Min(visible - 1, 5) * 0.025f; }
         }
     }
 }

@@ -181,7 +181,7 @@ public static class EraPosterGenerator
             wrapMode = TextureWrapMode.Clamp
         };
         tex.SetPixels(pixels);
-        tex.Apply(false, false);
+        tex.Apply(false, true);
         return tex;
     }
 

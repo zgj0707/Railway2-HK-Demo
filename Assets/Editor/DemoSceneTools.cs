@@ -15,10 +15,25 @@ static class DemoSceneTools
 {
     const string ScenePath = "Assets/Scenes/Main.unity";
     const string SessionKey = "Railway2.SceneChecked";
+    const string TestSavePath = "Assets/Resources/TestSaves/railway2_local_v1.json";
 
     static DemoSceneTools()
     {
         EditorApplication.delayCall += EnsureMainScene;
+        EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+    }
+
+    static void OnPlayModeStateChanged(PlayModeStateChange state)
+    {
+        if (state == PlayModeStateChange.EnteredEditMode && DemoBootstrap.DevTestSaveDirty)
+        {
+            DemoBootstrap.DevTestSaveDirty = false;
+            if (File.Exists(TestSavePath))
+            {
+                AssetDatabase.ImportAsset(TestSavePath, ImportAssetOptions.ForceUpdate);
+                Debug.Log("[Railway2] 已同步开发测试存档至 " + TestSavePath + "（可提交 Git 跨设备同步）");
+            }
+        }
     }
 
     static void EnsureMainScene()
@@ -82,6 +97,29 @@ static class DemoSceneTools
         if (main == null) return;
         EditorSceneManager.playModeStartScene = main;
         Debug.Log("[Railway2] Play 启动场景 = " + ScenePath);
+    }
+
+    [MenuItem("铁路大亨2/同步测试存档（跨设备开发）", false, 20)]
+    static void ToggleDevTestSaveSync()
+    {
+        bool next = !DemoBootstrap.DevTestSaveSyncEnabled;
+        DemoBootstrap.DevTestSaveSyncEnabled = next;
+        Debug.Log("[Railway2] 开发测试存档自动同步已" + (next ? "开启（启动优先读取并持续写回 " + TestSavePath + "）" : "关闭（仅使用本机 PlayerPrefs）"));
+    }
+
+    [MenuItem("铁路大亨2/同步测试存档（跨设备开发）", true, 20)]
+    static bool ValidateToggleDevTestSaveSync()
+    {
+        Menu.SetChecked("铁路大亨2/同步测试存档（跨设备开发）", DemoBootstrap.DevTestSaveSyncEnabled);
+        return true;
+    }
+
+    [MenuItem("铁路大亨2/打开测试存档 JSON", false, 21)]
+    static void OpenDevTestSaveJson()
+    {
+        var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(TestSavePath);
+        if (asset != null) AssetDatabase.OpenAsset(asset);
+        else Debug.LogWarning("[Railway2] 找不到 " + TestSavePath);
     }
 }
 #endif

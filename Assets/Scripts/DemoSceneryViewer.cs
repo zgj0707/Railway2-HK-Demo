@@ -100,6 +100,7 @@ public partial class DemoBootstrap
         if (sceneryViewer) Destroy(sceneryViewer);
         CloseLineBubble();
         sceneryViewer = new GameObject("SceneryViewer", typeof(RectTransform), typeof(Canvas), typeof(GraphicRaycaster), typeof(SceneryViewerLayout));
+        SyncRegionalMusic(false);
         var viewerCanvas = sceneryViewer.GetComponent<Canvas>();
         viewerCanvas.renderMode = RenderMode.ScreenSpaceOverlay; viewerCanvas.overrideSorting = true; viewerCanvas.sortingOrder = 100;
         var backdrop = Rect("Backdrop", sceneryViewer.transform, 0, 0, 0, 0);
@@ -128,7 +129,7 @@ public partial class DemoBootstrap
             notification.GetComponent<Image>().raycastTarget = false;
             Destroy(notification, 3f);
         }
-        var back = Btn(controls.transform, "Back", "←", 40, 24, 958, 94, 94, new Color(0.12f, 0.16f, 0.15f, 0.75f), () => { Destroy(sceneryViewer); sceneryViewer = null; after?.Invoke(); });
+        var back = Btn(controls.transform, "Back", "←", 40, 24, 958, 94, 94, new Color(0.12f, 0.16f, 0.15f, 0.75f), () => { Destroy(sceneryViewer); sceneryViewer = null; RequestResourceTrim(false); after?.Invoke(); if (pageRoot == null) SyncRegionalMusic(false); });
         TInk(back, Color.white);
         var home = Btn(controls.transform, "Home", "主页", 24, 134, 958, 104, 94, new Color(0.12f, 0.16f, 0.15f, 0.75f), GoHome);
         TInk(home, Color.white);
@@ -143,12 +144,16 @@ public partial class DemoBootstrap
 public class SceneryViewerLayout : MonoBehaviour
 {
     public RectTransform stage, clear;
+    int lastWidth = -1, lastHeight = -1;
     void LateUpdate()
     {
         if (!stage) return;
-        bool portrait = Screen.height > Screen.width;
-        float width = portrait ? Screen.height : Screen.width;
-        float height = portrait ? Screen.width : Screen.height;
+        if (Screen.width == lastWidth && Screen.height == lastHeight) return;
+        lastWidth = Screen.width;
+        lastHeight = Screen.height;
+        bool portrait = lastHeight > lastWidth;
+        float width = portrait ? lastHeight : lastWidth;
+        float height = portrait ? lastWidth : lastHeight;
         float scale = Mathf.Min(width / 1920f, height / 1080f);
         stage.localScale = Vector3.one * scale;
         stage.localRotation = Quaternion.Euler(0, 0, portrait ? 90 : 0);

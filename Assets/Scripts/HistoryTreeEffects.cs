@@ -108,16 +108,22 @@ public class HistoryParallaxLayer : MonoBehaviour
 {
     public RectTransform content, target;
     public float parallaxFactor = 0.42f;
-    Vector2 baseCenter;
+    Vector2 baseCenter, lastContentPos;
+    float lastContentScale = -1f;
     bool initialized;
 
     void LateUpdate()
     {
         if (!content || !target) return;
-        if (!initialized) { baseCenter = content.anchoredPosition; initialized = true; }
-        Vector2 delta = content.anchoredPosition - baseCenter;
+        Vector2 pos = content.anchoredPosition;
+        float cs = content.localScale.x;
+        if (!initialized) { baseCenter = pos; initialized = true; }
+        else if ((pos - lastContentPos).sqrMagnitude < 0.01f && Mathf.Abs(cs - lastContentScale) < 0.0005f) return;
+        lastContentPos = pos;
+        lastContentScale = cs;
+        Vector2 delta = pos - baseCenter;
         target.anchoredPosition = delta * parallaxFactor;
-        float s = Mathf.Lerp(1f, content.localScale.x, parallaxFactor);
+        float s = Mathf.Lerp(1f, cs, parallaxFactor);
         target.localScale = new Vector3(s, s, 1f);
     }
 }

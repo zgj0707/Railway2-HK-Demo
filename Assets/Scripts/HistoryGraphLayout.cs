@@ -13,7 +13,7 @@ public class HistoryGraphLayout : MonoBehaviour
     readonly Dictionary<string, float> angleTargets = new Dictionary<string, float>();
     readonly Dictionary<Vector2Int, List<int>> nearby = new Dictionary<Vector2Int, List<int>>();
     float nextAngleUpdate;
-    public float updatesPerSecond = 60f;
+    public float updatesPerSecond = 120f;
     float accumulatedTime;
     public void Add(string key, RectTransform rect, int era, string[] parents)
     {
@@ -43,8 +43,8 @@ public class HistoryGraphLayout : MonoBehaviour
     {
         if (positions == null || entries.Count == 0) return;
         float dt;
-        if (updatesPerSecond >= 60f) {
-            // 每帧推进，避免 60 Hz 浮点时间略小于 1/60 时意外隔帧更新。
+        if (updatesPerSecond <= 0f || updatesPerSecond >= 60f) {
+            // 每帧顺滑推进，全面适配 120Hz+ 高刷屏幕。
             dt = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
         } else {
             accumulatedTime += Time.unscaledDeltaTime;

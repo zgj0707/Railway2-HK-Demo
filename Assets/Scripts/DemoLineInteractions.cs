@@ -40,6 +40,43 @@ public partial class DemoBootstrap
         return list;
     }
 
+    float SegmentLoadRatio(Line line, int a, int b)
+    {
+        if (line == null || traffic == null || traffic.lineSegLoad == null) return 0f;
+        string sk = line.id + ":" + Mathf.Min(a, b) + ":" + Mathf.Max(a, b);
+        return traffic.lineSegLoad.TryGetValue(sk, out float load) ? load : 0f;
+    }
+
+    void QuickBoostLineSegment(Line line)
+    {
+        if (line == null || !lines.Contains(line)) return;
+        int slot = DispatchSlot();
+        if (line.dispatch[slot] < line.trains)
+        {
+            BeginUndo("热力快捷增班");
+            line.dispatch[slot] = Mathf.Min(line.trains, line.dispatch[slot] + 1);
+            hasForecastSignature = false; operatingRates.Clear();
+            RecalcIncome(); EndUndo(); RefreshHUD();
+            Toast(line.name + " 本时段发车增至 " + line.dispatch[slot] + " 班");
+            return;
+        }
+        foreach (var v in researchVehicles)
+        {
+            if (v.lineId == 0)
+            {
+                BeginUndo("热力快捷调车");
+                v.lineId = line.id;
+                SyncLineFleet(line);
+                line.dispatch[slot] = line.trains;
+                hasForecastSignature = false; operatingRates.Clear();
+                RecalcIncome(); EndUndo(); RefreshHUD();
+                Toast("已将空闲机车「" + LocoNames[Mathf.Clamp(v.node, 0, LocoNames.Length - 1)] + "」调入 " + line.name);
+                return;
+            }
+        }
+        OpenLineFleet(line);
+    }
+
     void ShowLineBubbles(Vector2 at, List<LineHit> hits)
     {
         CloseLineBubble();
@@ -51,13 +88,23 @@ public partial class DemoBootstrap
         lineBubbleRoot = Rect("LineBubbles", lineBubbleScrim.transform, 0, 0, W, H);
         lineBubbleRoot.transform.SetAsLastSibling();
 
-        const float bw = 460f, bh = 156f, gap = 12f;
-        float total = hits.Count * bh + (hits.Count - 1) * gap;
+        const float bw = 556f, gap = 14f;
+        var heights = new float[hits.Count];
+        float total = (hits.Count - 1) * gap;
+        for (int i = 0; i < hits.Count; i++)
+        {
+            var hHit = hits[i];
+            int ha = hHit.line.st[hHit.seg], hb = hHit.line.st[hHit.seg + 1];
+            float load = SegmentLoadRatio(hHit.line, ha, hb);
+            bool showBoost = trafficHeatmapMode || load >= 0.72f;
+            heights[i] = showBoost ? 236f : 172f;
+            total += heights[i];
+        }
         float x = Mathf.Clamp(at.x - bw / 2f, 16f, W - bw - 16f);
         float above = at.y + 24f;
         float groupY = above + total <= H - 250f ? above : at.y - total - 24f;
         groupY = Mathf.Clamp(groupY, 210f, H - 240f - total);
-        float top = groupY + total;
+        float cursorTop = groupY + total;
 
         for (int i = 0; i < hits.Count; i++)
         {
@@ -65,24 +112,47 @@ public partial class DemoBootstrap
             var line = hit.line;
             if (!lines.Contains(line)) continue;
             int a = line.st[hit.seg], b = line.st[hit.seg + 1];
-            float y = top - bh - i * (bh + gap);
+            float load = SegmentLoadRatio(line, a, b);
+            bool showBoost = trafficHeatmapMode || load >= 0.72f;
+            float bh = heights[i];
+            float y = cursorTop - bh;
+            cursorTop = y - gap;
+
             var card = Rect("LBubble" + line.id, lineBubbleRoot.transform, x, y, bw, bh);
             Rounded(card, new Color(1f, 0.985f, 0.95f, 0.985f)); SoftShadow(card);
             Img(Rect("Accent", card.transform, 0, 12, 6, bh - 24), line.color, spriteRound).raycastTarget = false;
-            Txt(card.transform, line.name, 25, Ink, 18, bh - 50, 150, 34, TextAnchor.MiddleLeft);
-            Txt(card.transform, StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion), 18, InkSoft, 168, bh - 48, 280, 30, TextAnchor.MiddleLeft);
+            Txt(card.transform, line.name, 28, Ink, 20, bh - 54, 170, 38, TextAnchor.MiddleLeft);
+            Txt(card.transform, StationDisplayName(a, currentRegion) + " ⇄ " + StationDisplayName(b, currentRegion), 23, InkSoft, 194, bh - 52, 342, 36, TextAnchor.MiddleLeft);
 
-            var b1 = Btn(card.transform, "CutSeg", "拆该段", 21, 18, 16, 128, 64, new Color(0.965f,0.895f,0.85f), () => {
+            if (showBoost)
+            {
+                int pct = Mathf.RoundToInt(load * 100f);
+                Color loadCol = load >= 0.95f ? Vermilion : load >= 0.72f ? new Color(0.84f, 0.56f, 0.12f) : Matcha;
+                string statusText = load >= 0.95f ? "负荷 " + pct + "% · 爆满拥挤" : load >= 0.72f ? "负荷 " + pct + "% · 运力吃紧" : "负荷 " + pct + "% · 运行通畅";
+                Txt(card.transform, statusText + "（发车 " + RunningTrains(line) + "/" + line.trains + "）", 21, loadCol, 20, 114, 326, 40, TextAnchor.MiddleLeft);
+
+                int slot = DispatchSlot();
+                bool canAddRun = line.dispatch[slot] < line.trains;
+                string boostLabel = canAddRun ? "⚡ 增班+1" : "⚡ 调配机车";
+                Color boostBg = canAddRun ? Matcha : (load >= 0.72f ? Vermilion : Indigo);
+                var boostBtn = Btn(card.transform, "QuickBoost", boostLabel, 22, 354, 108, 182, 52, boostBg, () => {
+                    CloseLineBubble();
+                    QuickBoostLineSegment(line);
+                });
+                TInk(boostBtn, Color.white);
+            }
+
+            var b1 = Btn(card.transform, "CutSeg", "拆该段", 24, 20, 16, 160, 78, new Color(0.965f,0.895f,0.85f), () => {
                 CloseLineBubble();
                 Confirm("拆除该段", SegmentConfirmText(line, hit.seg), () => DoDemolishSegment(line, hit.seg));
             });
             TInk(b1, Vermilion);
-            var b2 = Btn(card.transform, "CutLine", "拆整线", 21, 158, 16, 128, 64, new Color(0.86f,0.38f,0.29f), () => {
+            var b2 = Btn(card.transform, "CutLine", "拆整线", 24, 198, 16, 160, 78, new Color(0.86f,0.38f,0.29f), () => {
                 CloseLineBubble();
                 Confirm("拆除 " + line.name, LineConfirmText(line), () => DoDemolishLine(line));
             });
             TInk(b2, Color.white);
-            var b3 = Btn(card.transform, "Info", "详 情", 21, 298, 16, 128, 64, Indigo, () => {
+            var b3 = Btn(card.transform, "Info", "详 情", 24, 376, 16, 160, 78, Indigo, () => {
                 CloseLineBubble();
                 OpenLineInfo(line, hit.seg);
             });
@@ -188,7 +258,7 @@ public partial class DemoBootstrap
         float pathHeight = Mathf.Clamp(MeasureTextHeight(pathText, 19, 860) + 6, 48, 280);
         float extra = pathHeight - 48;
         float h = 1180f + extra;
-        var p = OpenPopup("", h, 960);
+        var p = OpenPopup("", h, 960, "line_info_" + line.id);
         BuildLineNameEditor(p.transform, line, h);
         Img(Rect("LineColor", p.transform, 36, h - 124, 888, 8), line.color, spriteRound).raycastTarget = false;
 
@@ -211,11 +281,11 @@ public partial class DemoBootstrap
                 Img(ghost, new Color(0.90f, 0.87f, 0.81f, 0.42f), spriteRound).raycastTarget = false;
             }
             Img(Rect("ChartBase", p.transform, 36, 500 + extra, 888, 2), new Color(0.55f,0.50f,0.42f,0.28f)).raycastTarget = false;
-            Txt(p.transform, "首日运营中 · 今日收入 ¥" + line.todayRevenue + "\n日结后生成近 7 日利润曲线", 21, InkSoft, 36, 545 + extra, 860, 70, TextAnchor.UpperLeft);
+            Txt(p.transform, "首日运营中 · 今日收入 ¥" + line.todayRevenue + "\n日结后生成近 7 日利润曲线", 23, InkSoft, 36, 540 + extra, 860, 74, TextAnchor.UpperLeft);
         }
         else
         {
-            Txt(p.transform, "已结算 " + line.recent.Count + " 日 · 日均 ¥" + (recentSum / line.recent.Count), 19, InkSoft, 480, 678 + extra, 430, 30, TextAnchor.MiddleRight);
+            Txt(p.transform, "已结算 " + line.recent.Count + " 日 · 日均 ¥" + (recentSum / line.recent.Count), 22, InkSoft, 450, 678 + extra, 460, 34, TextAnchor.MiddleRight);
             int max = 1;
             foreach (int v in line.recent) if (Mathf.Abs(v) > max) max = Mathf.Abs(v);
             int start = 7 - line.recent.Count;
@@ -232,14 +302,14 @@ public partial class DemoBootstrap
             }
         }
 
-        Txt(p.transform, "运 营", 24, Ink, 36, 470 + extra, 300, 34, TextAnchor.MiddleLeft);
-        Txt(p.transform, "车站 " + unique + " · 列车 " + line.trains + "/8 · 线路长度 " + Mathf.RoundToInt(EconomicPathLength(line.st)) + " 地图单位", 21, Ink, 36, 420 + extra, 860, 34, TextAnchor.MiddleLeft);
-        Txt(p.transform, "最高区段需求 " + Mathf.RoundToInt(LinePeakSectionDemand(line)) + " 人次/日 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line, 2)*100) + "%", 21, InkSoft, 36, 384 + extra, 860, 30, TextAnchor.MiddleLeft);
+        Txt(p.transform, "运 营", 26, Ink, 36, 470 + extra, 300, 36, TextAnchor.MiddleLeft);
+        Txt(p.transform, "车站 " + unique + " · 列车 " + line.trains + "/8 · 线路长度 " + Mathf.RoundToInt(EconomicPathLength(line.st)) + " 地图单位", 23, Ink, 36, 420 + extra, 860, 36, TextAnchor.MiddleLeft);
+        Txt(p.transform, "最高区段需求 " + Mathf.RoundToInt(LinePeakSectionDemand(line)) + " 人次/日 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line, 2)*100) + "%", 23, InkSoft, 36, 382 + extra, 860, 34, TextAnchor.MiddleLeft);
         if (seg >= 0 && seg < line.st.Count - 1)
-            Txt(p.transform, "选中段：" + stations[line.st[seg]].name + " ⇄ " + stations[line.st[seg + 1]].name, 19, line.color, 36, 344 + extra, 860, 30, TextAnchor.MiddleLeft);
-        ScrollableText(p.transform, pathText, 19, InkSoft, 36, 296, 860, pathHeight);
+            Txt(p.transform, "选中段：" + stations[line.st[seg]].name + " ⇄ " + stations[line.st[seg + 1]].name, 22, line.color, 36, 344 + extra, 860, 34, TextAnchor.MiddleLeft);
+        ScrollableText(p.transform, pathText, 22, InkSoft, 36, 296, 860, pathHeight);
 
-        Txt(p.transform, "预计成本：车辆 ¥" + Mathf.RoundToInt(forecast.vehicle) + " · 线路 ¥" + Mathf.RoundToInt(forecast.track) + " · 税 ¥" + Mathf.RoundToInt(forecast.tax), 20, InkSoft, 36, 246, 860, 34, TextAnchor.MiddleLeft);
+        Txt(p.transform, "预计成本：车辆 ¥" + Mathf.RoundToInt(forecast.vehicle) + " · 线路 ¥" + Mathf.RoundToInt(forecast.track) + " · 税 ¥" + Mathf.RoundToInt(forecast.tax), 23, InkSoft, 36, 244, 860, 38, TextAnchor.MiddleLeft);
         var planning = Btn(p.transform, "Operations", "票价与调度", 25, 34, 132, 892, 70, Indigo, () => { ClosePanel(true); OpenLineOperations(line); }); TInk(planning, Color.white);
         Btn(p.transform, "LineDetail", "线路详情 / 车辆", 26, 34, 34, 430, 82, Indigo, () => {
             ClosePanel(); OpenLineScreen(line.id, () => OpenLineInfo(line, seg));
@@ -387,7 +457,7 @@ public partial class DemoBootstrap
         int cost = InsertStationCost(line, segment, target);
         string details = line.name + " · " + StationDisplayName(target, currentRegion) + "\n造价 ¥" + cost + "（含必要开站费用）";
         float detailsHeight = Mathf.Clamp(MeasureTextHeight(details, 25, 620) + 8, 54, H - 410);
-        var p = OpenBubble("插入途经站", detailsHeight + 200, 680, new Vector2(W / 2, H / 2));
+        var p = OpenPopup("插入途经站", detailsHeight + 200, 680);
         ScrollableText(p.transform, details, 25, InkSoft, 28, 102, 620, detailsHeight);
         var confirm = Btn(p.transform, "ConfirmInsert", "确认 ¥" + cost, 25, 28, 20, 300, 66, Matcha, () => CommitLineInsertion(line, segment, target)); TInk(confirm, Color.white);
         var cancel = Btn(p.transform, "CancelInsert", "取消", 25, 350, 20, 300, 66, Paper2, ClosePanel); TInk(cancel, Ink);
@@ -439,21 +509,21 @@ public partial class DemoBootstrap
         const int pageSize = 5;
         int pages = (options.Count + pageSize - 1) / pageSize; page = Mathf.Clamp(page, 0, pages - 1);
         int count = Mathf.Min(pageSize, options.Count - page * pageSize);
-        float bottom = pages > 1 ? 96 : 24;
-        float h = bottom + count * 74 + 118;
-        var p = OpenBubble("选择要调整的线路", h, 680, new Vector2(W / 2, H / 2));
-        Txt(p.transform, StationDisplayName(station, currentRegion) + " · 仅从所选线路移除", 21, InkSoft, 28, h - 108, 620, 34, TextAnchor.MiddleLeft);
+        float bottom = pages > 1 ? 104 : 24;
+        float h = bottom + count * 82 + 124;
+        var p = OpenPopup("选择要调整的线路", h, 680, "remove_station_lines_" + station);
+        Txt(p.transform, StationDisplayName(station, currentRegion) + " · 仅从所选线路移除", 24, InkSoft, 28, h - 112, 620, 38, TextAnchor.MiddleLeft);
         for (int i = 0; i < count; i++) {
             var selected = options[page * pageSize + i];
-            var button = Btn(p.transform, "RemoveFromLine" + selected.id, selected.name, 24, 28, bottom + (count - 1 - i) * 74, 624, 62, Paper2,
+            var button = Btn(p.transform, "RemoveFromLine" + selected.id, selected.name, 26, 28, bottom + (count - 1 - i) * 82, 624, 68, Paper2,
                 () => PreviewRemoveWaystation(selected, station));
             TInk(button, Ink);
         }
         if (pages > 1) {
             int current = page;
-            var before = Btn(p.transform, "PreviousPage", "上一页", 22, 28, 20, 190, 58, Paper2, () => OpenRemoveStationLines(station, current - 1)); TInk(before, Ink);
-            Txt(p.transform, (page + 1) + " / " + pages, 22, InkSoft, 240, 20, 200, 58, TextAnchor.MiddleCenter);
-            var after = Btn(p.transform, "NextPage", "下一页", 22, 462, 20, 190, 58, Paper2, () => OpenRemoveStationLines(station, current + 1)); TInk(after, Ink);
+            var before = Btn(p.transform, "PreviousPage", "上一页", 24, 28, 20, 196, 66, Paper2, () => OpenRemoveStationLines(station, current - 1)); TInk(before, Ink);
+            Txt(p.transform, (page + 1) + " / " + pages, 24, InkSoft, 240, 20, 200, 66, TextAnchor.MiddleCenter);
+            var after = Btn(p.transform, "NextPage", "下一页", 24, 456, 20, 196, 66, Paper2, () => OpenRemoveStationLines(station, current + 1)); TInk(after, Ink);
         }
     }
     void PreviewRemoveWaystation(Line line, int station)

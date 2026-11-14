@@ -31,8 +31,8 @@ public partial class DemoBootstrap
     AudioSource sfx, music; AudioClip toneLo, toneHi;
     bool musicEnabled = true;
     int qualityTier = 1;
-    int selectedFrameRate = 60;
-    static readonly int[] FrameRateOptions = { 30, 60, 120 };
+    int selectedFrameRate = 120;
+    static readonly int[] FrameRateOptions = { 30, 60, 120, -1 };
     void ApplyFrameRate()
     {
         QualitySettings.vSyncCount = 0;
@@ -40,7 +40,7 @@ public partial class DemoBootstrap
     }
     void SetFrameRate(int fps)
     {
-        if (fps != 30 && fps != 60 && fps != 120) return;
+        if (fps != 30 && fps != 60 && fps != 120 && fps != -1) return;
         selectedFrameRate = fps;
         PlayerPrefs.SetInt("target_fps", fps); PlayerPrefs.Save();
         ApplyFrameRate();
@@ -48,8 +48,18 @@ public partial class DemoBootstrap
     void ApplyVisualQuality()
     {
         ApplyFrameRate();
-        foreach (var shadow in UnityEngine.Object.FindObjectsByType<Shadow>(FindObjectsInactive.Include, FindObjectsSortMode.None))
-            if (shadow && shadow.gameObject.scene.IsValid()) shadow.enabled = qualityTier > 0;
+        QualitySettings.globalTextureMipmapLimit = qualityTier <= 0 ? 1 : 0;
+        // 2D Screen Space Overlay 与 SDF 精灵无需硬件 MSAA，关闭可释放高刷性能与显存带宽。
+        QualitySettings.antiAliasing = 0;
+        bool enableShadow = qualityTier > 0;
+        for (int i = managedShadows.Count - 1; i >= 0; i--)
+        {
+            var sh = managedShadows[i];
+            if (!sh) { managedShadows.RemoveAt(i); continue; }
+            sh.enabled = enableShadow;
+        }
+        SyncRegionMapTextureMemory();
+        if (qualityTier <= 0) RequestResourceTrim(false);
     }
     void SetVisualQuality(int tier)
     {
@@ -62,13 +72,13 @@ public partial class DemoBootstrap
     static readonly float[] FontSizeScales = { 0.90f, 1.00f, 1.16f, 1.32f };
     float UiFontScale => FontSizeScales[Mathf.Clamp(fontSizeTier, 0, FontSizeScales.Length - 1)];
     int ScaledFontSize(int baseSize, float maxScale = 1.32f)
-        => Mathf.Max(10, Mathf.RoundToInt(baseSize * Mathf.Min(UiFontScale, maxScale)));
+        => Mathf.Max(16, Mathf.RoundToInt(baseSize * Mathf.Min(UiFontScale, maxScale)));
     void SetFontSizeTier(int tier)
     {
         fontSizeTier = Mathf.Clamp(tier, 0, FontSizeScales.Length - 1);
         PlayerPrefs.SetInt("font_size_tier", fontSizeTier); PlayerPrefs.Save();
         if (dragCostBadge) { Destroy(dragCostBadge); dragCostBadge = null; BuildDragCostBadge(); }
-        if (zoomNoticeTxt) zoomNoticeTxt.fontSize = ScaledFontSize(22);
+        if (zoomNoticeTxt) zoomNoticeTxt.fontSize = ScaledFontSize(25);
         if (root) RebuildChromeUI();
         UpdateStationLabelSizes(mapRect ? mapRect.localScale.x : 1f);
         UpdateRegionalMarkers(true);
@@ -82,97 +92,228 @@ public partial class DemoBootstrap
 
     void InitMobile()
     {
-        var go = new GameObject("Sfx", typeof(AudioSource));
-        go.transform.SetParent(transform, false);
-        sfx = go.GetComponent<AudioSource>();
-        var musicObject = new GameObject("BackgroundMusic", typeof(AudioSource));
-        musicObject.transform.SetParent(transform, false);
-        music = musicObject.GetComponent<AudioSource>();
-        music.clip = Resources.Load<AudioClip>("Audio/Between_the_Bow_and_Breath");
-        music.loop = true; music.playOnAwake = false; music.volume = 0.25f;
-        if (music.clip && musicEnabled) music.Play();
-        toneLo = MakeTone(620f, 0.07f);
-        toneHi = MakeTone(940f, 0.055f);
+        InitAudioEngine();
         RefreshStationDots();
         UpdateTimeText();
     }
     void OpenAudioSettings()
     {
-        var bubble = OpenBubble("设置", 990, 680, new Vector2(100, H - 180));
-        Txt(bubble.transform, "画面质量", 27, InkSoft, 34, 835, 550, 44, TextAnchor.MiddleLeft);
-        string[] levels = { "低", "中", "高" };
-        for (int i = 0; i < levels.Length; i++) {
-            int selected = i;
-            var quality = Btn(bubble.transform, "Quality" + i, levels[i] + (qualityTier == i ? " · 当前" : ""), 26,
-                34 + i * 205, 745, 190, 76, qualityTier == i ? Indigo : Paper2, () => { SetVisualQuality(selected); OpenAudioSettings(); });
-            TInk(quality, qualityTier == i ? Color.white : Ink);
-        }
-        Txt(bubble.transform, "帧率上限", 27, InkSoft, 34, 675, 550, 44, TextAnchor.MiddleLeft);
-        for (int i = 0; i < FrameRateOptions.Length; i++) {
-            int fps = FrameRateOptions[i];
-            var choice = Btn(bubble.transform, "FrameRate" + fps, fps + " FPS" + (selectedFrameRate == fps ? " · 当前" : ""), 24,
-                34 + i * 205, 585, 190, 76, selectedFrameRate == fps ? Indigo : Paper2, () => { SetFrameRate(fps); OpenAudioSettings(); });
-            TInk(choice, selectedFrameRate == fps ? Color.white : Ink);
-        }
-        Txt(bubble.transform, "实际帧率取决于屏幕刷新率和设备性能", 21, InkSoft, 34, 540, 612, 34, TextAnchor.MiddleLeft);
+        settingsTab = Mathf.Clamp(settingsTab, 0, 2);
+        const float panelW = 940f, panelH = 1140f;
+        var popup = OpenPopup("馆藏手记 · 系统设置", panelH, panelW, "settings");
+        JournalTape(popup.transform, panelW * 0.5f - 82f, panelH - 18f, 164f);
 
-        Txt(bubble.transform, "字体大小", 27, InkSoft, 34, 470, 550, 44, TextAnchor.MiddleLeft);
-        for (int i = 0; i < FontSizeTierNames.Length; i++) {
+        string[] tabLabels = { "画面风格", "声音手感", "档案引导" };
+        const float pad = 40f;
+        const float tabGap = 14f;
+        float tabW = (panelW - pad * 2f - tabGap * (tabLabels.Length - 1)) / tabLabels.Length;
+        for (int t = 0; t < tabLabels.Length; t++)
+        {
+            int idx = t;
+            bool active = settingsTab == idx;
+            var tb = Btn(popup.transform, "SetTab_" + idx, tabLabels[idx], 25, pad + t * (tabW + tabGap), 978f, tabW, 68f,
+                active ? Indigo : Paper2, () => { settingsTab = idx; OpenAudioSettings(); });
+            TInk(tb, active ? Color.white : Ink);
+            if (!active) SoftShadow(tb.gameObject);
+        }
+
+        if (settingsTab == 0) BuildSettingsVisualTab(popup.transform);
+        else if (settingsTab == 1) BuildSettingsAudioTab(popup.transform);
+        else BuildSettingsArchiveTab(popup.transform);
+    }
+
+    void BuildSettingsVisualTab(Transform parent)
+    {
+        const float pad = 40f, innerW = 860f;
+        Txt(parent, "画面质量（动效与粒子细致度）", 27, InkSoft, pad, 906f, innerW, 40f, TextAnchor.MiddleLeft);
+        string[] levels = { "低 · 省电", "中 · 均衡", "高 · 华彩" };
+        float qW = (innerW - 24f) / 3f;
+        for (int i = 0; i < levels.Length; i++)
+        {
+            int selected = i;
+            bool active = qualityTier == i;
+            var quality = Btn(parent, "Quality" + i, levels[i] + (active ? " ✓" : ""), 25,
+                pad + i * (qW + 12f), 816f, qW, 80f, active ? Indigo : Paper2, () => { SetVisualQuality(selected); OpenAudioSettings(); });
+            TInk(quality, active ? Color.white : Ink);
+        }
+
+        Txt(parent, "帧率上限", 27, InkSoft, pad, 738f, innerW, 40f, TextAnchor.MiddleLeft);
+        float fpsW = (innerW - 12f * Mathf.Max(0, FrameRateOptions.Length - 1)) / Mathf.Max(1, FrameRateOptions.Length);
+        for (int i = 0; i < FrameRateOptions.Length; i++)
+        {
+            int fps = FrameRateOptions[i];
+            bool active = selectedFrameRate == fps;
+            string fpsLabel = (fps < 0 ? "不限" : fps + " FPS") + (active ? " ✓" : "");
+            var choice = Btn(parent, "FrameRate" + fps, fpsLabel, 24,
+                pad + i * (fpsW + 12f), 648f, fpsW, 80f, active ? Indigo : Paper2, () => { SetFrameRate(fps); OpenAudioSettings(); });
+            TInk(choice, active ? Color.white : Ink);
+        }
+        Txt(parent, "高画质启用全量粒子、双环涟漪与 Q 弹动效；省电档降采样省 75% 贴图显存", 22, InkSoft, pad, 594f, innerW, 40f, TextAnchor.MiddleLeft);
+
+        Txt(parent, "手帐字体字号（当前 " + Mathf.RoundToInt(UiFontScale * 100f) + "%）", 27, InkSoft, pad, 514f, innerW, 40f, TextAnchor.MiddleLeft);
+        float fontGap = 12f;
+        float fontBtnW = (innerW - fontGap * Mathf.Max(0, FontSizeTierNames.Length - 1)) / Mathf.Max(1, FontSizeTierNames.Length);
+        for (int i = 0; i < FontSizeTierNames.Length; i++)
+        {
             int selectedFont = i;
             bool activeFont = fontSizeTier == i;
-            var fontBtn = Btn(bubble.transform, "FontSize" + i, FontSizeTierNames[i] + (activeFont ? " ✓" : ""), 24,
-                34 + i * 156, 380, 144, 76, activeFont ? Indigo : Paper2, () => {
+            var fontBtn = Btn(parent, "FontSize" + i, FontSizeTierNames[i] + (activeFont ? " ✓" : ""), 25,
+                pad + i * (fontBtnW + fontGap), 422f, fontBtnW, 82f, activeFont ? Indigo : Paper2, () => {
                     SetFontSizeTier(selectedFont);
                     OpenAudioSettings();
                     Toast("字体大小已切换为「" + FontSizeTierNames[selectedFont] + "」");
                 });
             TInk(fontBtn, activeFont ? Color.white : Ink);
         }
-        Txt(bubble.transform, "当前倍率 " + Mathf.RoundToInt(UiFontScale * 100f) + "% · 地图放大时站名也会清晰增大", 21, InkSoft, 34, 335, 612, 34, TextAnchor.MiddleLeft);
 
-        Txt(bubble.transform, "界面风格", 27, InkSoft, 34, 265, 350, 44, TextAnchor.MiddleLeft);
-        var moreTheme = Btn(bubble.transform, "ThemeShopLink", "商店 / 试用解锁 ›", 21, 410, 268, 236, 40, Paper2, () => { ClosePanel(true); OpenThemeShopScreen(); });
+        Txt(parent, "纸本手帐主题", 27, InkSoft, pad, 336f, 420f, 44f, TextAnchor.MiddleLeft);
+        var moreTheme = Btn(parent, "ThemeShopLink", "主题馆藏与试用 ›", 24, pad + innerW - 308f, 330f, 308f, 56f, Paper2, () => { ClosePanel(true); OpenThemeShopScreen(); });
         TInk(moreTheme, Indigo);
-        float innerThemeW = 612f;
-        float themeGap = 10f;
-        float themeBtnW = (innerThemeW - themeGap * Mathf.Max(0, Themes.Length - 1)) / Mathf.Max(1, Themes.Length);
-        for (int i = 0; i < Themes.Length; i++) {
+
+        float themeGap = 12f;
+        float themeBtnW = (innerW - themeGap * Mathf.Max(0, Themes.Length - 1)) / Mathf.Max(1, Themes.Length);
+        for (int i = 0; i < Themes.Length; i++)
+        {
             int themeIdx = i;
             bool avail = IsThemeAvailable(themeIdx);
             bool active = currentTheme == themeIdx && avail && previewRestoreTheme < 0;
             string label = Themes[themeIdx].shortName + (active ? " ✓" : avail ? "" : " · 锁");
-            var tb = Btn(bubble.transform, "ThemeBtn" + i, label, 21,
-                34 + i * (themeBtnW + themeGap), 170, themeBtnW, 76, active ? Indigo : avail ? Paper2 : new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f), () => {
-                    if (IsThemeAvailable(themeIdx)) {
-                        ApplyTheme(themeIdx);
-                        SaveGame();
-                        OpenAudioSettings();
+            var tb = Btn(parent, "ThemeBtn" + i, label, 23,
+                pad + i * (themeBtnW + themeGap), 210f, themeBtnW, 102f, active ? Indigo : avail ? Paper2 : new Color(Paper2.r, Paper2.g, Paper2.b, 0.55f), () => {
+                    if (IsThemeAvailable(themeIdx))
+                    {
+                        ApplyTheme(themeIdx); SaveGame(); OpenAudioSettings();
                         Toast("已切换为「" + Themes[themeIdx].name + "」");
-                    } else {
-                        ClosePanel(true);
-                        OpenThemeShopScreen();
                     }
+                    else { ClosePanel(true); OpenThemeShopScreen(); }
                 });
             TInk(tb, active ? Color.white : Ink);
         }
 
-        bool hasTestSave = HasBundledTestSave();
-        float musicW = hasTestSave ? 344f : 612f;
-        var toggle = Btn(bubble.transform, "MusicToggle", musicEnabled ? "背景音乐：开" : "背景音乐：关", 28, 34, 42, musicW, 88, Matcha, () => {
-            musicEnabled = !musicEnabled;
-            if (music) { if (musicEnabled && music.clip) music.Play(); else music.Stop(); }
-            ClosePanel(); Toast(musicEnabled ? "背景音乐已开启" : "背景音乐已关闭");
-        });
-        TInk(toggle, Color.white);
-        if (hasTestSave)
+        var doneBtn = Btn(parent, "SettingsOk", "收起手记", 26, pad, 40f, innerW, 84f, Matcha, ClosePanel);
+        TInk(doneBtn, Color.white);
+    }
+
+    void BuildSettingsAudioTab(Transform parent)
+    {
+        const float pad = 40f, innerW = 860f, cardPad = 28f, cardInnerW = 804f;
+        var bgmCard = Rect("BgmCard", parent, pad, 610f, innerW, 336f);
+        Rounded(bgmCard, Color.Lerp(CardBg, Ink, 0.04f));
+        Txt(bgmCard.transform, "原声配乐与播放模式（BGM）", 28, Ink, cardPad, 272f, 540f, 44f, TextAnchor.MiddleLeft);
+        var bgmToggle = Btn(bgmCard.transform, "BgmSwitch", musicEnabled ? "已开启 ✓" : "已静音", 25, innerW - cardPad - 210f, 262f, 210f, 60f,
+            musicEnabled ? Matcha : Paper2, () => { SetBgmEnabled(!musicEnabled); SaveGame(); OpenAudioSettings(); });
+        TInk(bgmToggle, musicEnabled ? Color.white : Ink);
+        var nowPlaying = Txt(bgmCard.transform, "正在播放：" + CurrentBgmDisplayTitle(), 24, Indigo, cardPad, 214f, cardInnerW, 40f, TextAnchor.MiddleLeft);
+        FitSingleLine(nowPlaying, 24);
+        string[] modeNames = { "场景联动", "经典长曲", "仅区域曲" };
+        const float modeGap = 14f;
+        float modeBtnW = (cardInnerW - modeGap * (modeNames.Length - 1)) / modeNames.Length;
+        for (int m = 0; m < modeNames.Length; m++)
         {
-            var testBtn = Btn(bubble.transform, "LoadTestSave", "载入测试存档", 24, 34 + musicW + 16f, 42, 612f - musicW - 16f, 88, Gold, () => {
-                Confirm("载入测试存档", "将覆盖当前本地进度，恢复至预置的第 79 日南粤全域测试存档（7 条线路 · 88 项科技 · 29.8 万资金）。是否继续？", () => {
-                    LoadBundledTestSave();
-                });
+            int modeVal = m;
+            bool active = bgmPlayMode == modeVal;
+            var mb = Btn(bgmCard.transform, "BgmMode_" + m, active ? modeNames[m] + " ✓" : modeNames[m], 24,
+                cardPad + m * (modeBtnW + modeGap), 140f, modeBtnW, 64f, active ? Indigo : Paper2, () => { SetBgmPlayMode(modeVal); OpenAudioSettings(); });
+            TInk(mb, active ? Color.white : Ink);
+        }
+        string modeDesc = bgmPlayMode == 1
+            ? "始终播放经典长曲《Between the Bow and Breath》"
+            : bgmPlayMode == 2
+                ? "始终随「香江 / 濠江 / 南粤」切换区域配乐"
+                : "地图播区域曲，进入内页自动淡入经典长曲（记忆进度）";
+        var modeHint = Txt(bgmCard.transform, modeDesc, 23, InkSoft, cardPad, 92f, cardInnerW, 38f, TextAnchor.MiddleLeft);
+        FitSingleLine(modeHint, 23);
+        BuildVolumeSlider(bgmCard.transform, "BgmVolSlider", cardPad, 26f, cardInnerW, bgmVolume, Matcha, SetBgmVolume);
+
+        var sfxCard = Rect("SfxCard", parent, pad, 330f, innerW, 256f);
+        Rounded(sfxCard, Color.Lerp(CardBg, Ink, 0.04f));
+        Txt(sfxCard.transform, "触点与汽笛音效（SFX）", 28, Ink, cardPad, 194f, 540f, 44f, TextAnchor.MiddleLeft);
+        var sfxToggle = Btn(sfxCard.transform, "SfxSwitch", sfxEnabled ? "已开启 ✓" : "已关闭", 25, innerW - cardPad - 210f, 184f, 210f, 60f,
+            sfxEnabled ? Indigo : Paper2, () => { SetSfxEnabled(!sfxEnabled); if (sfxEnabled) PlayTechSfx(); OpenAudioSettings(); });
+        TInk(sfxToggle, sfxEnabled ? Color.white : Ink);
+        Txt(sfxCard.transform, "包含：按压吸附、线路开通汽笛、金币营收、研发共鸣", 24, InkSoft, cardPad, 128f, cardInnerW, 42f, TextAnchor.MiddleLeft);
+        BuildVolumeSlider(sfxCard.transform, "SfxVolSlider", cardPad, 54f, cardInnerW - 190f, sfxVolume, Indigo, SetSfxVolume);
+        var testSfxBtn = Btn(sfxCard.transform, "TestSfx", "试听", 24, innerW - cardPad - 166f, 48f, 166f, 60f, Gold, () => PlayBuildSfx());
+        TInk(testSfxBtn, Color.white);
+
+        var hapCard = Rect("HapticCard", parent, pad, 152f, innerW, 154f);
+        Rounded(hapCard, Color.Lerp(CardBg, Ink, 0.04f));
+        Txt(hapCard.transform, "站台吸附轻震动反馈", 27, Ink, cardPad, 86f, 560f, 42f, TextAnchor.MiddleLeft);
+        Txt(hapCard.transform, "拖线吸附与完成里程碑时触发轻微震动提示", 23, InkSoft, cardPad, 26f, 560f, 44f, TextAnchor.MiddleLeft);
+        var hapBtn = Btn(hapCard.transform, "HapSwitch", hapticEnabled ? "开启 ✓" : "关闭", 25, innerW - cardPad - 210f, 40f, 210f, 74f,
+            hapticEnabled ? Matcha : Paper2, () => { SetHapticEnabled(!hapticEnabled); TriggerHaptic(18); OpenAudioSettings(); });
+        TInk(hapBtn, hapticEnabled ? Color.white : Ink);
+
+        var doneBtn = Btn(parent, "SettingsOk", "完成设置", 26, pad, 40f, innerW, 84f, Matcha, ClosePanel);
+        TInk(doneBtn, Color.white);
+    }
+
+    void BuildSettingsArchiveTab(Transform parent)
+    {
+        const float pad = 40f, innerW = 860f, cardPad = 28f, cardInnerW = 804f;
+        var summaryCard = Rect("ArchiveSummaryCard", parent, pad, 696f, innerW, 250f);
+        Rounded(summaryCard, Color.Lerp(CardBg, Indigo, 0.05f));
+        Txt(summaryCard.transform, $"{companyName} · 营运志档案", 29, Ink, cardPad, 188f, cardInnerW, 44f, TextAnchor.MiddleLeft);
+        Txt(summaryCard.transform, $"当前第 {day} 日 · 运营 {lines.Count} 条线路 · 已连 {DailyConnectedCount()} 站\n工程科技 {techDone.Count} 项 · 企业治理 {companyTechDone.Count}/{CompanyTechNodes.Length} 项 · 人才 {talents.Count} 名", 24, InkSoft, cardPad, 90f, cardInnerW, 86f, TextAnchor.UpperLeft);
+        Txt(summaryCard.transform, "游戏每 5 秒及关键操作时自动保存至本地档案", 23, Matcha, cardPad, 24f, cardInnerW, 40f, TextAnchor.MiddleLeft);
+
+        var storyCardBox = Rect("StoryControlCard", parent, pad, 430f, innerW, 242f);
+        Rounded(storyCardBox, Color.Lerp(CardBg, Gold, 0.07f));
+        Txt(storyCardBox.transform, "章节剧情与新手系统引导", 28, Ink, cardPad, 180f, cardInnerW, 44f, TextAnchor.MiddleLeft);
+        string guideStatus = tutorialSkipped ? "自由经营模式（全系统已开放）" : $"剧情进行中：第 {Mathf.Min(storyStage + 1, 5)}/5 章";
+        Txt(storyCardBox.transform, guideStatus, 24, Indigo, cardPad, 128f, cardInnerW, 40f, TextAnchor.MiddleLeft);
+        float halfBtnW = (cardInnerW - 24f) * 0.5f;
+        var archiveBtn = Btn(storyCardBox.transform, "OpenStoryArchive", "剧情篇章回放", 25, cardPad, 26f, halfBtnW, 80f, Indigo, () => { ClosePanel(true); OpenStoryArchiveModal(); });
+        TInk(archiveBtn, Color.white);
+        var skipBtn = Btn(storyCardBox.transform, "ToggleGuideBtn", tutorialSkipped ? "已解锁全系统 ✓" : "跳过引导直通自由", 24, cardPad + halfBtnW + 24f, 26f, halfBtnW, 80f,
+            tutorialSkipped ? Paper2 : Gold, () => {
+                if (!tutorialSkipped)
+                {
+                    Confirm("跳过新手引导", "将立即解锁「列车、名胜、公司、科技树」全部游戏系统并进入自由经营模式，剧情仍可在档案中回放。是否确认？", SkipTutorialFlow);
+                }
+                else Toast("当前已开放全部系统，可随时在「剧情篇章回放」重温故事");
+            });
+        TInk(skipBtn, tutorialSkipped ? InkSoft : Color.white);
+
+        float curY = 40f;
+        var doneBtn = Btn(parent, "SettingsOk", "收起设置", 26, pad, curY, innerW, 80f, Paper2, ClosePanel);
+        TInk(doneBtn, Ink);
+        curY += 98f;
+
+#if UNITY_EDITOR
+        bool syncOn = DevTestSaveSyncEnabled;
+        var syncBtn = Btn(parent, "DevTestSaveSyncToggle",
+            syncOn ? "[Editor开发] 持续写回仓库测试档：开" : "[Editor开发] 持续写回仓库测试档：关",
+            24, pad, curY, innerW, 74f, syncOn ? Indigo : Paper2, () => {
+                bool next = !DevTestSaveSyncEnabled;
+                DevTestSaveSyncEnabled = next;
+                OpenAudioSettings();
+                Toast(next ? "已开启同步：将持续写回仓库测试档" : "已关闭同步：仅读写本机存档");
+            });
+        TInk(syncBtn, syncOn ? Color.white : Ink);
+        curY += 90f;
+#endif
+
+        if (HasBundledTestSave())
+        {
+            var testBtn = Btn(parent, "LoadTestSave", "载入测试存档（" + DescribeBundledTestSave() + "）", 24, pad, curY, innerW, 80f, Gold, () => {
+                Confirm("载入测试存档", "将覆盖当前本机进度，恢复至仓库内" + DescribeBundledTestSave() + "。是否继续？", () => { LoadBundledTestSave(); });
             });
             TInk(testBtn, Color.white);
+            curY += 98f;
         }
+
+        var resetBtn = Btn(parent, "ResetLocalSave", "开启新周目（清空本机存档）", 25, pad, curY, innerW, 82f, Vermilion, () => {
+            Confirm("开启新周目", "确认从第 1 日序章《维港初笛》重新开始体验完整剧情引导吗？当前本机进度将被重置。", () => {
+#if UNITY_EDITOR
+                DevTestSaveSyncEnabled = false;
+#endif
+                PlayerPrefs.DeleteKey(SaveKey);
+                PlayerPrefs.Save();
+                UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+            });
+        });
+        TInk(resetBtn, Color.white);
     }
 
     AudioClip MakeTone(float freq, float dur)
@@ -189,7 +330,11 @@ public partial class DemoBootstrap
         c.SetData(data, 0);
         return c;
     }
-    void PlayTone(bool high) { if (sfx) sfx.PlayOneShot(high ? toneHi : toneLo); }
+    void PlayTone(bool high)
+    {
+        if (sfx && sfxEnabled && sfxVolume > 0.001f)
+            sfx.PlayOneShot(high ? toneHi : toneLo, sfxVolume);
+    }
 
     // ---------- clock ----------
     void TickClock(float dt)
@@ -217,6 +362,8 @@ public partial class DemoBootstrap
             dayClock += step; remaining -= step;
             if (dayClock >= GameDaySeconds - 0.0001f)
             {
+                int finishedDay = day;
+                RecordDailyReportSnapshot(finishedDay);
                 dayClock = 0; day++; economicHour = -1;
                 foreach (var line in lines)
                 {
@@ -225,6 +372,11 @@ public partial class DemoBootstrap
                     line.recent.Add(Mathf.RoundToInt(beforeTax - tax));
                     if (line.recent.Count > 7) line.recent.RemoveAt(0);
                     line.todayGross = line.todayMaintenance = line.todayTrack = 0f; line.todayRevenue = 0;
+                }
+                if (hasYesterdayReport && bondDaysLeft == 0)
+                {
+                    int netInt = Mathf.RoundToInt(yesterdayReport.netProfit);
+                    Toast("第 " + finishedDay + " 日结算：净" + (netInt >= 0 ? "盈 ¥" + netInt : "亏 ¥" + Mathf.Abs(netInt)) + "（点左上收益看日报）");
                 }
                 if (bondDaysLeft > 0)
                 {
@@ -259,6 +411,12 @@ public partial class DemoBootstrap
                     coins += cycleSub;
                     Toast("防汛防台运营补贴 +¥" + Mathf.RoundToInt(cycleSub));
                 }
+                float bayBonus = CrossBaySynergyDailyBonus();
+                if (bayBonus > 0f)
+                {
+                    coins += bayBonus;
+                    Toast("三地口岸联运补贴 +¥" + Mathf.RoundToInt(bayBonus));
+                }
                 if (consultantDaysLeft > 0)
                 {
                     consultantDaysLeft--;
@@ -276,10 +434,14 @@ public partial class DemoBootstrap
                 }
                 if ((day - 1) % 7 == 0) AdvanceEconomyCycle();
                 else EnsureCompanyInitialized();
+                TickDailyTalents();
+                EnsureTalentsInitialized(true);
+                SyncStoryProgression(true);
                 if (day % 15 == 0 && lastAwardDay < day)
                     Toast("《大湾区年度铁道大赏》第 " + day + " 日颁奖开启，去「公司」领奖！");
                 dailyStationBaseline = DailyConnectedCount();
                 RollTrafficEvents();
+                RefreshNoticeUnreadDot();
             }
         }
         UpdateTimeText();
@@ -307,7 +469,8 @@ public partial class DemoBootstrap
     int stationTrafficIndex = -1;
     sealed class StoryEvent
     {
-        public string title, text;
+        public string chapterTag, speaker, title, text, objectiveHint;
+        public bool allowSkip;
         // 预留立绘资源地址；当前只播放文字与 Unity 原生动效。
         public string portraitResource;
     }
@@ -341,13 +504,13 @@ public partial class DemoBootstrap
         string lineNames = "";
         foreach (var line in lines) if (line.st.Contains(index)) lineNames += (lineNames.Length == 0 ? "" : "、") + line.name;
         float demand = StationRequestedFlow(index), served = StationPassengerFlow(index), cap = StationCapacity(index);
-        string pressure = demand > cap ? "客流爆满，建议扩建升级" : "运力宽裕";
-        string compass = StationCompassHint(index);
+        string pressure = demand > cap ? "站台候车爆满（" + Mathf.RoundToInt(demand / Mathf.Max(1f, cap) * 100f) + "%），建议扩建升级" : "站台负荷 " + Mathf.RoundToInt(demand / Mathf.Max(1f, cap) * 100f) + "%（运力宽裕）";
+        string diag = StationFlowDiagnostics(index);
         return state + (lineNames.Length > 0 ? "\n途经：" + lineNames : "") + "\n日均需求 " + StationEstimatedDemand(index) + " 人 · 当前输送 " + Mathf.RoundToInt(served) + " / 需求 " + Mathf.RoundToInt(demand) + "\n" +
             "站内容量 " + Mathf.RoundToInt(cap) + " · " + pressure + "\n" +
             "站场动态：" + TrafficEventNames[station.trafficEvent] + "（需求 " +
             (TrafficEventFactors[station.trafficEvent] >= 1 ? "+" : "") + Mathf.RoundToInt((TrafficEventFactors[station.trafficEvent]-1)*100) + "%）\n" +
-            StationAreaHint(index) + (string.IsNullOrEmpty(compass) ? "" : "\n主要客流去向：" + compass);
+            StationAreaHint(index) + (string.IsNullOrEmpty(diag) ? "" : "\n" + diag);
     }
     bool OpenStation(int index)
     {
@@ -357,7 +520,11 @@ public partial class DemoBootstrap
         if (station.built && !station.closed) return true;
         BeginUndo(station.built ? "重新开站" : "开站");
         coins -= cost; station.built = true; station.closed = false;
-        RefreshStationDots(); RecalcIncome(); CheckSceneryOnLine(null); EndUndo(); RefreshHUD();
+        RefreshStationDots(); RecalcIncome(); CheckSceneryOnLine(null);
+        PlayBuildSfx(); TriggerHaptic(16);
+        SpawnMapRipple(Pos(index), Matcha, 128f);
+        SyncStoryProgression(true);
+        EndUndo(); RefreshHUD();
         Toast(StationDisplayName(index, currentRegion) + " 已开站" + (cost > 0 ? " · ¥" + cost : ""));
         return true;
     }
@@ -416,26 +583,159 @@ public partial class DemoBootstrap
         else if (lineCount > 0) status += "\n当前客流 " + Mathf.RoundToInt(StationPassengerFlow(index)) + " 人/日";
         else status += " · 已开站";
         status += "\n" + StationAreaHint(index);
-        float statusY = lineCount > 0 ? 166 : 92;
-        float statusH = Mathf.Max(54, MeasureTextHeight(status, 20, 464) + 8);
-        float introY = statusY + statusH + 8;
-        float introH = Mathf.Max(30, MeasureTextHeight(StationIntroduction(index), 20, 464) + 4);
-        var p = OpenBubble(StationDisplayName(index, currentRegion), introY + introH + 76, 520, anchor);
-        var intro = Txt(p.transform, StationIntroduction(index), 20, InkSoft, 28, introY, 464, introH, TextAnchor.MiddleLeft);
+        float statusY = lineCount > 0 ? 190 : 104;
+        float statusH = Mathf.Max(64, MeasureTextHeight(status, 24, 492) + 10);
+        float introY = statusY + statusH + 10;
+        float introH = Mathf.Max(38, MeasureTextHeight(StationIntroduction(index), 24, 492) + 8);
+        var p = OpenBubble(StationDisplayName(index, currentRegion), introY + introH + 80, 548, anchor);
+        var intro = Txt(p.transform, StationIntroduction(index), 24, InkSoft, 28, introY, 492, introH, TextAnchor.MiddleLeft);
         intro.name = "StationIntroduction";
-        Txt(p.transform, status, 20, InkSoft, 28, statusY, 464, statusH, TextAnchor.UpperLeft);
+        Txt(p.transform, status, 24, InkSoft, 28, statusY, 492, statusH, TextAnchor.UpperLeft);
         if (lineCount > 0) {
-            var remove = Btn(p.transform, "RemoveWaystation", "移除线路途经站", 23, 28, 92, 464, 62, Paper2, () => OpenRemoveStationLines(index, 0));
+            var remove = Btn(p.transform, "RemoveWaystation", "移除线路途经站", 25, 28, 102, 492, 74, Paper2, () => OpenRemoveStationLines(index, 0));
             TInk(remove, Ink);
         }
         bool canOpen = !station.built || station.closed;
         if (canOpen)
         {
-            var open = Btn(p.transform, "OpenStation", station.built ? "重新开站" : "开站 ¥" + StationOpeningCost(index), 23, 28, 18, 224, 62, Matcha, () => { if (OpenStation(index)) { ClosePanel(true); ShowStationActions(index); } });
+            var open = Btn(p.transform, "OpenStation", station.built ? "重新开站" : "开站 ¥" + StationOpeningCost(index), 26, 28, 18, 238, 74, Matcha, () => { if (OpenStation(index)) { ClosePanel(true); ShowStationActions(index); } });
             TInk(open, Color.white);
         }
-        var detail = Btn(p.transform, "StationInfo", "站点详情", 24, canOpen ? 268 : 28, 18, canOpen ? 224 : 464, 62, Indigo, () => OpenStationInfo(index));
+        var detail = Btn(p.transform, "StationInfo", "站点详情", 26, canOpen ? 282 : 28, 18, canOpen ? 238 : 492, 74, Indigo, () => OpenStationInfo(index));
         TInk(detail, Color.white);
+        ShowStationOdArcs(index);
+    }
+
+    void RecordDailyReportSnapshot(int settledDay)
+    {
+        float gross = 0f, maintAndTax = 0f, bestNet = float.NegativeInfinity, worstNet = float.PositiveInfinity;
+        string bestName = "—", worstName = "—";
+        foreach (var line in lines)
+        {
+            float beforeTax = line.todayGross - line.todayMaintenance - line.todayTrack;
+            float tax = Mathf.Max(0f, beforeTax) * 0.1f;
+            float net = beforeTax - tax;
+            gross += line.todayGross;
+            maintAndTax += line.todayMaintenance + line.todayTrack + tax;
+            if (net > bestNet) { bestNet = net; bestName = line.name; }
+            if (net < worstNet) { worstNet = net; worstName = line.name; }
+        }
+        float commRent = StationCommercialTotalDaily();
+        CollectTrafficAudit(out float crowdLost, out float unreachedLost, out float elasticLost, out int bnIdx, out _, out string bnNote);
+        yesterdayReport = new DailyReportSnapshot
+        {
+            settledDay = settledDay,
+            gross = gross,
+            commercialRent = commRent,
+            maintAndTax = maintAndTax,
+            netProfit = gross + commRent - maintAndTax,
+            passengers = traffic != null ? traffic.totalPassengers : 0f,
+            bestLineName = bestName,
+            bestLineNet = float.IsNegativeInfinity(bestNet) ? 0f : bestNet,
+            worstLineName = worstName,
+            worstLineNet = float.IsPositiveInfinity(worstNet) ? 0f : worstNet,
+            crowdLost = crowdLost,
+            unreachedLost = unreachedLost,
+            elasticLost = elasticLost,
+            bottleneckStation = bnIdx,
+            bottleneckNote = bnNote
+        };
+        hasYesterdayReport = true;
+    }
+
+    void OpenDailyBriefingPopup()
+    {
+        if (dragging || pageRoot || sceneryViewer) return;
+        RecalcIncome();
+        DailyReportSnapshot rep;
+        bool isLiveEstimate = !hasYesterdayReport;
+        if (hasYesterdayReport)
+        {
+            rep = yesterdayReport;
+        }
+        else
+        {
+            float gross = 0f, maintTax = 0f, bestNet = float.NegativeInfinity, worstNet = float.PositiveInfinity;
+            string bestName = "—", worstName = "—";
+            foreach (var l in lines)
+            {
+                var f = ForecastFor(l);
+                float net = f.Profit;
+                gross += f.gross;
+                maintTax += f.vehicle + f.track + f.tax;
+                if (net > bestNet) { bestNet = net; bestName = l.name; }
+                if (net < worstNet) { worstNet = net; worstName = l.name; }
+            }
+            float commRent = StationCommercialTotalDaily() + CrossBaySynergyDailyBonus();
+            CollectTrafficAudit(out float cL, out float uL, out float eL, out int bn, out _, out string bnNote);
+            rep = new DailyReportSnapshot
+            {
+                settledDay = day,
+                gross = gross,
+                commercialRent = commRent,
+                maintAndTax = maintTax,
+                netProfit = gross + commRent - maintTax,
+                passengers = traffic != null ? traffic.totalPassengers : 0f,
+                bestLineName = bestName,
+                bestLineNet = float.IsNegativeInfinity(bestNet) ? 0f : bestNet,
+                worstLineName = worstName,
+                worstLineNet = float.IsPositiveInfinity(worstNet) ? 0f : worstNet,
+                crowdLost = cL,
+                unreachedLost = uL,
+                elasticLost = eL,
+                bottleneckStation = bn,
+                bottleneckNote = bnNote
+            };
+        }
+
+        bool hasBn = rep.bottleneckStation >= 0 && rep.bottleneckStation < stations.Count;
+        float popH = hasBn ? 920f : 790f;
+        string popTitle = isLiveEstimate ? "运营手帐日报 · 第 " + rep.settledDay + " 日实时预估" : "运营手帐日报 · 第 " + rep.settledDay + " 日实绩";
+        var p = OpenPopup(popTitle, popH, 940, "daily_briefing");
+
+        float y = popH - 166f;
+        var cashCard = Rect("CashSummary", p.transform, 38f, y - 92f, 864f, 92f);
+        Rounded(cashCard, Paper2);
+        int netVal = Mathf.RoundToInt(rep.netProfit);
+        Txt(cashCard.transform, "当前账户可用资金：¥" + Math.Floor(coins).ToString("N0"), 26, Ink, 24f, 46f, 520f, 38f, TextAnchor.MiddleLeft);
+        Txt(cashCard.transform, (netVal >= 0 ? "净盈利 +¥" + netVal : "净亏损 -¥" + Mathf.Abs(netVal)), 30, netVal >= 0 ? Matcha : Vermilion, 550f, 44f, 290f, 42f, TextAnchor.MiddleRight);
+        Txt(cashCard.transform, "票款 ¥" + Mathf.RoundToInt(rep.gross) + "  ·  物业/联运 ¥" + Mathf.RoundToInt(rep.commercialRent) + "  ·  运维税费 -¥" + Mathf.RoundToInt(rep.maintAndTax), 22, InkSoft, 24f, 8f, 816f, 34f, TextAnchor.MiddleLeft);
+        y -= 114f;
+
+        var lineCard = Rect("LinePerfCard", p.transform, 38f, y - 140f, 864f, 140f);
+        Rounded(lineCard, Paper2);
+        Txt(lineCard.transform, "线路效益风向", 24, Ink, 24f, 94f, 400f, 36f, TextAnchor.MiddleLeft);
+        string lineText = lines.Count == 0
+            ? "尚未开通任何运营线路，长按地图车站并拖向下一站即可铺线。"
+            : "领跑线路：" + rep.bestLineName + "（日净利 ¥" + Mathf.RoundToInt(rep.bestLineNet) + "）\n待优线路：" + rep.worstLineName + "（日净利 ¥" + Mathf.RoundToInt(rep.worstLineNet) + "）";
+        Txt(lineCard.transform, lineText, 22, InkSoft, 24f, 12f, 816f, 80f, TextAnchor.UpperLeft);
+        y -= 162f;
+
+        var flowCard = Rect("TrafficAuditCard", p.transform, 38f, y - 188f, 864f, 188f);
+        Rounded(flowCard, Paper2);
+        Txt(flowCard.transform, "客流归因体检（全网多路径评估）", 24, Ink, 24f, 142f, 640f, 36f, TextAnchor.MiddleLeft);
+        string flowSummary =
+            "当前时段全网实载：" + Mathf.RoundToInt(rep.passengers) + " 人次\n" +
+            "· 站台/车厢满载受阻：约 " + Mathf.RoundToInt(rep.crowdLost) + " 人次\n" +
+            "· 热门目的尚无直达：约 " + Mathf.RoundToInt(rep.unreachedLost) + " 人次\n" +
+            "· 绕行耗时/票价敏感流失：约 " + Mathf.RoundToInt(rep.elasticLost) + " 人次";
+        Txt(flowCard.transform, flowSummary, 22, InkSoft, 24f, 12f, 816f, 126f, TextAnchor.UpperLeft);
+        y -= 210f;
+
+        if (hasBn)
+        {
+            int targetIdx = rep.bottleneckStation;
+            string stName = StationDisplayName(targetIdx, stations[targetIdx].region);
+            var bnCard = Rect("BottleneckCard", p.transform, 38f, y - 118f, 864f, 118f);
+            Rounded(bnCard, new Color(0.98f, 0.92f, 0.86f));
+            Txt(bnCard.transform, "首要瓶颈站：" + stName + "（" + DisplayPlaceAliases(stations[targetIdx].region) + "）", 24, Vermilion, 24f, 70f, 560f, 38f, TextAnchor.MiddleLeft);
+            Txt(bnCard.transform, rep.bottleneckNote, 24, InkSoft, 24f, 12f, 560f, 58f, TextAnchor.UpperLeft);
+            var locBtn = Btn(bnCard.transform, "FocusBottleneck", "定位查看", 24, 614f, 24f, 226f, 70f, Indigo, () => { ClosePanel(true); FocusMapOnStation(targetIdx); });
+            TInk(locBtn, Color.white);
+        }
+
+        var closeBtn = Btn(p.transform, "BriefingClose", "收起手帐", 26, 38f, 32f, 864f, 82f, new Color(0.92f, 0.89f, 0.83f), () => ClosePanel(true));
+        TInk(closeBtn, Ink);
     }
     void OpenStationInfo(int index)
     {
@@ -443,7 +743,7 @@ public partial class DemoBootstrap
         var station = stations[index];
         string description = StationTrafficDescription(index);
         float contentHeight = Mathf.Clamp(MeasureTextHeight(description, 28, 884) + 16, 100, H - 740);
-        var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, contentHeight + 510, 960);
+        var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, contentHeight + 510, 960, "station_info_" + index);
         stationTrafficPanel = p; stationTrafficIndex = index;
         stationTrafficLabel = ScrollableText(p.transform, description, 28, InkSoft, 38, 420, 884, contentHeight);
         int cost = Mathf.RoundToInt(180f * Mathf.Pow(1.85f, station.level - 1) / 10f) * 10;
@@ -468,14 +768,16 @@ public partial class DemoBootstrap
             ? "站前物业 · 建设「" + StationFacilityNames[curFac + 1] + "」 (¥" + facCost + " · 日租 ¥" + nextRent + ")"
             : "站前物业 · " + StationFacilityNames[curFac] + "（满级 · 日租 ¥" + Mathf.RoundToInt(curRent * TechMult() * (HasPartner(1) ? 1.25f : 1f)) + "）";
         var facBtn = Btn(p.transform, "StationFacility", facLabel, 24, 38, 155, 882, 92, curFac < 3 ? new Color(0.76f, 0.50f, 0.16f) : new Color(0.86f, 0.84f, 0.78f), () => {
+            if (!IsFeatureUnlocked(GameFeature.SceneryAndCommercial)) { PlayErrorSfx(); Toast(FeatureLockHint(GameFeature.SceneryAndCommercial)); return; }
             if (!station.built) { Toast("请先开站"); return; }
             if (curFac >= 3) { Toast("站前商业已达最高等级"); return; }
-            if (coins < facCost) { Toast("金币不足"); return; }
+            if (coins < facCost) { PlayErrorSfx(); Toast("金币不足"); return; }
             BeginUndo("站前商业升级");
             coins -= facCost;
             station.facLevel = curFac + 1;
             station.riderBonus = StationFacilityRents[station.facLevel];
             RecalcIncome();
+            PlayCoinSfx();
             EndUndo();
             RefreshHUD();
             OpenStationInfo(index);
@@ -488,22 +790,55 @@ public partial class DemoBootstrap
     void QueueStory(string key, string title, string content)
     {
         if (!storySeen.Add(key)) return;
-        storyQueue.Enqueue(new StoryEvent { title = title, text = content });
+        storyQueue.Enqueue(new StoryEvent {
+            chapterTag = "沿途风物",
+            speaker = "铁道手记",
+            title = title,
+            text = content,
+            objectiveHint = "",
+            allowSkip = false
+        });
     }
     void TickStory()
     {
         if (storyCard || storyQueue.Count == 0 || pageRoot || activePanel || sceneryViewer || lineBubbleRoot || dragging) return;
         var story = storyQueue.Dequeue();
-        storyCard = Rect("StoryCard", root, 40, 220, 1000, 360);
-        Rounded(storyCard, new Color(0.99f, 0.975f, 0.94f, 0.98f)); SoftShadow(storyCard);
-        var accent = Img(Rect("Accent", storyCard.transform, 0, 20, 8, 320), Gold, spriteRound); accent.raycastTarget = false;
-        Txt(storyCard.transform, "沿途故事", 22, Matcha, 34, 308, 400, 32, TextAnchor.MiddleLeft);
-        Txt(storyCard.transform, story.title, 36, Ink, 34, 254, 800, 50, TextAnchor.MiddleLeft);
-        Txt(storyCard.transform, story.text, 27, Ink, 34, 100, 932, 140, TextAnchor.UpperLeft);
-        var close = Btn(storyCard.transform, "Continue", "继续运营", 25, 740, 22, 226, 68, Matcha, () => { if (storyCard) Destroy(storyCard); storyCard = null; });
+        bool hasObj = !string.IsNullOrEmpty(story.objectiveHint);
+        float cardH = hasObj ? 450f : 390f;
+        storyCard = Rect("StoryCard", root, 40f, 204f, 1000f, cardH);
+        Rounded(storyCard, new Color(CardBg.r, CardBg.g, CardBg.b, 0.985f)); SoftShadow(storyCard);
+        JournalTape(storyCard.transform, 428f, cardH - 16f, 144f);
+        var accent = Img(Rect("Accent", storyCard.transform, 0f, 20f, 8f, cardH - 40f), Gold, spriteRound); accent.raycastTarget = false;
+
+        string headerLine = string.IsNullOrEmpty(story.chapterTag) ? "沿途故事" : story.chapterTag;
+        if (!string.IsNullOrEmpty(story.speaker)) headerLine += "  ·  " + story.speaker;
+        Txt(storyCard.transform, headerLine, 22, Matcha, 34f, cardH - 52f, 700f, 34f, TextAnchor.MiddleLeft);
+        Txt(storyCard.transform, story.title, 36, Ink, 34f, cardH - 106f, 920f, 50f, TextAnchor.MiddleLeft);
+        Txt(storyCard.transform, story.text, 25, Ink, 34f, hasObj ? 168f : 108f, 932f, cardH - (hasObj ? 284f : 224f), TextAnchor.UpperLeft);
+
+        if (hasObj)
+        {
+            var objBox = Rect("StoryObjective", storyCard.transform, 34f, 106f, 932f, 58f);
+            Rounded(objBox, Color.Lerp(CardBg, Indigo, 0.08f));
+            Txt(objBox.transform, story.objectiveHint, 24, Indigo, 18f, 0f, 896f, 58f, TextAnchor.MiddleLeft);
+        }
+
+        if (story.allowSkip)
+        {
+            var skipBtn = Btn(storyCard.transform, "SkipGuide", "跳过新手引导", 24, 34f, 22f, 246f, 70f, Paper2, () => {
+                Confirm("跳过新手引导", "将直接解锁全部系统并进入自由经营，稍后仍可在设置中重温剧情。确认跳过？", SkipTutorialFlow);
+            });
+            TInk(skipBtn, InkSoft);
+        }
+
+        var close = Btn(storyCard.transform, "Continue", "继续运营", 25, 740f, 22f, 226f, 68f, Matcha, () => {
+            if (storyCard) Destroy(storyCard);
+            storyCard = null;
+        });
         TInk(close, Color.white);
         if (undoButton) undoButton.transform.SetAsLastSibling();
-        var cg = storyCard.AddComponent<CanvasGroup>(); cg.alpha = 0;
+        var cg = storyCard.AddComponent<CanvasGroup>(); cg.alpha = 0f;
+        PlayStorySfx();
         StartCoroutine(AnimateStory(storyCard.GetComponent<RectTransform>(), cg));
     }
     System.Collections.IEnumerator AnimateStory(RectTransform rect, CanvasGroup group)
@@ -519,16 +854,19 @@ public partial class DemoBootstrap
 
     // 拖线造价跟随指针，实际已吸附部分与待吸附段的预估分开标示。
     GameObject dragCostBadge;
-    Text dragCostHeading, dragCostNumber;
+    Text dragCostHeading, dragCostNumber, dragCostSubText;
     float dragCostDisplayed, dragCostPulse;
-    int dragCostLastCommitted;
+    int dragCostLastCommitted, dragCostLastHov = -2, dragCostLastDraftCount = -1, dragCostAddedPassengers;
     void BuildDragCostBadge()
     {
-        dragCostBadge = Rect("DragCostBadge", root, 0, 0, 250, 96);
+        dragCostBadge = Rect("DragCostBadge", root, 0, 0, 308, 138);
         Rounded(dragCostBadge, CardBg);
         dragCostBadge.GetComponent<Image>().raycastTarget = false; SoftShadow(dragCostBadge);
-        dragCostHeading = Txt(dragCostBadge.transform, "线路造价", 20, InkSoft, 12, 62, 226, 26, TextAnchor.MiddleCenter);
-        dragCostNumber = Txt(dragCostBadge.transform, "¥0", 38, Ink, 12, 12, 226, 49, TextAnchor.MiddleCenter);
+        dragCostHeading = Txt(dragCostBadge.transform, "线路造价", 23, InkSoft, 14, 98, 280, 30, TextAnchor.MiddleCenter);
+        FitSingleLine(dragCostHeading, 23);
+        dragCostNumber = Txt(dragCostBadge.transform, "¥0", 40, Ink, 14, 42, 280, 52, TextAnchor.MiddleCenter);
+        dragCostSubText = Txt(dragCostBadge.transform, "拖向站点查看预计客流", 20, Matcha, 14, 10, 280, 28, TextAnchor.MiddleCenter);
+        FitSingleLine(dragCostSubText, 20);
         dragCostBadge.SetActive(false);
     }
     void UpdateDragCostBadge(Vector2 point, Vector2 pointer, float dt)
@@ -541,9 +879,35 @@ public partial class DemoBootstrap
         if (draftCost != dragCostLastCommitted) { dragCostLastCommitted = draftCost; dragCostPulse = 0.22f; }
         dragCostDisplayed = Mathf.Lerp(dragCostDisplayed, value, 1f - Mathf.Exp(-18f * dt));
         if (Mathf.Abs(dragCostDisplayed-value) < 0.5f) dragCostDisplayed = value;
-        dragCostHeading.text = preview ? "预计造价 · 含拖拽段" : "已选造价";
+        dragCostHeading.text = preview
+            ? (draftPreviewNeed >= 0.72f ? "高需走廊 · 含拖拽段" : draftPreviewNeed >= 0.40f ? "适中需求 · 含拖拽段" : "客需较平 · 含拖拽段")
+            : "已选造价";
         dragCostNumber.text = "¥" + Mathf.RoundToInt(dragCostDisplayed);
         dragCostNumber.color = value > coins ? Vermilion : Ink;
+        if (dragCostSubText)
+        {
+            if (hoverStation != dragCostLastHov || draft.Count != dragCostLastDraftCount)
+            {
+                dragCostLastHov = hoverStation;
+                dragCostLastDraftCount = draft.Count;
+                dragCostAddedPassengers = hoverStation >= 0 ? EstimateDraftAddedPassengers(draft, hoverStation) : 0;
+            }
+            if (hoverStation >= 0 && dragCostAddedPassengers > 0)
+            {
+                dragCostSubText.text = "预计增客 +" + dragCostAddedPassengers + " 人/日";
+                dragCostSubText.color = Matcha;
+            }
+            else if (preview)
+            {
+                dragCostSubText.text = draftPreviewNeed >= 0.72f ? "高潜直达方向 · 建议延伸" : draftPreviewNeed >= 0.40f ? "客需适中 · 可继续拖向站台" : "拖向目标站查看预计客流";
+                dragCostSubText.color = draftPreviewNeed >= 0.72f ? Vermilion : InkSoft;
+            }
+            else
+            {
+                dragCostSubText.text = "松手即按草案成线（" + draft.Count + " 站）";
+                dragCostSubText.color = Indigo;
+            }
+        }
         dragCostPulse = Mathf.Max(0, dragCostPulse-dt);
         float pop = 1f + 0.12f * Mathf.Sin((dragCostPulse / 0.22f) * Mathf.PI);
         dragCostNumber.rectTransform.localScale = Vector3.one * pop;
@@ -554,15 +918,15 @@ public partial class DemoBootstrap
         if (dir.sqrMagnitude < 4f) dir = new Vector2(0f, 1f);
         dir.Normalize();
         Vector2 at = (Vector2)root.InverseTransformPoint(mapRect.TransformPoint(pointer)) - root.rect.min;
-        float gap = 132f + Mathf.Abs(dir.x) * 52f;  // 水平方向再多留一段，避免气泡压住拖拽点
+        float gap = 138f + Mathf.Abs(dir.x) * 52f;  // 水平方向再多留一段，避免气泡压住拖拽点
         Vector2 anchor = at - dir * gap;            // 放在拖拽前进方向的反方向
         GetSafeMarginsInRoot(out float safeL, out float safeR, out float safeT, out float safeB);
         float minX = safeL + 12f;
-        float maxX = Mathf.Max(minX, RootW - safeR - 262f);
+        float maxX = Mathf.Max(minX, RootW - safeR - 320f);
         float minY = safeB + 180f;
-        float maxY = Mathf.Max(minY, RootH - safeT - 301f);
-        float x = Mathf.Clamp(anchor.x - 125f, minX, maxX);
-        float y = Mathf.Clamp(anchor.y - 48f, minY, maxY);
+        float maxY = Mathf.Max(minY, RootH - safeT - 328f);
+        float x = Mathf.Clamp(anchor.x - 154f, minX, maxX);
+        float y = Mathf.Clamp(anchor.y - 64f, minY, maxY);
         var badgeRt = dragCostBadge.GetComponent<RectTransform>();
         var target = new Vector2(x, y);
         if (dt >= 0.5f) badgeRt.anchoredPosition = target;   // 刚出现时直接落位
@@ -579,14 +943,17 @@ public partial class DemoBootstrap
     // ---------- income floaters ----------
     void SpawnFloater(int amount, Vector2 at)
     {
-        if (qualityTier == 0) return;
-        if (amount <= 0) return;
+        if (amount <= 0 || !floaterLayer) return;
         var go = Rect("Float", floaterLayer, at.x - 60, at.y + 20, 160, 34);
+        var rt = go.GetComponent<RectTransform>();
+        rt.pivot = new Vector2(0.5f, 0.5f);
+        if (qualityTier >= 2) rt.localScale = Vector3.one * 1.24f;
         var t = go.AddComponent<Text>();
         t.font = font; t.fontSize = ScaledFontSize(27); t.alignment = TextAnchor.MiddleCenter;
         t.color = FloaterColors[floaterColorRandom.Next(FloaterColors.Length)]; t.text = "+¥" + amount; t.raycastTarget = false;
-        var sh = go.AddComponent<Shadow>(); sh.effectColor = new Color(1, 0.99f, 0.95f, 0.85f);
-        var f = new Floater { txt = t, rt = go.GetComponent<RectTransform>(), age = 0f };
+        var sh = qualityTier >= 1 ? go.AddComponent<Shadow>() : null;
+        if (sh) sh.effectColor = new Color(1, 0.99f, 0.95f, 0.85f);
+        var f = new Floater { txt = t, rt = rt, age = 0f };
         floaters.Add(f);
     }
     void TickFloaters(float dt)
@@ -597,6 +964,15 @@ public partial class DemoBootstrap
             if (!f.rt || !f.txt) { floaters.RemoveAt(i); continue; }
             f.age += dt;
             f.rt.anchoredPosition += new Vector2(0, dt * 38f);
+            if (qualityTier >= 2 && f.age < 0.22f)
+            {
+                float s = Mathf.Lerp(1.24f, 1f, 1f - Mathf.Pow(1f - Mathf.Clamp01(f.age / 0.22f), 3f));
+                f.rt.localScale = new Vector3(s, s, 1f);
+            }
+            else if (f.rt.localScale.x > 1.001f)
+            {
+                f.rt.localScale = Vector3.one;
+            }
             var c = f.txt.color;
             c.a = Mathf.Clamp01(1f - (f.age - 0.55f) / 0.7f);
             f.txt.color = c;
@@ -629,6 +1005,7 @@ public partial class DemoBootstrap
     void BeginPress(int idx)
     {
         if (dragging) return;
+        ClearStationOdArcs();
         pressIdx = idx; pressTimer = 0f; pressing = true; pressStart = Input.mousePosition;
         HidePressRing();
     }
@@ -694,13 +1071,16 @@ public partial class DemoBootstrap
             return;
         }
         CloseLineBubble();
-        draft.Clear(); draft.Add(idx); draftCost = DraftCostOf(draft);
+        draft.Clear(); draftSegNeeds.Clear(); draft.Add(idx); draftCost = DraftCostOf(draft);
+        PrepareDraftNeedField(idx, draft);
+        draftPreviewNeed = EvaluateDragDirectionNeed(idx, Pos(idx));
+        draftPreviewColor = NeedColorGradient(draftPreviewNeed);
         dragFrom = idx; dragging = true; hoverStation = -1;
         dragCostDisplayed = 0; dragCostLastCommitted = 0; dragCostPulse = 0;
         if (dragCostBadge) { dragCostBadge.SetActive(true); UpdateDragCostBadge(Pos(idx), Pos(idx), 1f); }
         RedrawDraft();
-        if (previewImg) previewImg.gameObject.SetActive(true);
-        if (dragTip) dragTip.gameObject.SetActive(true);
+        if (previewImg) { previewImg.color = draftPreviewColor; previewImg.gameObject.SetActive(true); }
+        if (dragTip) { dragTip.color = draftPreviewColor; dragTip.gameObject.SetActive(true); }
         UpdateRings();
         Haptic.Vibrate(22); PlayTone(false);
     }
@@ -717,7 +1097,7 @@ public partial class DemoBootstrap
     }
     void CancelDraft()
     {
-        draft.Clear(); draftCost = 0;
+        draft.Clear(); draftSegNeeds.Clear(); draftCost = 0;
         if (dragCostBadge) dragCostBadge.SetActive(false);
         ClearDraftSegs(); ResetBuildVisuals();
     }

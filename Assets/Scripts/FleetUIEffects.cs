@@ -62,7 +62,14 @@ public class FleetPressFeedback : MonoBehaviour, IPointerDownHandler, IPointerUp
     public void OnPointerExit(PointerEventData e) { pressed = false; }
     void Update()
     {
-        transform.localScale = Vector3.Lerp(transform.localScale, original * (pressed ? 0.96f : 1f), 1f - Mathf.Exp(-22f * Time.unscaledDeltaTime));
+        float targetScale = pressed ? 0.96f : 1f;
+        Vector3 target = original * targetScale;
+        if ((transform.localScale - target).sqrMagnitude < 0.000004f)
+        {
+            if (transform.localScale != target) transform.localScale = target;
+            return;
+        }
+        transform.localScale = Vector3.Lerp(transform.localScale, target, 1f - Mathf.Exp(-24f * Time.unscaledDeltaTime));
     }
     void OnDisable() { transform.localScale = original; pressed = false; }
 }

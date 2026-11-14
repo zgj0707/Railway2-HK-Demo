@@ -13,6 +13,9 @@ public class PageHeaderLayout : MonoBehaviour
     public RectTransform topBarBg, topDivider, bottomSafeTarget;
     public float bottomSafeMargin = 20f;
     readonly List<TopOffsetEntry> extraTopLeftTargets = new List<TopOffsetEntry>();
+    int lastScreenW = -1, lastScreenH = -1, lastExtraCount = -1;
+    Rect lastSafeArea;
+    Vector2 lastPageSize = new Vector2(-1f, -1f);
 
     public void AddSafeTopLeftTarget(RectTransform target, Vector2 offsetFromSafeTopLeft)
     {
@@ -20,14 +23,15 @@ public class PageHeaderLayout : MonoBehaviour
         target.anchorMin = target.anchorMax = Vector2.zero;
         target.pivot = new Vector2(0, 1);
         extraTopLeftTargets.Add(new TopOffsetEntry { target = target, offsetFromSafeTopLeft = offsetFromSafeTopLeft });
-        Apply();
+        lastExtraCount = -1;
+        Apply(true);
     }
 
-    void OnEnable() { Apply(); }
+    void OnEnable() { Apply(true); }
 
-    void LateUpdate() { Apply(); }
+    void LateUpdate() { Apply(false); }
 
-    void Apply()
+    void Apply(bool force)
     {
         if (!page) return;
         Rect r = page.rect;
@@ -36,6 +40,21 @@ public class PageHeaderLayout : MonoBehaviour
         Rect safe = Screen.safeArea;
         if (safe.width <= 0f || safe.height <= 0f)
             safe = new Rect(0, 0, Screen.width, Screen.height);
+
+        if (!force &&
+            Screen.width == lastScreenW &&
+            Screen.height == lastScreenH &&
+            safe == lastSafeArea &&
+            Mathf.Approximately(r.width, lastPageSize.x) &&
+            Mathf.Approximately(r.height, lastPageSize.y) &&
+            extraTopLeftTargets.Count == lastExtraCount)
+            return;
+
+        lastScreenW = Screen.width;
+        lastScreenH = Screen.height;
+        lastSafeArea = safe;
+        lastPageSize = r.size;
+        lastExtraCount = extraTopLeftTargets.Count;
 
         Vector2 safeMin = r.min, safeMax = r.max;
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(page, new Vector2(safe.xMin, safe.yMin), null, out var pMin) &&
