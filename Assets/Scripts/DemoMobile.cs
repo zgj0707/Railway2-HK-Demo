@@ -219,7 +219,7 @@ public partial class DemoBootstrap
         string modeDesc = bgmPlayMode == 1
             ? "始终播放经典长曲《Between the Bow and Breath》"
             : bgmPlayMode == 2
-                ? "始终随「香江 / 濠江 / 南粤」切换区域配乐"
+                ? "始终随「青屿 / 镜汀 / 锦川」切换区域配乐"
                 : "地图播区域曲，进入内页自动淡入经典长曲（记忆进度）";
         var modeHint = Txt(bgmCard.transform, modeDesc, 23, InkSoft, cardPad, 92f, cardInnerW, 38f, TextAnchor.MiddleLeft);
         FitSingleLine(modeHint, 23);
@@ -254,7 +254,7 @@ public partial class DemoBootstrap
         var summaryCard = Rect("ArchiveSummaryCard", parent, pad, 696f, innerW, 250f);
         Rounded(summaryCard, Color.Lerp(CardBg, Indigo, 0.05f));
         Txt(summaryCard.transform, $"{companyName} · 营运志档案", 29, Ink, cardPad, 188f, cardInnerW, 44f, TextAnchor.MiddleLeft);
-        Txt(summaryCard.transform, $"当前第 {day} 日 · 运营 {lines.Count} 条线路 · 已连 {DailyConnectedCount()} 站\n工程科技 {techDone.Count} 项 · 企业治理 {companyTechDone.Count}/{CompanyTechNodes.Length} 项 · 人才 {talents.Count} 名", 24, InkSoft, cardPad, 90f, cardInnerW, 86f, TextAnchor.UpperLeft);
+        Txt(summaryCard.transform, $"当前第 {day} 日 · 运营 {lines.Count} 条线路 · 已连 {DailyConnectedCount()} 站\n工程科技 {EraTechDoneCount(0)}/{EraTechNodeCount(0)} 项 · 企业治理 {CoTechEraDoneCount(0)}/{CoTechEraNodeCount(0)} 项 · 人才 {talents.Count} 名", 24, InkSoft, cardPad, 90f, cardInnerW, 86f, TextAnchor.UpperLeft);
         Txt(summaryCard.transform, "游戏每 5 秒及关键操作时自动保存至本地档案", 23, Matcha, cardPad, 24f, cardInnerW, 40f, TextAnchor.MiddleLeft);
 
         var storyCardBox = Rect("StoryControlCard", parent, pad, 430f, innerW, 242f);
@@ -304,7 +304,7 @@ public partial class DemoBootstrap
         }
 
         var resetBtn = Btn(parent, "ResetLocalSave", "开启新周目（清空本机存档）", 25, pad, curY, innerW, 82f, Vermilion, () => {
-            Confirm("开启新周目", "确认从第 1 日序章《维港初笛》重新开始体验完整剧情引导吗？当前本机进度将被重置。", () => {
+            Confirm("开启新周目", "确认从第 1 日序章《青湾初笛》重新开始体验完整剧情引导吗？当前本机进度将被重置。", () => {
 #if UNITY_EDITOR
                 DevTestSaveSyncEnabled = false;
 #endif
@@ -437,8 +437,10 @@ public partial class DemoBootstrap
                 TickDailyTalents();
                 EnsureTalentsInitialized(true);
                 SyncStoryProgression(true);
+                NotifySolarTermRollover();
+                SyncCulturalCollection(true);
                 if (day % 15 == 0 && lastAwardDay < day)
-                    Toast("《大湾区年度铁道大赏》第 " + day + " 日颁奖开启，去「公司」领奖！");
+                    Toast("《山海年度铁道大赏》第 " + day + " 日颁奖开启，去「公司」领奖！");
                 dailyStationBaseline = DailyConnectedCount();
                 RollTrafficEvents();
                 RefreshNoticeUnreadDot();
@@ -446,13 +448,19 @@ public partial class DemoBootstrap
         }
         UpdateTimeText();
     }
-    int lastDisplayedMinute = -1, lastDisplayedDay = -1, lastDisplayedSpeed = -1;
+    int lastDisplayedMinute = -1, lastDisplayedDay = -1, lastDisplayedSpeed = -1, lastHudSolarTerm = -1;
     void UpdateTimeText()
     {
         if (!timeTxt) return;
         int mins = Mathf.FloorToInt(dayClock / GameDaySeconds * 1440f);
         if (mins != lastDisplayedMinute) { int hh = (mins / 60) % 24, mm = mins % 60; timeTxt.text = hh.ToString("00") + ":" + mm.ToString("00"); lastDisplayedMinute = mins; }
-        if (dayTxt && day != lastDisplayedDay) { dayTxt.text = "第 " + day + " 日"; lastDisplayedDay = day; }
+        int termIdx = CurrentSolarTermIndex();
+        if (dayTxt && (day != lastDisplayedDay || termIdx != lastHudSolarTerm))
+        {
+            dayTxt.text = "第 " + day + " 日 · " + SolarTerms[termIdx].name;
+            lastDisplayedDay = day;
+            lastHudSolarTerm = termIdx;
+        }
         if (speedTxt && timeSpeed != lastDisplayedSpeed) { speedTxt.text = timeSpeed == 0 ? "暂停" : timeSpeed + "×"; lastDisplayedSpeed = timeSpeed; }
     }
     void CycleSpeed()
@@ -533,41 +541,41 @@ public partial class DemoBootstrap
         var station = stations[index];
         switch (station.name)
         {
-            case "广州": return "珠江之畔的商贸名城，街巷烟火与现代都市交融。";
-            case "深圳（西九龙）": return "连接香江与鹏城的跨区域交通节点。";
-            case "珠海（关闸）": return "海岛与海湾相映的滨海城市，邻接濠江。";
-            case "东莞": return "水乡与制造业交织，城镇生活充满活力。";
-            case "惠州": return "山海相依，湖光与海岸风景相伴。";
-            case "佛山": return "岭南水乡与传统手艺相映的城市。";
-            case "中山": return "水网密布的岭南侨乡，延续着香山文脉。";
-            case "韶关": return "山水环绕的粤北门户，丹霞风光闻名。";
-            case "汕头": return "滨海商埠，潮汕风味与侨乡记忆交织。";
-            case "江门": return "五邑侨乡，骑楼与侨居故事相伴。";
-            case "湛江": return "雷州半岛上的滨海港城，面海而兴。";
-            case "茂名": return "粤西滨海城市，海岸与岭南果乡相伴。";
-            case "肇庆": return "西江之畔，山水与端砚文脉相映。";
-            case "梅州": return "山间客家之乡，围屋与乡村风物相连。";
-            case "汕尾": return "依山面海的城市，渔港与海岸风光相伴。";
-            case "河源": return "山水相依的东江上游城市。";
-            case "阳江": return "滨海山城，以海景与传统刀剪闻名。";
-            case "清远": return "北江穿城而过，山水与温泉相伴。";
-            case "潮州": return "韩江之畔的古城，保留着潮州文化风韵。";
-            case "揭阳": return "潮汕平原上的城市，榕江穿城而过。";
-            case "云浮": return "群山之间的石材之乡，依西江而展。";
-            case "罗湖": return "连接两地的口岸站，旅客往来频繁。";
-            case "港珠澳": return "跨越海湾的交通节点，连接三地。";
-            case "中环": return "海港边的商业街区，都市与山景相邻。";
-            case "尖沙咀": return "临海的繁华街区，可远眺维多利亚港。";
-            case "东涌": return "大屿山北岸的社区，邻近山海风景。";
-            case "旺角": return "街市与商铺密集，生活气息浓厚。";
-            case "大三巴": return "老城街巷环绕，留存着历史建筑风貌。";
-            case "氹仔": return "海岛社区与街巷美食交融的区域。";
-            case "路环": return "海岸与山林相伴，保留宁静的岛屿风貌。";
+            case "百花城": return "沧海之畔的商贸名城，街巷烟火与繁华市集交融。";
+            case "鹏湾（西渡）": return "连接青屿与锦川的跨区域交通节点。";
+            case "珠屿（北关）": return "海岛与海湾相映的滨海城镇，邻接镜汀。";
+            case "莞香坡": return "水乡与手工作坊交织，城镇生活充满活力。";
+            case "鹅湖镇": return "山海相依，湖光与海岸风景相伴。";
+            case "禅溪": return "南溟水乡与传统手艺相映的城市。";
+            case "翠香原": return "水网密布的滨海侨乡，延续着古朴文脉。";
+            case "韶溪镇": return "山水环绕的北岭门户，奇峰丹崖风光闻名。";
+            case "鮀海港": return "滨海商埠，海派食肆与古港记忆交织。";
+            case "五津镇": return "五津水乡，骑楼与老街故事相伴。";
+            case "湛溟港": return "沧海半岛上的滨海港城，面海而兴。";
+            case "茂林城": return "西海之滨城市，海岸与百果林乡相伴。";
+            case "端溪城": return "西川之畔，山水与古砚文脉相映。";
+            case "嘉应驿": return "山间古驿之乡，围屋与乡村风物相连。";
+            case "善浦港": return "依山面海的城市，渔港与海岸风光相伴。";
+            case "槎溪城": return "山水相依的东溪上游城市。";
+            case "鼍阳港": return "滨海山城，以海景与传统铁艺工坊闻名。";
+            case "清溪镇": return "北溪穿城而过，山水与温泉相伴。";
+            case "凤岭城": return "青溪之畔的古城，保留着传统古街风韵。";
+            case "榕浦城": return "海滨平原上的城镇，绿榕水穿城而过。";
+            case "石泉城": return "群山之间的采石之乡，依西川而展。";
+            case "界桥关": return "连接两地的口岸站，旅客往来频繁。";
+            case "三屿虹桥": return "跨越海湾的交通节点，连接三地。";
+            case "海晏埠": return "海港边的商业街区，都市与山景相邻。";
+            case "翠沙咀": return "临海的繁华街区，可远眺银潮百帆港。";
+            case "东溪涌": return "苍岚岛北岸的社区，邻近山海风景。";
+            case "熙市角": return "街市与商铺密集，生活气息浓厚。";
+            case "古坊石街": return "老城街巷环绕，留存着历史建筑风貌。";
+            case "汀屿里": return "海岛社区与街巷美食交融的区域。";
+            case "松风渔村": return "海岸与山林相伴，保留宁静的岛屿风貌。";
         }
         if (!string.IsNullOrEmpty(station.city))
             return "位于" + station.city + "，连接周边城镇与社区。";
-        if (station.region == "澳门") return "濠江的沿线区域，中西风貌交融。";
-        if (station.region == "香港") return "香江的沿线区域，山海与城市相伴。";
+        if (station.region == "镜汀") return "镜汀的沿线区域，山海古韵交融。";
+        if (station.region == "青屿") return "青屿的沿线区域，山海与城市相伴。";
         return "沿线城镇与社区相连的地区。";
     }
 
@@ -744,6 +752,7 @@ public partial class DemoBootstrap
         string description = StationTrafficDescription(index);
         float contentHeight = Mathf.Clamp(MeasureTextHeight(description, 28, 884) + 16, 100, H - 740);
         var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, contentHeight + 510, 960, "station_info_" + index);
+        AttachPopupCurrencyChip(p, 960f, contentHeight + 510);
         stationTrafficPanel = p; stationTrafficIndex = index;
         stationTrafficLabel = ScrollableText(p.transform, description, 28, InkSoft, 38, 420, 884, contentHeight);
         int cost = Mathf.RoundToInt(180f * Mathf.Pow(1.85f, station.level - 1) / 10f) * 10;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,7 +8,13 @@ public partial class DemoBootstrap
 {
     // ---------- M1: 轻量化手帐转场、微动效与粒子反馈系统 ----------
     GameObject regionCurtainGo;
-    Coroutine bubbleAnimCo, pageAnimCo;
+    Coroutine bubbleAnimCo, pageAnimCo, regionCurtainCo;
+
+    void StopRegionCurtain()
+    {
+        if (regionCurtainCo != null) { StopCoroutine(regionCurtainCo); regionCurtainCo = null; }
+        if (regionCurtainGo) { Destroy(regionCurtainGo); regionCurtainGo = null; }
+    }
 
     void StopBubbleAnim()
     {
@@ -41,6 +48,14 @@ public partial class DemoBootstrap
         bubbleAnimCo = StartCoroutine(CoBubblePop(rt, cg, shadowCg, targetScale, qualityTier >= 2));
     }
 
+    static float EvalOutBack(float p, float from, float to, float c1 = 1.70158f)
+    {
+        float c3 = c1 + 1f;
+        float u = p - 1f;
+        float back = 1f + c3 * u * u * u + c1 * u * u;
+        return Mathf.LerpUnclamped(from, to, back);
+    }
+
     IEnumerator CoBubblePop(RectTransform rt, CanvasGroup cg, CanvasGroup shadowCg, Vector3 targetScale, bool springOvershoot)
     {
         float dur = springOvershoot ? 0.19f : 0.14f;
@@ -52,10 +67,7 @@ public partial class DemoBootstrap
             float sc;
             if (springOvershoot)
             {
-                const float c1 = 1.70158f, c3 = c1 + 1f;
-                float u = p - 1f;
-                float back = 1f + c3 * u * u * u + c1 * u * u;
-                sc = Mathf.LerpUnclamped(0.88f, 1f, back);
+                sc = EvalOutBack(p, 0.88f, 1f);
             }
             else
             {
@@ -121,60 +133,235 @@ public partial class DemoBootstrap
         pageAnimCo = null;
     }
 
+    bool TryGetRegionShowcaseSpec(string titleOrRegion, out RegionShowcaseSpec spec)
+    {
+        string normalized = (titleOrRegion ?? "").Replace(" ", "");
+        for (int i = 0; i < RegionShowcaseSpecs.Length; i++)
+        {
+            if (RegionShowcaseSpecs[i].key == normalized) { spec = RegionShowcaseSpecs[i]; return true; }
+        }
+        spec = RegionShowcaseSpecs[0];
+        return false;
+    }
+
     void PlayRegionCurtain(string title)
     {
         if (!root) return;
-        if (regionCurtainGo) Destroy(regionCurtainGo);
+        StopRegionCurtain();
+
+        bool hasSpec = TryGetRegionShowcaseSpec(title, out var spec);
+        bool neon = IsNeonThemeActive();
+        Color veilColor = neon ? new Color(0.04f, 0.06f, 0.16f, 0.96f) : new Color(Paper.r, Paper.g, Paper.b, 0.96f);
+
         regionCurtainGo = Rect("RegionCurtain", root, 0f, 0f, RootW, RootH);
         var rt = regionCurtainGo.GetComponent<RectTransform>();
         rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
         rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
 
-        var bg = Img(regionCurtainGo, Paper);
+        var bg = Img(regionCurtainGo, veilColor);
         bg.raycastTarget = false;
 
-        var badge = Rect("Stamp", regionCurtainGo.transform, (RootW - 460f) * 0.5f, (RootH - 170f) * 0.5f, 460f, 170f);
-        var badgeRt = badge.GetComponent<RectTransform>();
-        badgeRt.pivot = new Vector2(0.5f, 0.5f);
-        badgeRt.anchoredPosition = new Vector2(RootW * 0.5f, RootH * 0.5f);
-        Rounded(badge, CardBg);
-        badge.GetComponent<Image>().raycastTarget = false;
-        SoftShadow(badge);
-        Txt(badge.transform, "前往版图", 24, InkSoft, 0f, 108f, 460f, 38f, TextAnchor.MiddleCenter).raycastTarget = false;
-        Txt(badge.transform, DisplayPlaceAliases(title), 54, Ink, 0f, 24f, 460f, 82f, TextAnchor.MiddleCenter).raycastTarget = false;
+        // 中心水彩风貌明信片框：呈现“到达区域专属手绘风景 + 古代书法名家集字挥毫揭幕”
+        const float cardW = 884f, cardH = 472f;
+        var card = Rect("CurtainCard", regionCurtainGo.transform, (RootW - cardW) * 0.5f, (RootH - cardH) * 0.5f, cardW, cardH);
+        var cardRt = card.GetComponent<RectTransform>();
+        cardRt.pivot = new Vector2(0.5f, 0.5f);
+        cardRt.anchoredPosition = new Vector2(RootW * 0.5f, RootH * 0.5f);
+        Rounded(card, neon ? new Color(0.14f, 0.20f, 0.38f, 1f) : new Color(0.99f, 0.978f, 0.946f, 1f));
+        card.GetComponent<Image>().raycastTarget = false;
+        SoftShadow(card);
+
+        const float pad = 10f, artW = cardW - pad * 2f, artH = cardH - pad * 2f;
+        var artClip = Rect("ArtClip", card.transform, pad, pad, artW, artH);
+        var clipImg = Img(artClip, neon ? new Color(0.06f, 0.08f, 0.18f, 1f) : new Color(0.96f, 0.94f, 0.89f, 1f), spriteRound);
+        clipImg.type = Image.Type.Sliced; clipImg.raycastTarget = false;
+        artClip.AddComponent<Mask>().showMaskGraphic = true;
+
+        RawImage bgRaw = null;
+        var bgTex = hasSpec ? Resources.Load<Texture2D>(spec.bgPath) : null;
+        if (bgTex)
+        {
+            bgRaw = Rect("Backdrop", artClip.transform, 0f, 0f, artW, artH).AddComponent<RawImage>();
+            bgRaw.texture = bgTex; bgRaw.raycastTarget = false;
+            bgRaw.color = neon ? new Color(0.38f, 0.46f, 0.86f, 0.90f) : Color.white;
+        }
+
+        var centerHaze = Rect("CenterHaze", artClip.transform, artW * 0.5f - 310f, artH * 0.5f - 115f, 620f, 276f);
+        var hazeImg = Img(centerHaze, neon ? new Color(0.05f, 0.08f, 0.19f, 0.58f) : new Color(0.988f, 0.972f, 0.932f, 0.58f), spriteCircle);
+        hazeImg.raycastTarget = false;
+
+        // 顶部抵达邮戳标签
+        var arrivalPill = Rect("ArrivalBadge", artClip.transform, (artW - 316f) * 0.5f, artH - 58f, 316f, 36f);
+        Rounded(arrivalPill, neon ? Gold : spec.frameAccent);
+        arrivalPill.GetComponent<Image>().raycastTarget = false;
+        Txt(arrivalPill.transform, "抵 达 版 图  ·  ARRIVAL", 18, neon ? new Color(0.08f, 0.08f, 0.14f) : Color.white, 16f, 0f, 284f, 36f, TextAnchor.MiddleCenter);
+
+        // 居中书法集字（支持动态缩放与淡入揭幕）
+        const float titleW = 540f, titleH = 204f;
+        float titleX = (artW - titleW) * 0.5f, titleY = (artH - titleH) * 0.5f + 22f;
+        var titleHolder = Rect("TitleReveal", artClip.transform, titleX, titleY, titleW, titleH);
+        var titleRt = titleHolder.GetComponent<RectTransform>();
+        titleRt.pivot = new Vector2(0.5f, 0.5f);
+        titleRt.anchoredPosition = new Vector2(artW * 0.5f, titleY + titleH * 0.5f);
+        var titleCg = titleHolder.AddComponent<CanvasGroup>();
+        titleCg.alpha = 0f;
+
+        var titleTex = (hasSpec && !string.IsNullOrEmpty(spec.titleMaskPath)) ? Resources.Load<Texture2D>(spec.titleMaskPath) : null;
+        if (titleTex)
+        {
+            var halo = Rect("Halo", titleHolder.transform, 0f, -3f, titleW, titleH).AddComponent<RawImage>();
+            halo.texture = titleTex; halo.raycastTarget = false;
+            halo.color = neon ? new Color(0.02f, 0.03f, 0.09f, 0.90f) : new Color(0.996f, 0.984f, 0.948f, 0.90f);
+
+            var glyph = Rect("Calligraphy", titleHolder.transform, 0f, 0f, titleW, titleH).AddComponent<RawImage>();
+            glyph.texture = titleTex; glyph.raycastTarget = false;
+            glyph.color = neon ? spec.neonInk : spec.dayInk;
+        }
+        else
+        {
+            string spaced = (hasSpec ? spec.key : DisplayPlaceAliases(title)).Replace(" ", "");
+            if (spaced.Length == 2) spaced = spaced[0] + "   " + spaced[1];
+            Color haloCol = neon ? new Color(0.02f, 0.03f, 0.09f, 0.90f) : new Color(0.996f, 0.984f, 0.948f, 0.92f);
+            Color inkCol = hasSpec ? (neon ? spec.neonInk : spec.dayInk) : (neon ? Gold : Ink);
+            Txt(titleHolder.transform, spaced, 108, haloCol, 2f, -3f, titleW, titleH, TextAnchor.MiddleCenter).raycastTarget = false;
+            Txt(titleHolder.transform, spaced, 108, inkCol, 0f, 0f, titleW, titleH, TextAnchor.MiddleCenter).raycastTarget = false;
+        }
+
+        // 中线金/青花装饰线（从中心向外舒展）
+        var rule = Rect("BrushRule", artClip.transform, artW * 0.5f - 180f, titleY - 12f, 360f, 4f);
+        var ruleRt = rule.GetComponent<RectTransform>();
+        ruleRt.pivot = new Vector2(0.5f, 0.5f);
+        ruleRt.anchoredPosition = new Vector2(artW * 0.5f, titleY - 10f);
+        var ruleImg = Img(rule, neon ? spec.neonInk : spec.frameAccent, spriteRound);
+        ruleImg.raycastTarget = false;
+        ruleRt.localScale = new Vector3(0f, 1f, 1f);
+
+        // 书法出处与城市风貌副标胶囊
+        float subW = 472f;
+        var subPill = Rect("SubPill", artClip.transform, (artW - subW) * 0.5f, 36f, subW, 40f);
+        Rounded(subPill, neon ? new Color(0.07f, 0.10f, 0.22f, 0.84f) : new Color(0.992f, 0.978f, 0.946f, 0.88f));
+        subPill.GetComponent<Image>().raycastTarget = false;
+        var subCg = subPill.AddComponent<CanvasGroup>();
+        subCg.alpha = 0f;
+        var subTxt = Txt(subPill.transform, hasSpec ? spec.subtitle : DisplayPlaceAliases(title), 22,
+            neon ? new Color(0.90f, 0.94f, 1f) : Ink, 16f, 0f, subW - 32f, 40f, TextAnchor.MiddleCenter);
+        FitSingleLine(subTxt, 22);
+
+        // 高画质附加轻盈浮金与花瓣星芒点缀
+        List<RectTransform> sparkles = null;
+        if (qualityTier >= 2 && (spriteDiamond || spriteCircle))
+        {
+            sparkles = new List<RectTransform>(10);
+            Color spCol = neon ? spec.neonInk : Color.Lerp(spec.frameAccent, Gold, 0.55f);
+            for (int i = 0; i < 10; i++)
+            {
+                bool leftWing = i % 2 == 0;
+                float sx = leftWing ? 42f + (i / 2) * 34f : artW - 42f - (i / 2) * 34f;
+                float sy = 96f + ((i * 67) % 270);
+                float sz = (i % 3 == 0) ? 14f : 10f;
+                var spGo = Rect("CurtainSpark" + i, artClip.transform, sx, sy, sz, sz);
+                var spRt = spGo.GetComponent<RectTransform>();
+                spRt.pivot = new Vector2(0.5f, 0.5f);
+                var spImg = Img(spGo, new Color(spCol.r, spCol.g, spCol.b, 0.72f), (i % 2 == 0 && spriteDiamond) ? spriteDiamond : spriteCircle);
+                spImg.raycastTarget = false;
+                sparkles.Add(spRt);
+            }
+        }
 
         var cg = regionCurtainGo.AddComponent<CanvasGroup>();
         cg.blocksRaycasts = false;
         cg.alpha = 0f;
-        StartCoroutine(CoRegionCurtain(regionCurtainGo, cg, badgeRt));
+        regionCurtainCo = StartCoroutine(CoRegionCurtain(regionCurtainGo, cg, cardRt, bgRaw, bgTex, titleRt, titleCg, ruleRt, subCg, sparkles));
     }
 
-    IEnumerator CoRegionCurtain(GameObject go, CanvasGroup cg, RectTransform badgeRt)
+    IEnumerator CoRegionCurtain(GameObject go, CanvasGroup cg, RectTransform cardRt, RawImage bgRaw, Texture2D bgTex,
+        RectTransform titleRt, CanvasGroup titleCg, RectTransform ruleRt, CanvasGroup subCg, List<RectTransform> sparkles)
     {
-        float inDur = 0.14f, holdDur = 0.22f, outDur = 0.34f;
-        float t = 0f;
-        while (go && cg && t < inDur)
+        float inDur = 0.16f, holdDur = 0.48f, outDur = 0.36f;
+        float totalDur = inDur + holdDur + outDur;
+        float elapsed = 0f;
+
+        Vector2 cardHome = cardRt ? cardRt.anchoredPosition : Vector2.zero;
+        float baseU = 0f, panSpan = 0.055f, visW = 1f - panSpan;
+        float visH = 1f, baseV = 0f;
+        if (bgRaw && bgTex && cardRt)
         {
-            t += Time.unscaledDeltaTime;
-            float p = Mathf.Clamp01(t / inDur);
-            cg.alpha = p;
-            if (badgeRt && qualityTier >= 2)
-                badgeRt.localScale = Vector3.one * Mathf.Lerp(0.88f, 1f, 1f - Mathf.Pow(1f - p, 3f));
-            yield return null;
+            float boxAspect = (cardRt.sizeDelta.x - 20f) / Mathf.Max(1f, cardRt.sizeDelta.y - 20f);
+            float imgAspect = (float)bgTex.width / Mathf.Max(1, bgTex.height);
+            float zoomedImgAspect = imgAspect * visW;
+            if (zoomedImgAspect < boxAspect)
+            {
+                visH = zoomedImgAspect / boxAspect;
+                baseV = (1f - visH) * 0.36f;
+            }
+            bgRaw.uvRect = new Rect(0f, baseV, visW, visH);
         }
-        if (cg) cg.alpha = 1f;
-        if (badgeRt) badgeRt.localScale = Vector3.one;
-        float h = 0f;
-        while (go && h < holdDur) { h += Time.unscaledDeltaTime; yield return null; }
-        t = 0f;
-        while (go && cg && t < outDur)
+
+        while (go && cg && elapsed < totalDur)
         {
-            t += Time.unscaledDeltaTime;
-            cg.alpha = 1f - Mathf.Clamp01(t / outDur);
+            elapsed += Mathf.Clamp(Time.unscaledDeltaTime, 0.001f, 0.033f);
+            float totalP = Mathf.Clamp01(elapsed / totalDur);
+
+            if (bgRaw)
+                bgRaw.uvRect = new Rect(Mathf.SmoothStep(baseU, panSpan, totalP), baseV, visW, visH);
+
+            if (sparkles != null)
+            {
+                for (int i = 0; i < sparkles.Count; i++)
+                {
+                    var sp = sparkles[i];
+                    if (!sp) continue;
+                    float phase = totalP * 6.28318f + i * 0.7f;
+                    sp.localScale = Vector3.one * (0.65f + 0.45f * Mathf.Sin(phase));
+                    sp.localRotation = Quaternion.Euler(0f, 0f, elapsed * (i % 2 == 0 ? 48f : -42f));
+                }
+            }
+
+            if (elapsed <= inDur)
+            {
+                float p = Mathf.Clamp01(elapsed / inDur);
+                float ease = 1f - Mathf.Pow(1f - p, 3f);
+                cg.alpha = ease;
+                if (cardRt)
+                {
+                    float s = qualityTier >= 2 ? EvalOutBack(p, 0.88f, 1.0f, 1.3f) : Mathf.Lerp(0.90f, 1.0f, ease);
+                    cardRt.localScale = Vector3.one * s;
+                }
+            }
+            else if (elapsed <= inDur + holdDur)
+            {
+                cg.alpha = 1f;
+                if (cardRt) cardRt.localScale = Vector3.one;
+            }
+            else
+            {
+                float p = Mathf.Clamp01((elapsed - inDur - holdDur) / outDur);
+                float ease = p * p * (3f - 2f * p);
+                cg.alpha = 1f - ease;
+                if (cardRt)
+                {
+                    cardRt.anchoredPosition = cardHome + new Vector2(0f, ease * 28f);
+                    cardRt.localScale = Vector3.one * Mathf.Lerp(1f, 1.03f, ease);
+                }
+            }
+
+            // 书法名家集字与饰线错峰揭幕（0.24s 内全部到位，确保高潮定格饱满清晰）
+            float titleP = Mathf.Clamp01((elapsed - 0.03f) / 0.20f);
+            float titleEase = 1f - Mathf.Pow(1f - titleP, 3f);
+            if (titleCg) titleCg.alpha = titleEase;
+            if (titleRt) titleRt.localScale = Vector3.one * Mathf.Lerp(1.13f, 1f, titleEase);
+
+            float ruleP = Mathf.Clamp01((elapsed - 0.06f) / 0.18f);
+            if (ruleRt) ruleRt.localScale = new Vector3(1f - Mathf.Pow(1f - ruleP, 3f), 1f, 1f);
+
+            float subP = Mathf.Clamp01((elapsed - 0.09f) / 0.17f);
+            if (subCg) subCg.alpha = 1f - Mathf.Pow(1f - subP, 2f);
+
             yield return null;
         }
         if (go) Destroy(go);
         if (regionCurtainGo == go) regionCurtainGo = null;
+        regionCurtainCo = null;
     }
 
     void SpawnMapRipple(Vector2 mapPos, Color col, float maxSize = 140f)

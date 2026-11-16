@@ -102,7 +102,7 @@ public partial class DemoBootstrap
         hasForecastSignature = false;
         RefreshSceneryViews(); RefreshPendingBadge(); RefreshFeatureGateVisuals(); UpdateStoryObjectiveBanner();
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome();
-        if (!RegionUnlocked(currentRegion)) SwitchRegion("香港");
+        if (!RegionUnlocked(currentRegion)) SwitchRegion("青屿");
         RefreshHUD(); RefreshUndoButton(); SaveGame(); Toast("已撤销：" + state.label);
     }
 }

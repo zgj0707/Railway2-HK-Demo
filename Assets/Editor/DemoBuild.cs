@@ -18,8 +18,8 @@ public class DemoBuild
         EditorSceneManager.SaveScene(scene, scenePath);
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
 
-        PlayerSettings.companyName = "Railway2";
-        PlayerSettings.productName = "Railway2 HK Demo";
+        PlayerSettings.companyName = "山海铁道社";
+        PlayerSettings.productName = "山海铁道志";
         PlayerSettings.defaultScreenWidth = 1080;
         PlayerSettings.defaultScreenHeight = 1920;
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;

@@ -83,7 +83,7 @@ public class PageHeaderLayout : MonoBehaviour
             title.pivot = new Vector2(0, 1);
             float titleX = help ? 330 : 254;
             title.anchoredPosition = leftTop + new Vector2(titleX, -45);
-            float rightPadding = coinBadge ? 256 : 28;
+            float rightPadding = coinBadge ? Mathf.Max(256f, coinBadge.sizeDelta.x + 36f) : 28f;
             title.sizeDelta = new Vector2(Mathf.Max(120f, rightTop.x - leftTop.x - titleX - rightPadding), 60);
         }
 

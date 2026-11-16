@@ -182,7 +182,7 @@ public partial class DemoBootstrap
         int n = line.st.Count;
         if (!IsLoop(line.st) && n > 3 && seg > 0 && seg < n - 2) {
             var head = line.st.GetRange(0, seg + 1); var tailPath = line.st.GetRange(seg + 1, n - seg - 1);
-            foreach (string region in new[] { "香港", "澳门", "广东" }) {
+            foreach (string region in new[] { "青屿", "镜汀", "锦川" }) {
                 int after = RegionLineCount(region) - (PathTouchesRegion(line.st, region) ? 1 : 0)
                     + (PathTouchesRegion(head, region) ? 1 : 0) + (PathTouchesRegion(tailPath, region) ? 1 : 0);
                 if (after > RegionLineLimit(region)) { Toast(region + "线路已达上限，无法拆分该段"); return; }

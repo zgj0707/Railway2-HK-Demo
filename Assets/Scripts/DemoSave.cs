@@ -67,7 +67,7 @@ public partial class DemoBootstrap
         public List<int> themes = new List<int>();
         public List<string> adKeys = new List<string>(); public List<int> adCounts = new List<int>();
         public List<int> trialThemes = new List<int>(); public List<long> trialEnds = new List<long>();
-        public string companyName = "湾区铁道社";
+        public string companyName = "山海铁道社";
         public int companySeal, companyPolicy, bondDaysLeft, lastPolicyDay = -1, lastAdSubsidyDay = -1, dailyTaskClaimedDay = -1;
         public int bondPrincipal, bondDailyDue, bondsRepaid, consultantId = -1, consultantDaysLeft, economyCycle, nextEconomyCycle = 1, turboDaysLeft, autoDispatchDaysLeft, lastAwardDay;
         public bool bondSubsidized;
@@ -81,6 +81,9 @@ public partial class DemoBootstrap
         public List<SavedTalent> talentPool = new List<SavedTalent>();
         public int nextTalentId = 1, lastTalentRefreshDay = -1;
         public int lastReadNoticeDay = -1;
+        public List<string> memorialPlaques = new List<string>();
+        public List<string> memorialTickets = new List<string>();
+        public int retiredVehiclesCount;
     }
     bool saveReady, saveBlocked; float autosaveTimer;
     string StationSaveKey(Station station) { return station.region + ":" + station.name; }
@@ -148,7 +151,7 @@ public partial class DemoBootstrap
             if (!IsThemeAvailable(currentTheme)) currentTheme = 0;
             coins=data.coins; diamonds=data.diamonds; rp=data.rp; day=Mathf.Max(1,data.day); dayClock=data.clock; researchClock=data.researchClock; timeSpeed=data.speed;
             nextLineId=data.nextId; dailyStationBaseline=data.dailyBaseline; macauUnlocked=data.macau; guangdongUnlocked=data.guangdong; loanOutstanding=data.loan; musicEnabled=data.music;
-            companyName = string.IsNullOrWhiteSpace(data.companyName) ? "湾区铁道社" : data.companyName.Trim();
+            companyName = string.IsNullOrWhiteSpace(data.companyName) ? "山海铁道社" : data.companyName.Trim();
             companySeal = Mathf.Clamp(data.companySeal, 0, CompanySealChars.Length - 1);
             companyPolicy = Mathf.Clamp(data.companyPolicy, 0, CompanyPolicyNames.Length - 1);
             bondDaysLeft = Mathf.Max(0, data.bondDaysLeft);
@@ -180,11 +183,17 @@ public partial class DemoBootstrap
             nextTalentId = Mathf.Max(1, data.nextTalentId);
             lastTalentRefreshDay = data.lastTalentRefreshDay;
             lastReadNoticeDay = data.lastReadNoticeDay;
+            earnedPlaques.Clear();
+            if (data.memorialPlaques != null) foreach (string pk in data.memorialPlaques) if (!string.IsNullOrEmpty(pk) && !earnedPlaques.Contains(pk)) earnedPlaques.Add(pk);
+            earnedMemorialTickets.Clear();
+            if (data.memorialTickets != null) foreach (string tk in data.memorialTickets) if (!string.IsNullOrEmpty(tk) && !earnedMemorialTickets.Contains(tk)) earnedMemorialTickets.Add(tk);
+            retiredVehiclesCount = Mathf.Max(0, data.retiredVehiclesCount);
             storyStage = Mathf.Max(0, data.storyStage);
             tutorialSkipped = data.tutorialSkipped;
             EnsureCompanyInitialized();
             EnsureTalentsInitialized();
             SyncStoryProgression(false);
+            SyncCulturalCollection(false);
             lastPolicyDay = data.lastPolicyDay; lastAdSubsidyDay = data.lastAdSubsidyDay; dailyTaskClaimedDay = data.dailyTaskClaimedDay;
             savedRegion=data.region;
             saveBlocked = false;
@@ -209,7 +218,9 @@ public partial class DemoBootstrap
             } catch {}
         }
         try {
-            var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=(previewRestoreTheme >= 0 ? previewRestoreTheme : currentTheme), companyName=companyName, companySeal=companySeal, companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, bondPrincipal=bondPrincipal, bondDailyDue=bondDailyDue, bondsRepaid=bondsRepaid, bondSubsidized=bondSubsidized, consultantId=consultantId, consultantDaysLeft=consultantDaysLeft, economyCycle=economyCycle, nextEconomyCycle=nextEconomyCycle, turboDaysLeft=turboDaysLeft, autoDispatchDaysLeft=autoDispatchDaysLeft, lastAwardDay=lastAwardDay, lastPolicyDay=lastPolicyDay, lastAdSubsidyDay=lastAdSubsidyDay, dailyTaskClaimedDay=dailyTaskClaimedDay, storyStage=storyStage, tutorialSkipped=tutorialSkipped, nextTalentId=nextTalentId, lastTalentRefreshDay=lastTalentRefreshDay, lastReadNoticeDay=lastReadNoticeDay };
+            var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=(previewRestoreTheme >= 0 ? previewRestoreTheme : currentTheme), companyName=companyName, companySeal=companySeal, companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, bondPrincipal=bondPrincipal, bondDailyDue=bondDailyDue, bondsRepaid=bondsRepaid, bondSubsidized=bondSubsidized, consultantId=consultantId, consultantDaysLeft=consultantDaysLeft, economyCycle=economyCycle, nextEconomyCycle=nextEconomyCycle, turboDaysLeft=turboDaysLeft, autoDispatchDaysLeft=autoDispatchDaysLeft, lastAwardDay=lastAwardDay, lastPolicyDay=lastPolicyDay, lastAdSubsidyDay=lastAdSubsidyDay, dailyTaskClaimedDay=dailyTaskClaimedDay, storyStage=storyStage, tutorialSkipped=tutorialSkipped, nextTalentId=nextTalentId, lastTalentRefreshDay=lastTalentRefreshDay, lastReadNoticeDay=lastReadNoticeDay, retiredVehiclesCount=retiredVehiclesCount };
+            data.memorialPlaques.AddRange(earnedPlaques);
+            data.memorialTickets.AddRange(earnedMemorialTickets);
             data.boardPartners.AddRange(boardPartners);
             data.contracts.AddRange(activeContracts);
             data.coTech.AddRange(companyTechDone);
@@ -248,7 +259,7 @@ public partial class DemoBootstrap
             var check = JsonUtility.FromJson<SaveData>(raw);
             if (check != null && check.version == 1)
             {
-                string reg = string.IsNullOrEmpty(check.region) ? "香港" : DisplayPlaceAliases(check.region);
+                string reg = string.IsNullOrEmpty(check.region) ? "青屿" : DisplayPlaceAliases(check.region);
                 int lc = check.lines != null ? check.lines.Count : 0;
                 int tc = check.tech != null ? check.tech.Count : 0;
                 return "第 " + Mathf.Max(1, check.day) + " 日" + reg + "测试存档（" + lc + " 条线路 · " + tc + " 项科技 · " + FormatCoins(check.coins) + " 资金）";
@@ -286,12 +297,12 @@ public partial class DemoBootstrap
 
         EnsureCompanyInitialized();
         if (!IsThemeAvailable(currentTheme)) currentTheme = 0;
-        string dest = (!string.IsNullOrEmpty(savedRegion) && RegionUnlocked(savedRegion)) ? savedRegion : "香港";
+        string dest = (!string.IsNullOrEmpty(savedRegion) && RegionUnlocked(savedRegion)) ? savedRegion : "青屿";
         FreezeRegionTraffic();
         currentRegion = dest;
-        if (hkMapArt) hkMapArt.SetActive(currentRegion == "香港");
-        if (macauMapArt) macauMapArt.SetActive(currentRegion == "澳门");
-        if (guangdongMapArt) guangdongMapArt.SetActive(currentRegion == "广东");
+        if (hkMapArt) hkMapArt.SetActive(currentRegion == "青屿");
+        if (macauMapArt) macauMapArt.SetActive(currentRegion == "镜汀");
+        if (guangdongMapArt) guangdongMapArt.SetActive(currentRegion == "锦川");
         if (mapRect)
         {
             mapRect.localScale = Vector3.one;
@@ -310,7 +321,7 @@ public partial class DemoBootstrap
                 if (texts.Length > 1) texts[1].text = DisplayPlaceAliases(PortalSubtitle(stations[i], currentRegion));
             }
         }
-        if (regionTitle) regionTitle.text = DisplayPlaceAliases(currentRegion == "香港" ? "香 港" : currentRegion == "澳门" ? "澳 门" : "广 东");
+        if (regionTitle) regionTitle.text = DisplayPlaceAliases(currentRegion == "青屿" ? "青 屿" : currentRegion == "镜汀" ? "镜 汀" : "锦 川");
         RefreshSceneryViews();
         UpdateStationLabelSizes(1f);
         LayoutStationLabels();

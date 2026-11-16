@@ -21,8 +21,8 @@ public partial class DemoBootstrap
     readonly Dictionary<string, HistoryNode> historyByKey = new Dictionary<string, HistoryNode>();
     static readonly string[] LocoNames = {
         "潘尼达伦", "萨拉曼卡", "喷气比利", "旅行者一号", "火箭号", "约翰牛", "鹰号", "仙女皇后", "纽约中央 999",
-        "飞翔的苏格兰人", "野鸭号", "大男孩型", "东风 4B 型", "TGV 东南型",
-        "CRH2A 和谐号", "CR400AF 复兴号"
+        "飞翔的苏格兰人", "野鸭号", "大男孩型", "南风 4B 型", "TGV 东南型",
+        "CH-2A 和韵号", "CH-400 天工号"
     };
     static readonly string[] LocoYears = {
         "1804", "1812", "1813", "1825", "1829", "1831", "1835", "1855", "1893",
@@ -47,8 +47,9 @@ public partial class DemoBootstrap
     TechCoinWidget historyCoinWidget;
     readonly HashSet<string> historyAnimated = new HashSet<string>();
     readonly Dictionary<string, Vector2> historyPositions = new Dictionary<string, Vector2>();
+    readonly Dictionary<string, Vector2> coTechPositions = new Dictionary<string, Vector2>();
     readonly Dictionary<string, RectTransform> historyNodeRects = new Dictionary<string, RectTransform>();
-    float historyZoom = 1f;
+    float historyZoom = 1f, coTechScrollX = 0.5f, coTechScrollY = 0.5f, coTechZoom = 1f;
     HistoryTooltipFollow historyTooltipFollow;
     string historyJustUnlocked;
     GameObject historyPage;
@@ -105,15 +106,11 @@ public partial class DemoBootstrap
     }
     bool IsTechEraUnlocked(int era)
     {
-        if (era <= 0) return true;
-        InitHistoryTree();
-        if (era == 1) return EraTechDoneCount(0) >= 5 || day >= 5 || macauUnlocked || guangdongUnlocked;
-        return EraTechDoneCount(1) >= 4 || guangdongUnlocked || CrossBaySynergyLinkCount() >= 2;
+        return era == 0;
     }
     string EraUnlockHint(int era)
     {
-        if (era == 1) return "解锁条件：十九世纪研究满 5 项，或运营满 5 天 / 开通澳门或广东线网";
-        return "解锁条件：二十世纪研究满 4 项，或开通广东版图 / 至少 2 条跨湾通道协同";
+        return "暂未开放 · 后续纪元敬请期待";
     }
     void InitHistoryTree()
     {
@@ -192,19 +189,19 @@ public partial class DemoBootstrap
         AddEraHistory(1, 1972, ResearchEffect.Track, "ac_electrification", "工频交流电气化", 5, "25 kV 架空接触网为干线注入稳定高功率，构筑高速动车组能源底座。", "diesel_traction", LocoKey(10));
         AddEraHistoryLoco(1, 13, "1981 年开启商业高速铁路纪元，以 270 km/h 级电力动车组重塑城际通勤。", "ac_electrification");
         AddEraHistoryLoco(1, 12, "大功率电传动内燃主力机车代表，兼顾繁忙客运特快与重型干线编组。", "diesel_traction");
-        AddEraHistory(1, 1992, ResearchEffect.Demand, "bay_intercity_comm", "区域跨城直通联运", 5, "推动广九港珠干线票务互认与跨城直通时刻协调，激发湾区城际出行动能。", LocoKey(13), LocoKey(12));
+        AddEraHistory(1, 1992, ResearchEffect.Demand, "bay_intercity_comm", "区域跨城直通联运", 5, "推动沧溟跨湾干线票务互认与跨城直通时刻协调，激发山海城际出行动能。", LocoKey(13), LocoKey(12));
 
         // 二十一世纪 · 高速智行卷册（2000—2025+）
         AddEraHistory(2, 2002, ResearchEffect.Capacity, "cbtc_signaling", "CBTC 移动闭塞列控", 6, "无线车地双向通信实现精细追踪间隔控制，让高峰高密发车从容高效。");
         AddEraHistory(2, 2005, ResearchEffect.Track, "ballastless_track", "无砟轨道精调技术", 5, "毫米级高精度无砟道床兼顾 300+ km/h 平顺舒适度与更低长周期养护开销。", "cbtc_signaling");
         AddEraHistoryLoco(2, 14, "轻量化铝合金动力分散型高速动车组，加速迅猛且兼顾大客流城际公交化运营。", "cbtc_signaling", "ballastless_track");
         AddEraHistory(2, 2010, ResearchEffect.Vehicle, "regen_braking", "再生制动能量回馈", 6, "进站制动电能高效回馈牵引供电网供邻车复用，大幅压低整线牵引电耗。", LocoKey(14));
-        AddEraHistory(2, 2013, ResearchEffect.Demand, "immersed_tunnel", "跨海沉管隧道工程", 5, "深水沉管隧道与超长跨海大桥彻底打通珠江口天堑，激活跨湾超级客流走廊。", "ballastless_track");
-        AddEraHistoryLoco(2, 15, "智能高速标准动车组标杆，极低气动阻力与高可靠冗余裕度领衔湾区主干网。", LocoKey(14), "regen_braking");
+        AddEraHistory(2, 2013, ResearchEffect.Demand, "immersed_tunnel", "跨海沉管隧道工程", 5, "深水沉管隧道与超长跨海大桥彻底打通沧海湾口天堑，激活跨湾超级客流走廊。", "ballastless_track");
+        AddEraHistoryLoco(2, 15, "智能高速标准动车组标杆，极低气动阻力与高可靠冗余裕度领衔山海主干网。", LocoKey(14), "regen_braking");
         AddEraHistory(2, 2019, ResearchEffect.Station, "smart_hub_ato", "智慧站台与 ATO 自动驾驶", 6, "全自动折返、精准停靠与站内智慧导乘协同，显著放大综合枢纽日吞吐容量。", "immersed_tunnel", LocoKey(15));
         AddEraHistory(2, 2021, ResearchEffect.Transfer, "seamless_transfer", "四网融合一码无感换乘", 6, "国铁干线、城际铁路与城市地铁安检互认、票制融通，消弭跨线换乘时间摩擦。", "smart_hub_ato");
         AddEraHistory(2, 2023, ResearchEffect.Speed, "ai_dynamic_dispatch", "AI 潮汐动态重联", 6, "根据实时客流热力自动重联加开潮汐班次，全面拉升跨湾列车全网直达旅行速度。", LocoKey(15), "seamless_transfer");
-        AddEraHistory(2, 2025, ResearchEffect.Demand, "bay_integrated_grid", "大湾区一小时超级铁路圈", 7, "港澳与珠三角九城轨道全域闭环直通，开创同城化超级湾区新纪元。", "ai_dynamic_dispatch", "seamless_transfer");
+        AddEraHistory(2, 2025, ResearchEffect.Demand, "bay_integrated_grid", "山海一小时超级铁路圈", 7, "双屿与锦川九城轨道全域闭环直通，开创同城化山海湾新纪元。", "ai_dynamic_dispatch", "seamless_transfer");
 
     }
     bool HistoryVisible(HistoryNode node)
@@ -371,6 +368,25 @@ public partial class DemoBootstrap
         }
         historyInfo.text = DisplayPlaceAliases(HistoryPeriod(node) + " · 研发 " + costPart + "\n" + node.description + "\n" + effect + " · " + state + estimate);
     }
+    void HoldCoTechNode(string key)
+    {
+        EnsureCoTechIndexBuilt();
+        if (!historyInfoPanel || !coTechByKey.TryGetValue(key, out var node)) return;
+        if (historyInfoRect) historyInfoRect.sizeDelta = new Vector2(900, 324);
+        historyInfoPanel.SetActive(true);
+        if (historyTooltipFollow && historyNodeRects.TryGetValue(key, out var target)) historyTooltipFollow.target = target;
+        historyHeading.text = DisplayPlaceAliases(node.title + "  ·  " + CoTechBranchNames[Mathf.Clamp(node.branch, 0, CoTechBranchNames.Length - 1)]);
+        string missing = "";
+        if (node.parents != null)
+            foreach (string p in node.parents)
+                if (!HasCoTech(p) && coTechByKey.TryGetValue(p, out var pn)) missing += (missing.Length == 0 ? "" : "、") + pn.title;
+        string costPart = node.costCoins <= 0 && node.costRp <= 0
+            ? "起始免费颁行"
+            : ("¥" + FormatCoins(node.costCoins) + (node.costRp > 0 ? " · " + node.costRp + " RP" : ""));
+        string state = HasCoTech(node.key) ? "已掌握 ✓" : missing.Length > 0 ? "前置：" + missing : "点击立研";
+        string cleanDesc = string.IsNullOrEmpty(node.desc) ? "" : node.desc.Replace(" 年", "年");
+        historyInfo.text = DisplayPlaceAliases(node.periodLabel + " · 研发 " + costPart + "\n" + cleanDesc + "\n效用：" + node.effectSummary + " · " + state);
+    }
     void HoldRpRules()
     {
         if (!historyInfoPanel) return;
@@ -501,33 +517,49 @@ public partial class DemoBootstrap
         if (year < 1870) return 4;
         return 5;
     }
-    Vector2 HistoryPosition(string key)
+    Vector2 HistoryPosition(string key) => ResolveTreePosition(key, historyPositions, key => historyByKey.TryGetValue(key, out var n) ? n.parents : null, key => historyByKey.TryGetValue(key, out var n) ? historyNodes.IndexOf(n) : 0);
+
+    Vector2 CoTechPosition(string key)
     {
-        if (historyPositions.TryGetValue(key, out var position)) return position;
-        var node = historyByKey[key];
-        if (node.parents.Length == 0) return historyPositions[key] = Vector2.zero;
-        Vector2 origin = Vector2.zero; int count = 0;
-        foreach (var parent in node.parents)
-            if (historyPositions.TryGetValue(parent, out var p)) { origin += p; count++; }
-        if (count > 0) origin /= count;
-        int index = historyNodes.IndexOf(node);
-        float angle = index * 2.399963f;
-        return historyPositions[key] = origin + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * 160f;
+        EnsureCoTechIndexBuilt();
+        return ResolveTreePosition(key, coTechPositions,
+            k => coTechByKey.TryGetValue(k, out var n) ? n.parents : null,
+            k => Array.FindIndex(CompanyTechNodes, x => x.key == k));
     }
-    void TickResearch(float dt) { }
-    void OpenTechScreen(int mode = 0)
+
+    Vector2 ResolveTreePosition(string key, Dictionary<string, Vector2> posMap, Func<string, string[]> getParents, Func<string, int> getIndex)
     {
-        // mode == 0：重新进入科技树界面时清空本次解锁暂留名单并自动收纳全部已解锁节点；mode == 1：停留在页面内刷新，本次解锁节点留在外面
+        if (posMap.TryGetValue(key, out var position)) return position;
+        var parents = getParents(key);
+        if (parents == null || parents.Length == 0) return posMap[key] = Vector2.zero;
+        Vector2 origin = Vector2.zero; int count = 0;
+        foreach (string parent in parents)
+            if (posMap.TryGetValue(parent, out var p)) { origin += p; count++; }
+        if (count > 0) origin /= count;
+        int index = Mathf.Max(0, getIndex(key));
+        float angle = index * 2.399963f;
+        return posMap[key] = origin + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * 160f;
+    }
+
+    void TickResearch(float dt) { }
+    void OpenTechScreen(int mode = 0) => OpenConcentricTechScreen(false, mode);
+
+    void OpenConcentricTechScreen(bool isCorporate, int mode = 0)
+    {
+        techTreeTab = isCorporate ? 1 : 0;
         if (mode == 0)
         {
-            techCollapseDone = true;
-            techSessionUnlocked.Clear();
+            if (isCorporate) { coTechCollapseDone = true; coTechSessionUnlocked.Clear(); }
+            else { techCollapseDone = true; techSessionUnlocked.Clear(); }
         }
         InitHistoryTree();
+        EnsureCompanyTechMigrated();
         if (!IsTechEraUnlocked(currentTechEra)) currentTechEra = 0;
         currentTechEra = Mathf.Clamp(currentTechEra, 0, 2);
-        int eraTotalCount = EraTechNodeCount(currentTechEra);
-        int eraDoneCount = EraTechDoneCount(currentTechEra);
+        int activeEra = isCorporate ? 0 : currentTechEra;
+        int eraTotalCount = isCorporate ? CoTechEraNodeCount(0) : EraTechNodeCount(activeEra);
+        int eraDoneCount = isCorporate ? CoTechEraDoneCount(0) : EraTechDoneCount(activeEra);
+
         ClosePage(false); pageBack = null; CloseLineBubble(); eraJournalModal = null;
         var page = Rect("HistoryFullScreen", canvas.transform, 0, 0, 0, 0);
         var pageRt = page.GetComponent<RectTransform>(); pageRt.anchorMin = Vector2.zero; pageRt.anchorMax = Vector2.one; pageRt.offsetMin = pageRt.offsetMax = Vector2.zero;
@@ -535,7 +567,6 @@ public partial class DemoBootstrap
         pageRoot = page; historyPage = page;
         SyncRegionalMusic(false);
 
-        // 远景景深视差层（随拖拽 0.42× 慢速位移，营造裸眼 3D 立体纵深）
         var farLayer = Rect("FarParallaxLayer", page.transform, 0, 0, 0, 0);
         var farRt = farLayer.GetComponent<RectTransform>(); farRt.anchorMin = Vector2.zero; farRt.anchorMax = Vector2.one; farRt.offsetMin = farRt.offsetMax = Vector2.zero;
         if (!historyCircleOutline) historyCircleOutline = MakeRing(512, 2f);
@@ -563,19 +594,23 @@ public partial class DemoBootstrap
         const float cw = 8000, ch = 8000;
         var content = Rect("HistoryTree", view.transform, 0, 0, cw, ch);
         var rt = content.GetComponent<RectTransform>(); rt.anchorMin = rt.anchorMax = new Vector2(0, 1); rt.pivot = new Vector2(0, 1); rt.anchoredPosition = Vector2.zero; scroll.content = rt;
-        rt.localScale = Vector3.one * historyZoom;
-        scroll.horizontalNormalizedPosition = historyScrollX; scroll.verticalNormalizedPosition = historyScrollY;
-        scroll.onValueChanged.AddListener(v => { historyScrollX = v.x; historyScrollY = v.y; });
+        rt.localScale = Vector3.one * (isCorporate ? coTechZoom : historyZoom);
+        scroll.horizontalNormalizedPosition = isCorporate ? coTechScrollX : historyScrollX;
+        scroll.verticalNormalizedPosition = isCorporate ? coTechScrollY : historyScrollY;
+        scroll.onValueChanged.AddListener(v => {
+            if (isCorporate) { coTechScrollX = v.x; coTechScrollY = v.y; }
+            else { historyScrollX = v.x; historyScrollY = v.y; }
+        });
         var zoom = view.AddComponent<HistoryGraphZoom>(); zoom.viewport = viewRt; zoom.content = rt; zoom.scroll = scroll;
-        zoom.scale = historyZoom; zoom.onScaleChanged = value => historyZoom = value; zoom.onPinch = SetHistoryDragging;
+        zoom.scale = isCorporate ? coTechZoom : historyZoom;
+        zoom.onScaleChanged = value => { if (isCorporate) coTechZoom = value; else historyZoom = value; };
+        zoom.onPinch = SetHistoryDragging;
         var drag = view.AddComponent<HistoryDragFeedback>(); drag.callback = SetHistoryDragging;
         var parallax = view.AddComponent<HistoryParallaxLayer>(); parallax.content = rt; parallax.target = farRt;
 
-        string[] eras = currentTechEra == 0
-            ? new[] { "1800s · 蒸汽萌芽", "1810s · 矿道初试", "1820s · 公共铁路", "1830—1849 · 制式确立", "1850—1869 · 干线时代", "1870—1899 · 电气前夜" }
-            : currentTechEra == 1
-            ? new[] { "1900—1919 · 过热蒸汽", "1920—1934 · 流线特快", "1935—1949 · 自动闭塞", "1950—1969 · 复线内燃", "1970—1984 · 电气干线", "1985—1999 · 区域联运" }
-            : new[] { "2000—2005 · 移动闭塞", "2006—2009 · 动车时代", "2010—2014 · 跨海沉管", "2015—2017 · 复兴标杆", "2018—2021 · 四网融合", "2022+ · 湾区一体网" };
+        string[] eras = isCorporate
+            ? new[] { "1800—1829 · 矿轨契约与立社", "1830—1845 · 清算萌芽与标准时", "1846—1864 · 干线整并与融资", "1865—1879 · 总社科层与远东初探", "1880—1889 · 港埠骑楼与年审", "1890—1899 · 海湾口岸与银团" }
+            : new[] { "1800s · 蒸汽萌芽", "1810s · 矿道初试", "1820s · 公共铁路", "1830—1849 · 制式确立", "1850—1869 · 干线时代", "1870—1899 · 电气前夜" };
         for (int i = 5; i >= 0; i--)
         {
             float radius = 270 + i * 230;
@@ -583,88 +618,107 @@ public partial class DemoBootstrap
             Img(circle, new Color(0.58f, 0.45f, 0.30f, 0.20f), historyCircleOutline).raycastTarget = false;
             var outerHair = Rect("EraCircleHair" + i, content.transform, 4000 - (radius + 6), 4000 - (radius + 6), (radius + 6) * 2, (radius + 6) * 2);
             Img(outerHair, new Color(0.58f, 0.45f, 0.30f, 0.08f), historyCircleOutline).raycastTarget = false;
-            var eraLbl = Txt(content.transform, "◆  " + eras[i], 25, new Color(0.42f, 0.33f, 0.23f, 0.92f), 4012, 4000 + radius + 12, 360, 38, TextAnchor.MiddleLeft);
+            var eraLbl = Txt(content.transform, "◆  " + eras[i], 25, new Color(0.42f, 0.33f, 0.23f, 0.92f), 4012, 4000 + radius + 12, 430, 38, TextAnchor.MiddleLeft);
             eraLbl.fontStyle = FontStyle.Normal; eraLbl.raycastTarget = false;
         }
         var edgeGo = Rect("HistoryEdges", content.transform, 0, 0, cw, ch);
         var edges = edgeGo.AddComponent<HistoryGraphEdges>(); edges.lineSprite = spriteWhite;
+        var posMap = isCorporate ? coTechPositions : historyPositions;
         var layout = content.AddComponent<HistoryGraphLayout>();
-        layout.positions = historyPositions; layout.edges = edges;
+        layout.positions = posMap; layout.edges = edges;
         layout.updatesPerSecond = 120f;
         var graphRects = new Dictionary<string, RectTransform>();
         historyNodeRects.Clear();
 
+        bool collapseFlag = isCorporate ? coTechCollapseDone : techCollapseDone;
+        var sessionSet = isCorporate ? coTechSessionUnlocked : techSessionUnlocked;
+        Func<string, bool> isDoneFn = k => isCorporate ? companyTechDone.Contains(k) : techDone.Contains(k);
+        Func<string, bool> isInHub = k => collapseFlag && isDoneFn(k) && !sessionSet.Contains(k);
+
         int hubCollapsedCount = 0;
-        if (techCollapseDone) foreach (var node in historyNodes) if (node.era == currentTechEra && techDone.Contains(node.key) && !techSessionUnlocked.Contains(node.key)) hubCollapsedCount++;
-        bool collapsed = techCollapseDone && hubCollapsedCount > 0;
+        if (collapseFlag)
+        {
+            if (isCorporate)
+            {
+                for (int i = 0; i < CompanyTechNodes.Length; i++)
+                    if (CompanyTechNodes[i].eraGroup == 0 && isInHub(CompanyTechNodes[i].key)) hubCollapsedCount++;
+            }
+            else
+            {
+                foreach (var node in historyNodes)
+                    if (node.era == activeEra && isInHub(node.key)) hubCollapsedCount++;
+            }
+        }
+        bool collapsed = collapseFlag && hubCollapsedCount > 0;
         const string HubKey = "__completed_hub__";
         if (collapsed)
         {
-            historyPositions[HubKey] = Vector2.zero;
+            posMap[HubKey] = Vector2.zero;
             const float hubSize = 370f;
             var hubGo = Rect("CompletedHub", content.transform, 4000f - hubSize * 0.5f, 4000f - hubSize * 0.5f, hubSize, hubSize);
             var hubRt = hubGo.GetComponent<RectTransform>();
             graphRects[HubKey] = hubRt;
             layout.Add(HubKey, hubRt, -1, Array.Empty<string>());
 
-            // 多层典藏徽章圆盘视觉（使用高分抗锯齿实心圆底盘 + 立体浮雕暗底托）
             var hub3dShadow = Rect("Hub3DBase", hubGo.transform, -10, -12, hubSize + 4, hubSize + 4);
             Img(hub3dShadow, new Color(0.14f, 0.17f, 0.26f, 0.34f), historyHubDiscSprite).raycastTarget = false;
             var outerDisc = Rect("HubOuter", hubGo.transform, 0, 0, hubSize, hubSize);
-            Img(outerDisc, new Color(0.76f, 0.56f, 0.25f, 0.98f), historyHubDiscSprite).raycastTarget = false;
+            Img(outerDisc, isCorporate ? new Color(0.24f, 0.52f, 0.42f, 0.98f) : new Color(0.76f, 0.56f, 0.25f, 0.98f), historyHubDiscSprite).raycastTarget = false;
             var midDisc = Rect("HubMid", hubGo.transform, 10, 10, hubSize - 20, hubSize - 20);
             Img(midDisc, new Color(0.27f, 0.22f, 0.17f, 0.95f), historyHubDiscSprite).raycastTarget = false;
             var innerDisc = Rect("HubInner", hubGo.transform, 18, 18, hubSize - 36, hubSize - 36);
             Img(innerDisc, new Color(0.985f, 0.968f, 0.928f), historyHubDiscSprite).raycastTarget = true;
 
-            string romanCentury = currentTechEra == 0 ? "XIX" : currentTechEra == 1 ? "XX" : "XXI";
-            string subLabel = techSessionUnlocked.Count > 0 ? "本次新解 " + techSessionUnlocked.Count + " 项外留" : "— " + romanCentury + " CENTURY —";
+            string subLabel = sessionSet.Count > 0 ? "本次新解 " + sessionSet.Count + " 项外留" : "— XIX CENTURY —";
             var hubSub = Txt(hubGo.transform, subLabel, 21, new Color(0.56f, 0.42f, 0.22f), 24, 256, hubSize - 48, 34, TextAnchor.MiddleCenter);
             hubSub.fontStyle = FontStyle.Normal; hubSub.raycastTarget = false;
-            var hubTitle = Txt(hubGo.transform, "已研典藏图谱", 32, Ink, 24, 208, hubSize - 48, 46, TextAnchor.MiddleCenter);
+            var hubTitle = Txt(hubGo.transform, isCorporate ? "已研商道图谱" : "已研典藏图谱", 32, Ink, 24, 208, hubSize - 48, 46, TextAnchor.MiddleCenter);
             hubTitle.fontStyle = FontStyle.Normal; hubTitle.raycastTarget = false;
             var hubCount = Txt(hubGo.transform, hubCollapsedCount + " / " + eraTotalCount, 48, new Color(0.74f, 0.48f, 0.16f), 24, 136, hubSize - 48, 64, TextAnchor.MiddleCenter);
             hubCount.fontStyle = FontStyle.Normal; hubCount.raycastTarget = false;
             bool allDone = hubCollapsedCount >= eraTotalCount;
-            var hubHintBg = Rect("HubHintChip", hubGo.transform, 68, 64, hubSize - 136, 44);
+            var hubHintBg = Rect("HubHintChip", hubGo.transform, 46, 64, hubSize - 92, 44);
             Rounded(hubHintBg, new Color(0.24f, 0.34f, 0.48f, 0.12f));
             hubHintBg.GetComponent<Image>().raycastTarget = false;
-            var hubHint = Txt(hubHintBg.transform, allDone ? "全卷圆满 · 点击检视" : "点击展开全部节点 ▸", 23, Indigo, 6, 0, hubSize - 148, 48, TextAnchor.MiddleCenter);
+            var hubHint = Txt(hubHintBg.transform, allDone ? "全卷圆满 · 点击检视" : "点击展开全部节点 ▸", 22, Indigo, 6, 0, hubSize - 104, 44, TextAnchor.MiddleCenter);
+            FitSingleLine(hubHint, 18);
             hubHint.fontStyle = FontStyle.Normal; hubHint.raycastTarget = false;
 
             var hubBtn = hubGo.AddComponent<Button>();
             hubBtn.targetGraphic = innerDisc.GetComponent<Image>();
-            hubBtn.onClick.AddListener(() => { techCollapseDone = false; OpenTechScreen(1); });
+            hubBtn.onClick.AddListener(() => {
+                if (isCorporate) { coTechCollapseDone = false; OpenConcentricTechScreen(true, 1); }
+                else { techCollapseDone = false; OpenConcentricTechScreen(false, 1); }
+            });
         }
 
-        string eraRootKey = EraRootKey(currentTechEra);
-        foreach (var node in historyNodes)
+        string eraRootKey = isCorporate ? "co_charter_1801" : EraRootKey(activeEra);
+        string justUnlockedKey = isCorporate ? coTechJustUnlocked : historyJustUnlocked;
+
+        Action<string, string, int, string[], Color, bool, bool, int, string, Action, Action> spawnNodeCard =
+            (nodeKey, nodeTitle, ringIdx, rawParents, categoryColor, done, ready, locoIdx, badgeSub, onTap, onHold) =>
         {
-            if (node.era != currentTechEra || !HistoryVisible(node)) continue;
-            bool done = techDone.Contains(node.key), ready = HistoryAvailable(node);
-            if (IsCollapsedIntoHub(node.key, collapsed)) continue;
+            Vector2 point = isCorporate ? CoTechPosition(nodeKey) : HistoryPosition(nodeKey);
+            var card = Rect(nodeKey, content.transform, 4000 + point.x - 100, 4000 + point.y - 60, 200, 120);
+            var cardRect = card.GetComponent<RectTransform>();
+            graphRects[nodeKey] = cardRect;
+            historyNodeRects[nodeKey] = cardRect;
 
-            Vector2 point = HistoryPosition(node.key);
-            var card = Rect(node.key, content.transform, 4000 + point.x - 100, 4000 + point.y - 60, 200, 120);
-            var cardRect = card.GetComponent<RectTransform>(); graphRects[node.key] = cardRect; historyNodeRects[node.key] = cardRect;
-
-            string[] resolvedParents = node.parents;
-            if (collapsed)
+            string[] resolvedParents = rawParents ?? Array.Empty<string>();
+            if (collapsed && resolvedParents.Length > 0)
             {
                 var mapped = new List<string>();
                 bool linkedHub = false;
-                foreach (string parent in node.parents)
+                foreach (string p in resolvedParents)
                 {
-                    if (IsCollapsedIntoHub(parent, collapsed)) { if (!linkedHub) { mapped.Add(HubKey); linkedHub = true; } }
-                    else mapped.Add(parent);
+                    if (isInHub(p)) { if (!linkedHub) { mapped.Add(HubKey); linkedHub = true; } }
+                    else mapped.Add(p);
                 }
                 resolvedParents = mapped.ToArray();
             }
-            layout.Add(node.key, cardRect, node.key == eraRootKey ? -1 : HistoryEra(node.key), resolvedParents);
-            Color categoryColor = HistoryEffectColor(node);
-            bool locked = !done && !ready; // 前置不足
+            layout.Add(nodeKey, cardRect, nodeKey == eraRootKey ? -1 : ringIdx, resolvedParents);
 
-            // 卡片底色与立体浮雕底座：可解锁节点增加左下方偏置深靛硬影，营造裸眼 3D 悬浮卡片质感并保纯墨可读性
+            bool locked = !done && !ready;
             Color cardBg = done ? Color.Lerp(categoryColor, Color.white, 0.60f)
                          : locked ? new Color(1f, 1f, 1f, 0.45f)
                          : new Color(0.996f, 0.992f, 0.976f);
@@ -679,40 +733,39 @@ public partial class DemoBootstrap
             }
             Rounded(card, ready ? new Color(1f, 1f, 1f, 0.01f) : cardBg);
 
-            // 分类圆标：前置不足低透明度弱化，其余恢复原样饱和色
             var marker = Rect("Category", card.transform, 8, 90, 17, 17);
             Color dotColor = locked ? new Color(categoryColor.r, categoryColor.g, categoryColor.b, 0.35f) : categoryColor;
             Img(marker, dotColor, spriteCircle).raycastTarget = false;
 
-            // 标题文字：单一字重下使用 FontStyle.Normal 避免伪粗体发糊，改以字号与墨色深浅区分层级
             Color nameColor = locked ? new Color(Ink.r, Ink.g, Ink.b, 0.48f) : Ink;
             int nameMaxSize = ScaledFontSize(ready ? 25 : 23, 1.24f);
-            var name = Txt(card.transform, node.name, nameMaxSize, nameColor, 6, node.loco >= 0 ? 83 : 62, 188, node.loco >= 0 ? 32 : 48, TextAnchor.MiddleCenter);
+            var name = Txt(card.transform, nodeTitle, nameMaxSize, nameColor, 6, locoIdx >= 0 ? 83 : 62, 188, locoIdx >= 0 ? 32 : 48, TextAnchor.MiddleCenter);
             name.fontStyle = FontStyle.Normal;
             name.resizeTextForBestFit = true; name.resizeTextMinSize = 16; name.resizeTextMaxSize = nameMaxSize;
 
-            if (node.loco >= 0)
+            if (locoIdx >= 0)
             {
                 var art = Rect("Locomotive", card.transform, 12, 36, 176, 46).AddComponent<RawImage>();
-                art.texture = Resources.Load<Texture2D>("Research/Train/" + LocoArt[node.loco]); art.raycastTarget = false;
-                if (locked) art.color = new Color(1f, 1f, 1f, 0.35f); // 前置不足机车图低透明度
+                art.texture = Resources.Load<Texture2D>("Research/Train/" + LocoArt[locoIdx]); art.raycastTarget = false;
+                if (locked) art.color = new Color(1f, 1f, 1f, 0.35f);
                 if (art.texture)
                 {
                     float ratio = (float)art.texture.width / art.texture.height;
                     float iw = Mathf.Min(176, 46 * ratio), ih = iw / ratio;
-                    art.rectTransform.sizeDelta = new Vector2(iw, ih); art.rectTransform.anchoredPosition = new Vector2((200 - iw) / 2, 36 + (46 - ih) / 2);
+                    art.rectTransform.sizeDelta = new Vector2(iw, ih);
+                    art.rectTransform.anchoredPosition = new Vector2((200 - iw) / 2, 36 + (46 - ih) / 2);
                 }
             }
 
-            // 状态标签文本：前置不足半透明，其余恢复原样排版与 InkSoft 字色
-            string label = node.loco >= 0 ? "机车" : node.effect == ResearchEffect.None ? "运营解锁" : HistoryEffectText(node).Replace(" 基础值（同类收益递减）", "");
             Color labelColor = locked ? new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.45f) : InkSoft;
-            var labelText = Txt(card.transform, label + (done ? " · 已解锁" : ready ? " · 可解锁" : " · 前置不足"), 20, labelColor, 6, 18, 188, 34, TextAnchor.MiddleCenter);
+            var labelText = Txt(card.transform, badgeSub + (done ? " · 已解锁" : ready ? " · 可解锁" : " · 前置不足"), 20, labelColor, 6, 18, 188, 34, TextAnchor.MiddleCenter);
             labelText.resizeTextForBestFit = true; labelText.resizeTextMinSize = 15; labelText.resizeTextMaxSize = ScaledFontSize(20, 1.24f);
-            var touch = card.AddComponent<HistoryNodeTouch>(); string key = node.key;
-            touch.onTap = () => TapHistoryNode(key); touch.onHold = () => HoldHistoryNode(key); touch.onRelease = HideHistoryInfo;
-            bool newlyVisible = historyJustUnlocked != null && !historyAnimated.Contains(key);
-            if (newlyVisible || historyJustUnlocked == key)
+
+            var touch = card.AddComponent<HistoryNodeTouch>();
+            touch.onTap = onTap; touch.onHold = onHold; touch.onRelease = HideHistoryInfo;
+
+            bool newlyVisible = justUnlockedKey != null && !historyAnimated.Contains(nodeKey);
+            if (newlyVisible || justUnlockedKey == nodeKey)
             {
                 var fx = card.AddComponent<HistoryNodeReveal>(); fx.startDelay = newlyVisible ? 0.18f : 0f;
                 var halo = Rect("UnlockHalo", card.transform, -30, -70, 260, 260);
@@ -720,39 +773,75 @@ public partial class DemoBootstrap
                 halo.transform.SetAsFirstSibling(); fx.halo = halo.GetComponent<RectTransform>();
                 fx.halo.pivot = new Vector2(0.5f, 0.5f); fx.halo.anchoredPosition = new Vector2(100, 60);
                 int sparkCount = qualityTier >= 2 ? 20 : qualityTier == 1 ? 12 : 8;
-                for (int i = 0; i < sparkCount; i++)
+                for (int sp = 0; sp < sparkCount; sp++)
                 {
                     var spark = Rect("Spark", card.transform, 96, 56, 9, 9);
-                    Img(spark, i % 2 == 0 ? Indigo : Gold, spriteCircle).raycastTarget = false;
+                    Img(spark, sp % 2 == 0 ? Indigo : Gold, spriteCircle).raycastTarget = false;
                     fx.sparks.Add(spark.GetComponent<RectTransform>());
                 }
             }
-        }
-        foreach (var node in historyNodes)
+        };
+
+        if (isCorporate)
         {
-            if (!graphRects.TryGetValue(node.key, out var child)) continue;
-            bool linkedHub = false;
-            foreach (string parent in node.parents)
+            for (int i = 0; i < CompanyTechNodes.Length; i++)
             {
-                if (IsCollapsedIntoHub(parent, collapsed))
+                var cnode = CompanyTechNodes[i];
+                if (cnode.eraGroup != 0 || !IsCoTechVisible(cnode) || isInHub(cnode.key)) continue;
+                bool done = HasCoTech(cnode.key);
+                bool ready = CanUnlockCoTech(cnode);
+                Color bCol = CoTechBranchColors[Mathf.Clamp(cnode.branch, 0, CoTechBranchColors.Length - 1)];
+                var capturedNode = cnode;
+                string ckey = cnode.key;
+                string subBadge = cnode.year + " · " + CoTechBranchNames[Mathf.Clamp(cnode.branch, 0, CoTechBranchNames.Length - 1)];
+                spawnNodeCard(ckey, cnode.title, CoTechRingIndex(cnode), cnode.parents, bCol, done, ready, -1, subBadge,
+                    () => TapCompanyTechNode(capturedNode), () => HoldCoTechNode(ckey));
+            }
+            for (int i = 0; i < CompanyTechNodes.Length; i++)
+            {
+                var cnode = CompanyTechNodes[i];
+                if (!graphRects.TryGetValue(cnode.key, out var child) || cnode.parents == null) continue;
+                bool linkedHub = false;
+                foreach (string parent in cnode.parents)
                 {
-                    if (!linkedHub && graphRects.TryGetValue(HubKey, out var hubRect))
+                    if (isInHub(parent))
                     {
-                        edges.Add(hubRect, child, true);
-                        linkedHub = true;
+                        if (!linkedHub && graphRects.TryGetValue(HubKey, out var hubRect)) { edges.Add(hubRect, child, true); linkedHub = true; }
                     }
-                }
-                else if (graphRects.TryGetValue(parent, out var parentRect))
-                {
-                    edges.Add(parentRect, child, techDone.Contains(parent));
+                    else if (graphRects.TryGetValue(parent, out var parentRect)) edges.Add(parentRect, child, companyTechDone.Contains(parent));
                 }
             }
         }
-        edges.Refresh();
-        if (qualityTier >= 1 && historyJustUnlocked != null) { var shake = page.AddComponent<HistoryCameraShake>(); shake.target = rt; }
-        historyJustUnlocked = null;
+        else
+        {
+            foreach (var node in historyNodes)
+            {
+                if (node.era != activeEra || !HistoryVisible(node) || isInHub(node.key)) continue;
+                bool done = techDone.Contains(node.key), ready = HistoryAvailable(node);
+                string key = node.key;
+                string label = node.loco >= 0 ? "机车" : node.effect == ResearchEffect.None ? "运营解锁" : HistoryEffectText(node).Replace(" 基础值（同类收益递减）", "");
+                spawnNodeCard(key, node.name, HistoryEra(key), node.parents, HistoryEffectColor(node), done, ready, node.loco, label,
+                    () => TapHistoryNode(key), () => HoldHistoryNode(key));
+            }
+            foreach (var node in historyNodes)
+            {
+                if (!graphRects.TryGetValue(node.key, out var child)) continue;
+                bool linkedHub = false;
+                foreach (string parent in node.parents)
+                {
+                    if (isInHub(parent))
+                    {
+                        if (!linkedHub && graphRects.TryGetValue(HubKey, out var hubRect)) { edges.Add(hubRect, child, true); linkedHub = true; }
+                    }
+                    else if (graphRects.TryGetValue(parent, out var parentRect)) edges.Add(parentRect, child, techDone.Contains(parent));
+                }
+            }
+        }
 
-        // 屏幕最外缘深色景深画框（类似透视黑框裁切效果：边框之外沉暗，中心明朗，顶栏与胶囊浮跃框前）
+        edges.Refresh();
+        if (qualityTier >= 1 && justUnlockedKey != null) { var shake = page.AddComponent<HistoryCameraShake>(); shake.target = rt; }
+        if (isCorporate) coTechJustUnlocked = null; else historyJustUnlocked = null;
+
         Color matteEdge = new Color(0.14f, 0.13f, 0.16f, 0.88f);
         Color brassLine = new Color(0.76f, 0.58f, 0.30f, 0.72f);
         var frameLayer = Rect("DepthGalleryFrame", page.transform, 0, 0, 0, 0);
@@ -782,13 +871,12 @@ public partial class DemoBootstrap
         titleCardBg.type = Image.Type.Sliced; titleCardBg.raycastTarget = false;
         SoftShadow(titleCard);
         var titleRt = titleCard.GetComponent<RectTransform>(); titleRt.anchorMin = titleRt.anchorMax = new Vector2(0,1); titleRt.pivot = new Vector2(0,1); titleRt.anchoredPosition = new Vector2(254,-45);
-        var title = Txt(titleCard.transform, "铁路典籍 · 科技树", 34, Ink, 0, 0, 0, 0, TextAnchor.MiddleLeft);
+        var title = Txt(titleCard.transform, isCorporate ? "商道典籍 · 公司树" : "铁路典籍 · 科技树", 34, Ink, 0, 0, 0, 0, TextAnchor.MiddleLeft);
         title.fontStyle = FontStyle.Normal; title.raycastTarget = false;
         title.resizeTextForBestFit = true; title.resizeTextMinSize = 18; title.resizeTextMaxSize = ScaledFontSize(34);
         var titleTextRt = title.rectTransform; titleTextRt.anchorMin = Vector2.zero; titleTextRt.anchorMax = Vector2.one;
         titleTextRt.offsetMin = new Vector2(20, 4); titleTextRt.offsetMax = new Vector2(-148, -4);
-        string romanTop = currentTechEra == 0 ? "XIX · ARCHIVE" : currentTechEra == 1 ? "XX · ARCHIVE" : "XXI · ARCHIVE";
-        var titleSub = Txt(titleCard.transform, romanTop, 20, new Color(0.58f, 0.45f, 0.28f, 0.85f), 0, 0, 0, 0, TextAnchor.MiddleRight);
+        var titleSub = Txt(titleCard.transform, isCorporate ? "XIX · CORP" : "XIX · ARCHIVE", 20, new Color(0.58f, 0.45f, 0.28f, 0.85f), 0, 0, 0, 0, TextAnchor.MiddleRight);
         titleSub.fontStyle = FontStyle.Normal; titleSub.raycastTarget = false;
         var titleSubRt = titleSub.rectTransform; titleSubRt.anchorMin = Vector2.zero; titleSubRt.anchorMax = Vector2.one;
         titleSubRt.offsetMin = new Vector2(16, 4); titleSubRt.offsetMax = new Vector2(-18, -4);
@@ -796,7 +884,6 @@ public partial class DemoBootstrap
         homeRt.anchorMin = homeRt.anchorMax = Vector2.zero;
         titleRt.anchorMin = titleRt.anchorMax = Vector2.zero;
 
-        // 顶栏实时金币展示与不足震颤提示组件
         var coinBadge = Rect("TechCoinBadge", historyControls.transform, 0, 0, 224, 94);
         var coinBadgeRt = coinBadge.GetComponent<RectTransform>();
         coinBadgeRt.anchorMin = coinBadgeRt.anchorMax = Vector2.zero;
@@ -845,8 +932,8 @@ public partial class DemoBootstrap
         rpTouch.onRelease = HideHistoryInfo;
         rpTouch.onTap = () => Toast("长按科研点徽章查看获取规则（当前日产 " + EstimatedDailyRpRate().ToString("0.0") + " RP）");
 
-        string eraBtnLabel = currentTechEra == 0 ? "19世纪 · 蒸汽与轨交  ▾" : currentTechEra == 1 ? "20世纪 · 内燃与电气  ▾" : "21世纪 · 高速与智行  ▾";
-        var eraBadge = Btn(historyControls.transform, "EraRoadmapBadge", eraBtnLabel, 23, 24, 0, 328, 54, new Color(1f, 0.99f, 0.96f, 0.99f), () => OpenEraJournalModal(page.transform));
+        string eraBtnLabel = isCorporate ? "19世纪 · 合股与商办  ▾" : "19世纪 · 蒸汽与轨交  ▾";
+        var eraBadge = Btn(historyControls.transform, "EraRoadmapBadge", eraBtnLabel, 23, 24, 0, 328, 54, new Color(1f, 0.99f, 0.96f, 0.99f), () => OpenEraJournalModal(page.transform, isCorporate));
         eraBadge.GetComponentInChildren<Text>().fontStyle = FontStyle.Normal;
         TInk(eraBadge, new Color(0.45f, 0.31f, 0.16f));
         SoftShadow(eraBadge.gameObject);
@@ -854,19 +941,31 @@ public partial class DemoBootstrap
         var ert = eraBadge.GetComponent<RectTransform>();
         headerLayout.AddSafeTopLeftTarget(ert, new Vector2(24, -206));
 
-        if ((!techCollapseDone || techSessionUnlocked.Count > 0) && eraDoneCount > 0)
+        if ((!collapseFlag || sessionSet.Count > 0) && eraDoneCount > 0)
         {
-            var collapseBtn = Btn(historyControls.transform, "CollapseDoneBtn", "收纳已研节点 ⟲", 22, 366, 0, 232, 54, new Color(0.95f, 0.92f, 0.85f, 0.98f), () => { techSessionUnlocked.Clear(); techCollapseDone = true; OpenTechScreen(1); });
+            var collapseBtn = Btn(historyControls.transform, "CollapseDoneBtn", "收纳已研节点 ⟲", 22, 366, 0, 232, 54, new Color(0.95f, 0.92f, 0.85f, 0.98f), () => {
+                if (isCorporate) { coTechSessionUnlocked.Clear(); coTechCollapseDone = true; }
+                else { techSessionUnlocked.Clear(); techCollapseDone = true; }
+                OpenConcentricTechScreen(isCorporate, 1);
+            });
             TInk(collapseBtn, Indigo);
             SoftShadow(collapseBtn.gameObject);
             var crt2 = collapseBtn.GetComponent<RectTransform>();
             headerLayout.AddSafeTopLeftTarget(crt2, new Vector2(366, -206));
         }
 
-        if (IsFeatureUnlocked(GameFeature.CompanyCore))
+        if (isCorporate)
         {
-            float tx = ((!techCollapseDone || techSessionUnlocked.Count > 0) && techDone.Count > 0) ? 612f : 366f;
-            var coTreeBtn = Btn(historyControls.transform, "GoCorporateTreeBtn", "切换：企业治理树 ▸", 22, tx, 0, 250, 54, Matcha, () => OpenCompanyTechScreen());
+            float tx = ((!collapseFlag || sessionSet.Count > 0) && eraDoneCount > 0) ? 612f : 366f;
+            var engBtn = Btn(historyControls.transform, "GoEngTreeBtn", "切换：工程技术史 ▸", 22, tx, 0, 250, 54, Indigo, () => OpenTechScreen(0));
+            TInk(engBtn, Color.white);
+            SoftShadow(engBtn.gameObject);
+            headerLayout.AddSafeTopLeftTarget(engBtn.GetComponent<RectTransform>(), new Vector2(tx, -206));
+        }
+        else if (IsFeatureUnlocked(GameFeature.CompanyCore))
+        {
+            float tx = ((!collapseFlag || sessionSet.Count > 0) && eraDoneCount > 0) ? 612f : 366f;
+            var coTreeBtn = Btn(historyControls.transform, "GoCorporateTreeBtn", "切换：企业治理树 ▸", 22, tx, 0, 250, 54, Matcha, () => OpenCompanyTechScreen(0));
             TInk(coTreeBtn, Color.white);
             SoftShadow(coTreeBtn.gameObject);
             headerLayout.AddSafeTopLeftTarget(coTreeBtn.GetComponent<RectTransform>(), new Vector2(tx, -206));
@@ -876,13 +975,27 @@ public partial class DemoBootstrap
         var legendRt = legend.GetComponent<RectTransform>(); legendRt.anchorMin = legendRt.anchorMax = new Vector2(0.5f, 0); legendRt.pivot = new Vector2(0.5f, 0); legendRt.anchoredPosition = new Vector2(0, 20);
         headerLayout.bottomSafeTarget = legendRt; headerLayout.bottomSafeMargin = 20f;
         Rounded(legend, new Color(1f, 0.99f, 0.96f, 0.97f)); SoftShadow(legend);
-        string[] legendNames = { "收入", "客流", "运力", "速度", "站点吞吐", "车辆维护", "线路维护", "换乘", "机车", "运营解锁" };
-        ResearchEffect[] legendKinds = { ResearchEffect.Revenue, ResearchEffect.Demand, ResearchEffect.Capacity, ResearchEffect.Speed, ResearchEffect.Station, ResearchEffect.Vehicle, ResearchEffect.Track, ResearchEffect.Transfer, ResearchEffect.None, ResearchEffect.None };
-        for (int i = 0; i < legendNames.Length; i++) {
-            float x = 16 + (i % 5) * 204, y = i < 5 ? 62 : 18;
-            var sample = new HistoryNode { effect = legendKinds[i], loco = i == 8 ? 0 : -1 };
-            var dot = Rect("LegendDot" + i, legend.transform, x, y + 6, 18, 18); Img(dot, HistoryEffectColor(sample), spriteCircle).raycastTarget = false;
-            Txt(legend.transform, legendNames[i], 22, InkSoft, x + 24, y, 174, 32, TextAnchor.MiddleLeft);
+        if (isCorporate)
+        {
+            for (int i = 0; i < CoTechBranchNames.Length; i++)
+            {
+                float x = 22f + i * 200f;
+                var dot = Rect("CoLegendDot" + i, legend.transform, x, 64f, 18, 18);
+                Img(dot, CoTechBranchColors[i], spriteCircle).raycastTarget = false;
+                Txt(legend.transform, CoTechBranchNames[i], 23, Ink, x + 24f, 56f, 168f, 34f, TextAnchor.MiddleLeft);
+            }
+            Txt(legend.transform, "十九世纪铁路商业与企业制度演进 · 单指拖动画布 · 双指缩放 · 长按考据史实与减免明细", 21, InkSoft, 22f, 14f, 988f, 32f, TextAnchor.MiddleLeft);
+        }
+        else
+        {
+            string[] legendNames = { "收入", "客流", "运力", "速度", "站点吞吐", "车辆维护", "线路维护", "换乘", "机车", "运营解锁" };
+            ResearchEffect[] legendKinds = { ResearchEffect.Revenue, ResearchEffect.Demand, ResearchEffect.Capacity, ResearchEffect.Speed, ResearchEffect.Station, ResearchEffect.Vehicle, ResearchEffect.Track, ResearchEffect.Transfer, ResearchEffect.None, ResearchEffect.None };
+            for (int i = 0; i < legendNames.Length; i++) {
+                float x = 16 + (i % 5) * 204, y = i < 5 ? 62 : 18;
+                var sample = new HistoryNode { effect = legendKinds[i], loco = i == 8 ? 0 : -1 };
+                var dot = Rect("LegendDot" + i, legend.transform, x, y + 6, 18, 18); Img(dot, HistoryEffectColor(sample), spriteCircle).raycastTarget = false;
+                Txt(legend.transform, legendNames[i], 22, InkSoft, x + 24, y, 174, 32, TextAnchor.MiddleLeft);
+            }
         }
         var info = Rect("HistoryInfo", page.transform, 0, 0, 900, 310); Rounded(info, new Color(0.97f,0.94f,0.88f,0.99f)); SoftShadow(info);
         var irt = info.GetComponent<RectTransform>(); irt.anchorMin = irt.anchorMax = new Vector2(0.5f,0.5f); irt.pivot = new Vector2(0.5f,0); irt.anchoredPosition = Vector2.zero;
@@ -905,7 +1018,7 @@ public partial class DemoBootstrap
         historyInfoPanel.SetActive(false);
     }
 
-    void OpenEraJournalModal(Transform parent)
+    void OpenEraJournalModal(Transform parent, bool isCorporate = false)
     {
         if (eraJournalModal) Destroy(eraJournalModal);
         var modal = Rect("EraJournalModal", parent, 0, 0, 0, 0);
@@ -930,26 +1043,33 @@ public partial class DemoBootstrap
         frameInner.GetComponent<Image>().raycastTarget = false;
         JournalTape(sheet.transform, cardW * 0.5f - 95f, cardH - 18f, 190f);
 
-        var enHeader = Txt(sheet.transform, "CHRONICLES OF RAILWAY  ·  XIX — XXI CENTURY", 21, new Color(0.55f, 0.42f, 0.25f), 44, cardH - 88, cardW - 88, 32, TextAnchor.MiddleCenter);
+        var enHeader = Txt(sheet.transform, isCorporate ? "CORPORATE ARCHIVE  ·  XIX — XXI CENTURY" : "CHRONICLES OF RAILWAY  ·  XIX — XXI CENTURY", 21, new Color(0.55f, 0.42f, 0.25f), 44, cardH - 88, cardW - 88, 32, TextAnchor.MiddleCenter);
         enHeader.fontStyle = FontStyle.Normal;
-        var cnHeader = Txt(sheet.transform, "— ◆ 铁道百年 · 时代手帐 ◆ —", 38, Ink, 44, cardH - 144, cardW - 88, 52, TextAnchor.MiddleCenter);
+        var cnHeader = Txt(sheet.transform, isCorporate ? "— ◆ 商道百年 · 治理手帐 ◆ —" : "— ◆ 铁道百年 · 时代手帐 ◆ —", 38, Ink, 44, cardH - 144, cardW - 88, 52, TextAnchor.MiddleCenter);
         cnHeader.fontStyle = FontStyle.Normal;
-        var subHeader = Txt(sheet.transform, "手绘霓虹色彩视差纪元卷册 · 点击进入或查阅详情", 22, InkSoft, 44, cardH - 184, cardW - 88, 32, TextAnchor.MiddleCenter);
+        var subHeader = Txt(sheet.transform, "目前仅十九世纪卷已开卷 · 二十与二十一世纪暂未开放", 22, InkSoft, 44, cardH - 184, cardW - 88, 32, TextAnchor.MiddleCenter);
 
         var xClose = Btn(sheet.transform, "CloseJournal", "×", 34, cardW - 96, cardH - 96, 62, 62, new Color(0.92f, 0.87f, 0.78f), () => {
             if (eraJournalModal) Destroy(eraJournalModal); eraJournalModal = null;
         });
         TInk(xClose, Ink);
 
-        string[] titles = { "十九世纪 · 蒸汽奠基", "二十世纪 · 内燃电气", "二十一世纪 · 高速智行" };
+        string[] titles = isCorporate
+            ? new[] { "十九世纪 · 合股与商办", "二十世纪 · 电气集团网", "二十一世纪 · 智慧湾枢纽" }
+            : new[] { "十九世纪 · 蒸汽奠基", "二十世纪 · 内燃电气", "二十一世纪 · 高速智行" };
         string[] subStatus = new string[3];
         for (int e = 0; e < 3; e++)
         {
-            int doneE = EraTechDoneCount(e);
-            int totalE = EraTechNodeCount(e);
-            if (e == currentTechEra) subStatus[e] = "现行研习 · 已收编 " + doneE + " / " + totalE + " 项  ›";
-            else if (IsTechEraUnlocked(e)) subStatus[e] = "已启封 · 点击切换 (" + doneE + "/" + totalE + ")  ›";
-            else subStatus[e] = EraUnlockHint(e);
+            if (e == 0)
+            {
+                int doneE = isCorporate ? CoTechEraDoneCount(0) : EraTechDoneCount(0);
+                int totalE = isCorporate ? CoTechEraNodeCount(0) : EraTechNodeCount(0);
+                subStatus[e] = "现行研习 · 已收编 " + doneE + " / " + totalE + " 项  ›";
+            }
+            else
+            {
+                subStatus[e] = EraUnlockHint(e);
+            }
         }
         Color[] accentColors = {
             new Color(1.00f, 0.34f, 0.72f),
@@ -962,24 +1082,20 @@ public partial class DemoBootstrap
         for (int i = 0; i < 3; i++)
         {
             int idx = i;
-            bool activeEra = i == currentTechEra;
             bool unlockedEra = IsTechEraUnlocked(i);
             float cy = cardH - 480f - i * 286f;
 
-            // 外层极黑影院遮幅画框：复刻参考图纯黑上下边衬托中心炽烈彩色霓虹海报
             var vol = Rect("EraVolume_" + i, sheet.transform, 46, cy, itemW, itemH);
             Rounded(vol, new Color(0.015f, 0.015f, 0.025f, 1f));
             SoftShadow(vol);
 
-            // 中间铺满程序化矢量手绘「19Century / 20Century / 21Century」海报贴图（上黑边 12px，下黑边 44px）
             var posterGo = Rect("NeonPoster", vol.transform, 10, 44, itemW - 20f, itemH - 56f);
             var posterRaw = posterGo.AddComponent<RawImage>();
             posterRaw.texture = EraPosterGenerator.GetPoster(i);
-            if (!unlockedEra) posterRaw.color = new Color(0.55f, 0.58f, 0.65f, 0.78f);
+            if (!unlockedEra) posterRaw.color = new Color(0.45f, 0.48f, 0.55f, 0.55f);
             posterRaw.raycastTarget = false;
 
-            // 下黑边安静承接时代中文卷名与当前状态，绝不破坏画面主体霓虹艺术纯文字
-            var leftLabel = Txt(vol.transform, titles[i], 22, new Color(0.92f, 0.94f, 0.98f, 0.94f), 20, 4, 290, 36, TextAnchor.MiddleLeft);
+            var leftLabel = Txt(vol.transform, titles[i], 22, new Color(0.92f, 0.94f, 0.98f, unlockedEra ? 0.96f : 0.65f), 20, 4, 290, 36, TextAnchor.MiddleLeft);
             leftLabel.raycastTarget = false;
             var rightLabel = Txt(vol.transform, subStatus[i], 20, unlockedEra ? accentColors[i] : new Color(0.65f, 0.68f, 0.75f, 0.85f), 315, 4, itemW - 335f, 36, TextAnchor.MiddleRight);
             rightLabel.resizeTextForBestFit = true; rightLabel.resizeTextMinSize = 14; rightLabel.resizeTextMaxSize = ScaledFontSize(20);
@@ -988,18 +1104,12 @@ public partial class DemoBootstrap
             var cardTap = vol.AddComponent<Button>();
             cardTap.targetGraphic = vol.GetComponent<Image>();
             cardTap.onClick.AddListener(() => {
-                if (activeEra) {
+                if (idx == 0) {
                     if (eraJournalModal) Destroy(eraJournalModal);
                     eraJournalModal = null;
-                } else if (unlockedEra) {
-                    currentTechEra = idx;
-                    historyScrollX = 0.5f;
-                    historyScrollY = 0.5f;
-                    historyZoom = 1f;
-                    PlayPaperFlipSfx();
-                    OpenTechScreen(0);
                 } else {
-                    Toast("「" + titles[idx] + "」尚未启封：" + EraUnlockHint(idx));
+                    PlayErrorSfx();
+                    Toast("「" + titles[idx] + "」" + EraUnlockHint(idx));
                 }
             });
         }
@@ -1012,9 +1122,14 @@ public partial class DemoBootstrap
     int LocoPrice(int index) { return LocoPrices[Mathf.Clamp(index, 0, LocoPrices.Length - 1)]; }
     void PurchaseLoco(int index)
     {
-        if (index < 0 || index >= LocoNames.Length || !techDone.Contains(LocoKey(index))) { Toast("请先解锁对应机车节点"); return; }
+        if (index < 0 || index >= LocoNames.Length) return;
+        if (!techDone.Contains(LocoKey(index)))
+        {
+            Toast(index >= 9 ? "该车型所属 20/21 世纪科技树暂未开放" : "请先在 19 世纪科技树解锁对应机车节点");
+            return;
+        }
         int price = LocoPrice(index);
         if (coins < price) { Toast("金币不足，还差 ¥" + FormatShortfall(price - coins)); return; }
-        BeginUndo("购买机车"); coins -= price; researchVehicles.Add(new ResearchVehicle { node = index }); EndUndo(); RefreshHUD(); OpenLocoShop(); Toast("已购买 " + LocoNames[index] + " ×1");
+        BeginUndo("购买机车"); coins -= price; researchVehicles.Add(new ResearchVehicle { node = index }); SyncCulturalCollection(true); EndUndo(); RefreshHUD(); OpenLocoShop(); Toast("已购买 " + LocoNames[index] + " ×1");
     }
 }

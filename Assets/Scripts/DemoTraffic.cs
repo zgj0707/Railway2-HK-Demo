@@ -69,13 +69,13 @@ public partial class DemoBootstrap
     float CityDemandWeight(Station station)
     {
         if (station.portal) return 1.6f;
-        if (station.region == "香港") return 1.25f;
-        if (station.region == "澳门") return 0.75f;
+        if (station.region == "青屿") return 1.25f;
+        if (station.region == "镜汀") return 0.75f;
         switch (station.city)
         {
-            case "广州市": case "深圳市": return station.county ? 1.1f : 1.7f;
-            case "佛山市": case "东莞市": return station.county ? 0.95f : 1.35f;
-            case "惠州市": case "珠海市": case "中山市": case "江门市": return station.county ? 0.8f : 1.1f;
+            case "百花府": case "鹏湾府": return station.county ? 1.1f : 1.7f;
+            case "禅溪府": case "莞香府": return station.county ? 0.95f : 1.35f;
+            case "鹅湖府": case "珠屿府": case "翠香府": case "五津府": return station.county ? 0.8f : 1.1f;
             default: return station.county ? 0.65f : 0.9f;
         }
     }
@@ -85,8 +85,8 @@ public partial class DemoBootstrap
         float baseValue = 80f;
         switch (s.name)
         {
-            case "沙田": case "大围": case "天水围": case "元朗": case "上水": case "粉岭": case "荃湾": case "屯门": case "氹仔": case "青洲": case "石排湾": baseValue *= 1.25f; break;
-            case "中环": case "金钟": case "尖沙咀": case "旺角": case "铜锣湾": case "大三巴": case "妈阁": case "澳门机场": case "深圳": case "广州": baseValue *= 1.30f; break;
+            case "白沙坪": case "翠围乡": case "云水围": case "丰朗墟": case "清溪上": case "松烟岭": case "香兰湾": case "守望门": case "汀屿里": case "青芦洲": case "叠石湾": baseValue *= 1.25f; break;
+            case "海晏埠": case "鸣钟里": case "翠沙咀": case "熙市角": case "铜鼓湾": case "古坊石街": case "海神阁": case "镜汀空港": case "鹏湾": case "百花城": baseValue *= 1.30f; break;
         }
         foreach (var sc in sceneries) if (sc.triggerStation == s.name && s.region == sc.region) { baseValue *= 1.15f; break; }
         return baseValue * CityDemandWeight(s);
@@ -108,8 +108,8 @@ public partial class DemoBootstrap
         string name = stations[i].name;
         switch (name)
         {
-            case "沙田": case "大围": case "天水围": case "元朗": case "上水": case "粉岭": case "荃湾": case "屯门": case "氹仔": case "青洲": case "石排湾": return 1;
-            case "中环": case "金钟": case "尖沙咀": case "旺角": case "铜锣湾": case "广州": case "深圳（西九龙）": return 2;
+            case "白沙坪": case "翠围乡": case "云水围": case "丰朗墟": case "清溪上": case "松烟岭": case "香兰湾": case "守望门": case "汀屿里": case "青芦洲": case "叠石湾": return 1;
+            case "海晏埠": case "鸣钟里": case "翠沙咀": case "熙市角": case "铜鼓湾": case "百花城": case "鹏湾（西渡）": return 2;
         }
         foreach (var sc in sceneries) if (sc.triggerStation == name && sc.region == stations[i].region) return 3;
         return stations[i].portal ? 4 : 0;
@@ -221,26 +221,26 @@ public partial class DemoBootstrap
     Vector2 EconomicPosition(int index)
     {
         var station=stations[index];
-        if (StationInRegion(index,"广东")) return PosInRegion(index,"广东");
-        if (station.region == "香港") {
-            if (hkEconomicAnchor == -2) hkEconomicAnchor = stations.FindIndex(x=>x.name=="深圳（西九龙）");
+        if (StationInRegion(index,"锦川")) return PosInRegion(index,"锦川");
+        if (station.region == "青屿") {
+            if (hkEconomicAnchor == -2) hkEconomicAnchor = stations.FindIndex(x=>x.name=="鹏湾（西渡）");
             int anchor = hkEconomicAnchor;
-            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"广东") : new Vector2(615,900);
-            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"香港") : new Vector2(590,865);
-            return origin+(PosInRegion(index,"香港")-localAnchor)*0.4f;
+            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"锦川") : new Vector2(615,900);
+            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"青屿") : new Vector2(590,865);
+            return origin+(PosInRegion(index,"青屿")-localAnchor)*0.4f;
         }
-        if (station.region == "澳门") {
-            if (macauEconomicAnchor == -2) macauEconomicAnchor = stations.FindIndex(x=>x.name=="珠海（关闸）");
+        if (station.region == "镜汀") {
+            if (macauEconomicAnchor == -2) macauEconomicAnchor = stations.FindIndex(x=>x.name=="珠屿（北关）");
             int anchor = macauEconomicAnchor;
-            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"广东") : new Vector2(540,850);
-            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"澳门") : new Vector2(540,900);
-            return origin+(PosInRegion(index,"澳门")-localAnchor)*0.4f;
+            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"锦川") : new Vector2(540,850);
+            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"镜汀") : new Vector2(540,900);
+            return origin+(PosInRegion(index,"镜汀")-localAnchor)*0.4f;
         }
         return Pos(index);
     }
     float EconomicSegmentDistance(int a,int b,string region)
     {
-        float scale = region == "广东" ? 1f : 0.4f;
+        float scale = region == "锦川" ? 1f : 0.4f;
         return Vector2.Distance(PosInRegion(a,region),PosInRegion(b,region))*scale;
     }
     float EconomicPathLength(List<int> path)
@@ -953,7 +953,9 @@ public partial class DemoBootstrap
     {
         unchecked {
             int hash = 17; hash = hash * 31 + currentRegion.GetHashCode(); hash = hash * 31 + companyPolicy;
-            hash = hash * 31 + economyCycle; hash = hash * 31 + (consultantDaysLeft > 0 ? consultantId + 100 : 0);
+            hash = hash * 31 + economyCycle; hash = hash * 31 + CurrentSolarTermIndex();
+            hash = hash * 31 + earnedPlaques.Count * 13 + earnedMemorialTickets.Count * 7;
+            hash = hash * 31 + (consultantDaysLeft > 0 ? consultantId + 100 : 0);
             hash = hash * 31 + (autoDispatchDaysLeft > 0 ? 1 : 0);
             foreach (int pid in boardPartners) hash = hash * 31 + (pid + 7);
             foreach (var line in lines) {

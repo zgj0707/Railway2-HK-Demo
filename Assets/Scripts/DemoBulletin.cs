@@ -5,7 +5,7 @@ using UnityEngine.UI;
 
 public partial class DemoBootstrap
 {
-    // ---------- 动态「湾区铁道驿报」与本地「湾区群雄榜」 ----------
+    // ---------- 动态「山海铁道驿报」与本地「山海群雄榜」 ----------
     sealed class BulletinEntry
     {
         public string tag, title, date, body, actionLabel;
@@ -28,6 +28,58 @@ public partial class DemoBootstrap
     {
         var list = new List<BulletinEntry>();
 
+        // 0. 山海节气风物与舆情急报、督办考成
+        var term = CurrentSolarTerm();
+        list.Add(new BulletinEntry
+        {
+            tag = "物候",
+            title = "时令【" + term.name + "】· " + term.season,
+            date = "剩 " + SolarTermDaysRemaining() + " 日",
+            accentColor = new Color(0.24f, 0.50f, 0.42f),
+            body = "「" + term.poem + "」\n当期物候加成：" + term.effectHint + "\n下一节候预告：【" + NextSolarTerm().name + "】" + NextSolarTerm().effectHint,
+            actionLabel = "节气风物历",
+            onAction = () => OpenCultureJournalModal(2)
+        });
+
+        var hotSegs = CollectTopCongestedSegments(3);
+        if (hotSegs.Count > 0)
+        {
+            string segLines = "";
+            for (int hs = 0; hs < hotSegs.Count; hs++)
+            {
+                var cg = hotSegs[hs];
+                int pctLoad = Mathf.RoundToInt(cg.loadRatio * 100f);
+                segLines += (hs > 0 ? "\n" : "") + (hs + 1) + ". " + DisplayPlaceAliases(cg.region) + " · " + cg.line.name
+                    + "（" + StationDisplayName(cg.stA, cg.region) + " ↔ " + StationDisplayName(cg.stB, cg.region) + "）满载 " + pctLoad + "%";
+            }
+            var firstSeg = hotSegs[0];
+            list.Add(new BulletinEntry
+            {
+                tag = "急报",
+                title = "全网卡点急报（" + hotSegs.Count + " 处高负荷）",
+                date = "实时",
+                accentColor = Vermilion,
+                body = segLines + "\n建议开启热力图或直接跳转对应区段快速增班/调入备车。",
+                actionLabel = "直飞最堵区段",
+                onAction = () => FocusAndBoostSegment(firstSeg)
+            });
+        }
+
+        int readyPlaques = CountClaimablePlaques();
+        if (readyPlaques > 0)
+        {
+            list.Add(new BulletinEntry
+            {
+                tag = "考成",
+                title = "督办考成：" + readyPlaques + " 方牌匾待领",
+                date = "可请颁",
+                accentColor = Gold,
+                body = "总办考核目标已达成！请前往「山海舆图志 · 钦颁匾额」请领赏银、科研点与永久经营加成。",
+                actionLabel = "前往请匾",
+                onAction = () => OpenCultureJournalModal(0)
+            });
+        }
+
         // 1. 跨区联运与年度评比动态
         int links = CrossBaySynergyLinkCount();
         int awardCycle = (day / 15) * 15;
@@ -36,7 +88,7 @@ public partial class DemoBootstrap
             list.Add(new BulletinEntry
             {
                 tag = "嘉奖",
-                title = "第 " + awardCycle + " 日大湾区年度铁道大赏已揭晓",
+                title = "第 " + awardCycle + " 日山海年度铁道大赏已揭晓",
                 date = "第 " + day + " 日",
                 accentColor = Gold,
                 body = "评审团已完成本周期路网评估，贺礼现已备妥，请前往「公司」页签领赏。",
@@ -85,12 +137,12 @@ public partial class DemoBootstrap
             });
         }
 
-        // 3. 湾区行风周报
+        // 3. 山海行风周报
         int weekNum = ((day - 1) / 7) + 1;
         list.Add(new BulletinEntry
         {
             tag = "周报",
-            title = "《湾区行风周报》第 " + weekNum + " 周 · " + EconomyCycleNames[economyCycle],
+            title = "《山海行风周报》第 " + weekNum + " 周 · " + EconomyCycleNames[economyCycle],
             date = "还剩 " + CycleDaysRemaining() + " 日",
             accentColor = Indigo,
             body = "本周态势：" + EconomyCycleDescs[economyCycle] + "\n下周风向预告：" + EconomyCycleNames[nextEconomyCycle] + " — " + EconomyCycleDescs[nextEconomyCycle]
@@ -100,12 +152,12 @@ public partial class DemoBootstrap
         list.Add(new BulletinEntry
         {
             tag = "联运",
-            title = links > 0 ? "三地口岸联运生效中（" + links + "/3 走廊）" : "湾区口岸联运开通指引",
+            title = links > 0 ? "三地口岸联运生效中（" + links + "/3 走廊）" : "三域口岸联运开通指引",
             date = "实时",
             accentColor = Matcha,
             body = links > 0
                 ? CrossBaySynergySummary() + "\n继续贯通其余跨区门户可进一步叠加口岸补贴与全网客流吸引力。"
-                : "当香港、濠江与南粤的运营线路在「罗湖 / 深圳（西九龙）」「珠海（关闸）/ 横琴口岸」「港珠澳」等门户两侧同时接通时，即可激活每日跨区联运补贴与客流加成。"
+                : "当青屿、镜汀与锦川的运营线路在「界桥关 / 鹏湾（西渡）」「珠屿（北关）/ 玉琴关」「三屿虹桥」等门户两侧同时接通时，即可激活每日跨区联运补贴与客流加成。"
         });
 
         // 5. 常规社务公告
@@ -134,8 +186,10 @@ public partial class DemoBootstrap
 
         const float popupW = 880f;
         const float popupH = 980f;
-        var panel = OpenPopup("湾区铁道驿报", popupH, popupW, "notice_board");
+        var panel = OpenPopup("山海铁道驿报", popupH, popupW, "notice_board");
         JournalTape(panel.transform, popupW * 0.5f - 82f, popupH - 18f, 164f);
+        StampBotanicalSprig(panel.transform, "orn_cloud_fret", 10f, 10f, 38f, 38f, 0.35f, false, true);
+        StampBotanicalSprig(panel.transform, "orn_cloud_fret", popupW - 48f, 10f, 38f, 38f, 0.35f, true, true);
         Txt(panel.transform, "第 " + day + " 日 · 沿线动态与运营简报（共 " + total + " 则）", 23, InkSoft, 28, popupH - 108, popupW - 56, 32, TextAnchor.MiddleLeft);
         Img(Rect("NoticeHeaderLine", panel.transform, 28, popupH - 120, popupW - 56, 2), new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.16f)).raycastTarget = false;
 
@@ -269,8 +323,8 @@ public partial class DemoBootstrap
         var entries = new List<LeaderboardOperator>
         {
             new LeaderboardOperator {
-                name = companyName,
-                tag = CompanyTitle() + " · 本社",
+                name = companyName + PlayerPlaqueHonorTag(),
+                tag = CompanyTitle() + " · 票册 " + earnedMemorialTickets.Count + "/6",
                 motto = CrossBaySynergyLinkCount() > 0 ? "三地口岸联运中 · " + DisplayPlaceAliases(currentRegion) + "主导" : "当前重心：" + DisplayPlaceAliases(currentRegion),
                 stations = DailyConnectedCount(),
                 linesCount = lines.Count,
@@ -279,34 +333,34 @@ public partial class DemoBootstrap
                 isPlayer = true
             },
             new LeaderboardOperator {
-                name = "香江电铁局",
+                name = "青屿电铁局",
                 tag = "老牌港岛干线",
-                motto = "维港南岸高密度通勤网络",
+                motto = "青湾南岸高密度通勤网络",
                 stations = 4 + Mathf.Min(18, d / 3),
                 linesCount = 1 + Mathf.Min(6, d / 7),
                 dailyProfit = 320 + d * 42,
                 score = 1100 + d * 195
             },
             new LeaderboardOperator {
-                name = "南粤快轨集团",
-                tag = "岭南城际联营",
-                motto = "主打广深莞跨市大站快线",
+                name = "锦川快轨集团",
+                tag = "南溟城际联营",
+                motto = "主打百花—鹏湾—莞香跨城大站快线",
                 stations = 3 + Mathf.Min(26, d / 2),
                 linesCount = 1 + Mathf.Min(8, d / 6),
                 dailyProfit = 240 + d * 56,
                 score = 920 + d * 245
             },
             new LeaderboardOperator {
-                name = "濠江轻轨社",
+                name = "镜汀轻轨社",
                 tag = "海湾文旅专线",
-                motto = "深耕半岛与路氹度假区接驳",
+                motto = "深耕半岛与连汀海湾接驳",
                 stations = 2 + Mathf.Min(12, d / 4),
                 linesCount = 1 + Mathf.Min(4, d / 9),
                 dailyProfit = 190 + d * 26,
                 score = 720 + d * 120
             },
             new LeaderboardOperator {
-                name = "珠江客运总社",
+                name = "沧海客运总社",
                 tag = "百年商埠车队",
                 motto = "老街商业与站前物业稳健派",
                 stations = 5 + Mathf.Min(20, d / 3),
@@ -315,9 +369,9 @@ public partial class DemoBootstrap
                 score = 1480 + d * 185
             },
             new LeaderboardOperator {
-                name = "岭南星铁联营",
+                name = "山海星铁联营",
                 tag = "高速智行先驱",
-                motto = "瞄准二十一世纪大湾区环形快网",
+                motto = "瞄准新纪元山海湾环形快网",
                 stations = 6 + Mathf.Min(32, d / 2),
                 linesCount = 2 + Mathf.Min(10, d / 5),
                 dailyProfit = 460 + d * 68,
@@ -330,8 +384,8 @@ public partial class DemoBootstrap
 
     void OpenLeaderboard()
     {
-        var page = OpenPage("排行榜", "查看湾区铁路同行名录与本社建设编年史。", "PageArt/album_watercolor");
-        Txt(page.transform, "湾区群雄榜", 38, Ink, 36, PgH - 245, 800, 54, TextAnchor.MiddleLeft);
+        var page = OpenPage("排行榜", "查看山海铁路同行名录与本社建设编年史。", "PageArt/album_watercolor");
+        Txt(page.transform, "山海群雄榜", 38, Ink, 36, PgH - 245, 800, 54, TextAnchor.MiddleLeft);
         Txt(page.transform, "BAY AREA RAILWAY RANKINGS & CHRONICLE", 22, InkSoft, 38, PgH - 287, 760, 34, TextAnchor.MiddleLeft);
 
         var list = BuildBayLeaderboard();
@@ -349,7 +403,7 @@ public partial class DemoBootstrap
         float y = topY - 12f - heroH;
         var hero = Rect("RankingHeroCard", content, 4f, y, innerW, heroH);
         Rounded(hero, CardBg); SoftShadow(hero); JournalTape(hero.transform, innerW * 0.5f - 72f, heroH - 17f, 144f);
-        int palette = currentRegion == "澳门" ? 2 : currentRegion == "广东" ? 1 : 0;
+        int palette = currentRegion == "镜汀" ? 2 : currentRegion == "锦川" ? 1 : 0;
         var posterTex = EraPosterGenerator.GetCustomPoster("rank_" + currentRegion, "RAILWAY", palette, 4, 768, 220, 1);
         var posterFrame = CreateNeonPosterFrame(hero.transform, "RankingNeonPoster", 24f, 134f, innerW - 48f, 214f, posterTex, 9f);
         var badge = Rect("RegionTag", posterFrame.transform, 18f, 16f, 240f, 38f);
@@ -361,7 +415,7 @@ public partial class DemoBootstrap
         Txt(hero.transform, "已连 " + DailyConnectedCount() + " 站  ·  运营 " + lines.Count + " 线  ·  预期日利 " + FormatSignedCoins(income) + "  ·  口岸走廊 " + CrossBaySynergyLinkCount() + "/3",
             22, InkSoft, 28f, 22f, innerW - 56f, 38f, TextAnchor.MiddleLeft);
 
-        // 2. 湾区同行阶梯榜
+        // 2. 山海同行阶梯榜
         for (int i = 0; i < list.Count; i++)
         {
             var op = list[i];
@@ -388,11 +442,11 @@ public partial class DemoBootstrap
         Rounded(chron, CardBg); SoftShadow(chron);
         Txt(chron.transform, "公司史册 · 里程碑碑林", 30, Ink, 28f, 256f, innerW - 56f, 44f, TextAnchor.MiddleLeft);
         string[] milestones = {
-            (lines.Count >= 1 ? "✓ " : "○ ") + "维港初笛：开通首条商业线路",
+            (lines.Count >= 1 ? "✓ " : "○ ") + "青湾初笛：开通首条商业线路",
             (FoundCount() >= 3 ? "✓ " : "○ ") + "山海留影：累计收录 3 处以上名胜风光（当前 " + FoundCount() + " 处）",
-            (macauUnlocked ? "✓ " : "○ ") + "越海濠江：解锁并通车澳门版图",
-            (guangdongUnlocked ? "✓ " : "○ ") + "北上南粤：解锁并贯通广东路网",
-            (CrossBaySynergyLinkCount() >= 1 ? "✓ " : "○ ") + "湾区直通：打通跨区口岸联运走廊（" + CrossBaySynergyLinkCount() + "/3）",
+            (macauUnlocked ? "✓ " : "○ ") + "越海镜汀：解锁并通车镜汀版图",
+            (guangdongUnlocked ? "✓ " : "○ ") + "北上锦川：解锁并贯通锦川路网",
+            (CrossBaySynergyLinkCount() >= 1 ? "✓ " : "○ ") + "山海直通：打通跨区口岸联运走廊（" + CrossBaySynergyLinkCount() + "/3）",
             (income >= 2000f ? "✓ " : "○ ") + "金字招牌：全网预期日利润突破 ¥2,000（当前 " + FormatSignedCoins(income) + "）"
         };
         for (int m = 0; m < milestones.Length; m++)
