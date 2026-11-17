@@ -6,9 +6,9 @@ public partial class DemoBootstrap
     // ---------- 三域口岸联运协同 ----------
     static readonly string[] CrossBayCorridorNames = { "双渡口双枢纽走廊", "汀屿北关走廊", "三屿跨海虹桥走廊" };
     static readonly string[] CrossBayCorridorDescs = {
-        "青屿与锦川线路同时接入「界桥关」或「鹏湾（西渡）」",
-        "镜汀与锦川线路同时接入「珠屿（北关）」「西岸工坊区」或「玉琴关」",
-        "「三屿虹桥」门户在任意两域以上均有运行线路接驳"
+        "香埠与粤海线路同时接入「桥头关」或「新安（西渡）」",
+        "莲澳与粤海线路同时接入「香山（北关）」「拱北口」或「莲花口」",
+        "「伶仃桥」门户在任意两域以上均有运行线路接驳"
     };
 
     bool HasPortalServiceInRegion(int portalIdx, string region)
@@ -39,27 +39,27 @@ public partial class DemoBootstrap
         {
             case 0:
             {
-                int luo = FindStationIndexByExactName("界桥关");
-                int sz = FindStationIndexByExactName("鹏湾（西渡）");
-                bool hkSide = HasPortalServiceInRegion(luo, "青屿") || HasPortalServiceInRegion(sz, "青屿");
-                bool gdSide = HasPortalServiceInRegion(luo, "锦川") || HasPortalServiceInRegion(sz, "锦川");
+                int luo = FindStationIndexByExactName("桥头关");
+                int sz = FindStationIndexByExactName("新安（西渡）");
+                bool hkSide = HasPortalServiceInRegion(luo, "香埠") || HasPortalServiceInRegion(sz, "香埠");
+                bool gdSide = HasPortalServiceInRegion(luo, "粤海") || HasPortalServiceInRegion(sz, "粤海");
                 return hkSide && gdSide;
             }
             case 1:
             {
-                int zh = FindStationIndexByExactName("珠屿（北关）");
-                int zha = FindStationIndexByExactName("西岸工坊区");
-                int hq = FindStationIndexByExactName("玉琴关");
-                bool moSide = HasPortalServiceInRegion(zh, "镜汀") || HasPortalServiceInRegion(zha, "镜汀") || HasPortalServiceInRegion(hq, "镜汀");
-                bool gdSide = HasPortalServiceInRegion(zh, "锦川") || HasPortalServiceInRegion(zha, "锦川") || HasPortalServiceInRegion(hq, "锦川");
+                int zh = FindStationIndexByExactName("香山（北关）");
+                int zha = FindStationIndexByExactName("拱北口");
+                int hq = FindStationIndexByExactName("莲花口");
+                bool moSide = HasPortalServiceInRegion(zh, "莲澳") || HasPortalServiceInRegion(zha, "莲澳") || HasPortalServiceInRegion(hq, "莲澳");
+                bool gdSide = HasPortalServiceInRegion(zh, "粤海") || HasPortalServiceInRegion(zha, "粤海") || HasPortalServiceInRegion(hq, "粤海");
                 return moSide && gdSide;
             }
             case 2:
             {
-                int hzm = FindStationIndexByExactName("三屿虹桥");
-                int regions = (HasPortalServiceInRegion(hzm, "青屿") ? 1 : 0)
-                            + (HasPortalServiceInRegion(hzm, "镜汀") ? 1 : 0)
-                            + (HasPortalServiceInRegion(hzm, "锦川") ? 1 : 0);
+                int hzm = FindStationIndexByExactName("伶仃桥");
+                int regions = (HasPortalServiceInRegion(hzm, "香埠") ? 1 : 0)
+                            + (HasPortalServiceInRegion(hzm, "莲澳") ? 1 : 0)
+                            + (HasPortalServiceInRegion(hzm, "粤海") ? 1 : 0);
                 return regions >= 2;
             }
             default:

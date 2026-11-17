@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -33,8 +33,9 @@ public partial class DemoBootstrap
         public string periodLabel;
         public string desc;
         public string effectSummary;
-        public int costCoins;
-        public int costRp;
+        public string effKind;
+        public float effVal;
+        public string resolvedBy; // 阵痛成本在对应合规节点掌握后解除
         public string[] parents;
     }
 
@@ -75,197 +76,274 @@ public partial class DemoBootstrap
     };
 
     static readonly CompanyTechNode[] CompanyTechNodes = {
-        // 环 0：1800—1829 · 矿轨契约与特许立社
+        // 历史阶段：1800—1829 · 矿轨契约与特许立社
         new CompanyTechNode {
             key = "co_charter_1801", eraGroup = 0, year = 1801, branch = 1,
             title = "萨里包运契约", periodLabel = "1801 年 · 公共收费铁路雏形",
             desc = "1801 年英国萨里铁道获议会特许作为世界首条公共收费轨道运输社运营，奠定“集资修路、按程收费”的商业起点。",
-            effectSummary = "开站与商用筹备造价 -3%", costCoins = 0, costRp = 0, parents = Array.Empty<string>()
+            effectSummary = "开站与商用筹备造价 -3%", parents = Array.Empty<string>()
         },
         new CompanyTechNode {
             key = "co_stock_1821", eraGroup = 0, year = 1821, branch = 2,
             title = "议会筑路特许案", periodLabel = "1821 年 · 斯托克顿—达灵顿法案",
             desc = "1821 年英国首条公共蒸汽铁路历经国会辩论取得法定筑路与征地特许状，确立近代铁路公司合股筹资法规。",
-            effectSummary = "全网铺轨造价 -4%", costCoins = 220, costRp = 2, parents = new[] { "co_charter_1801" }
+            effectSummary = "全网铺轨造价 -4%", parents = new[] { "co_inst_1_07", "co_inst_2_13" }
         },
         new CompanyTechNode {
             key = "co_shares_1825", eraGroup = 0, year = 1825, branch = 0,
             title = "合股募股章程", periodLabel = "1825 年 · 公开招股与经理制",
             desc = "1825 年通车前夕铁路公司向公众发售股份并聘任专职总监管账，确立资合制铁路社的初代治理与人才框架。",
-            effectSummary = "全网人才编制上限 +1", costCoins = 320, costRp = 3, parents = new[] { "co_stock_1821" }
+            effectSummary = "全网人才编制上限 +1", parents = new[] { "co_stock_1821", "co_inst_0_06" }
         },
         new CompanyTechNode {
             key = "co_booth_1826", eraGroup = 0, year = 1826, branch = 1,
             title = "初代站台票房", periodLabel = "1826 年 · 驿站木屋售票处",
             desc = "早期公共客运在道旁搭设兼办售票、寄存与小卖部的木屋站房，让车站首次具备稳定商铺租金价值。",
-            effectSummary = "新开车站与站前商用设施造价 -5%", costCoins = 340, costRp = 3, parents = new[] { "co_charter_1801" }
+            effectSummary = "新开车站与站前商用设施造价 -4%", parents = new[] { "co_shares_1825" }
         },
 
-        // 环 1：1830—1845 · 清算萌芽与标准时刻
+        // 历史阶段：1830—1845 · 清算萌芽与标准时刻
         new CompanyTechNode {
             key = "co_fin_1", eraGroup = 0, year = 1830, branch = 2,
             title = "复式分账精算", periodLabel = "1830 年 · 利物浦—曼彻斯特会计制",
             desc = "1830 年利曼铁路严格区隔工程资本支出与煤耗、维护等日常营运账目，开创铁路精算成本核查传统。",
-            effectSummary = "铺轨造价再 -6%，线路与车辆日常维保 -6%", costCoins = 450, costRp = 4, parents = new[] { "co_stock_1821" }
+            effectSummary = "铺轨造价再 -4%，线路与车辆日常维保 -4%", parents = new[] { "co_inst_4_10", "co_inst_2_18" }
         },
         new CompanyTechNode {
             key = "co_hr_1", eraGroup = 0, year = 1835, branch = 0,
             title = "站务班组规章", periodLabel = "1835 年 · 制服班组与轮值表",
             desc = "干线客运兴盛后，各站配备着装整洁、照表交接的站长、扳道员与行包班组，员工培养自成章法。",
-            effectSummary = "人才训练经验 +25%，全网人才编制上限再 +1", costCoins = 480, costRp = 4, parents = new[] { "co_shares_1825" }
+            effectSummary = "人才训练经验 +4%，全网人才编制上限再 +1", parents = new[] { "co_fin_1" }
         },
         new CompanyTechNode {
             key = "co_re_1", eraGroup = 0, year = 1838, branch = 1,
             title = "月台书报茶座", periodLabel = "1838 年 · 车站特许商铺兴起",
             desc = "1830 年代末旅途报刊与茶点需求激增，书报商铺率先批量入驻大站月台，形成持续稳健的特许经营租金流。",
-            effectSummary = "开站与站前商业设施造价再 -7%，物业租金 +6%", costCoins = 560, costRp = 5, parents = new[] { "co_booth_1826" }
+            effectSummary = "开站与站前商业设施造价再 -4%，物业租金 +4%", parents = new[] { "co_fin_1" }
         },
         new CompanyTechNode {
             key = "co_ops_1", eraGroup = 0, year = 1840, branch = 3,
             title = "铁路统一标准时", periodLabel = "1840 年 · 大西部铁路标准时",
             desc = "1840 年大西部铁路率先废除沿线各镇地方日晷时间、全网统一按伦敦标准时运行，塑造准点金字口碑。",
-            effectSummary = "全网机车平均运营车速 +6%，每日科研产速 +15%", costCoins = 640, costRp = 5, parents = new[] { "co_hr_1", "co_booth_1826" }
+            effectSummary = "全网机车平均运营车速 +4%，每日科研产速 +4%", parents = new[] { "co_inst_3_04", "co_hr_1" }
         },
         new CompanyTechNode {
             key = "co_rch_1842", eraGroup = 0, year = 1842, branch = 3,
             title = "伦敦铁路清算所", periodLabel = "1842 年 · 跨社联运清分机构",
             desc = "1842 年铁路清算所（RCH）设立，各家铁路公司据此实行联程一票直达并按里程自动清分票款。",
-            effectSummary = "跨线换乘阻力降低 8%", costCoins = 980, costRp = 6, parents = new[] { "co_ops_1", "co_fin_1" }
+            effectSummary = "跨线换乘阻力降低 4%", parents = new[] { "co_ops_1", "co_fin_1", "co_booth_1826" }
         },
         new CompanyTechNode {
             key = "co_fare_act_1844", eraGroup = 0, year = 1844, branch = 3,
             title = "分级客票条例", periodLabel = "1844 年 · 格莱斯顿铁路法案",
             desc = "1844 年议会法案规定各干线须每日开行每英里一便士的平价三等车厢，促成大众平价出行时代与分级票价制度。",
-            effectSummary = "全网基础客流需求 +4%，客票营收结算 +3%", costCoins = 1150, costRp = 7, parents = new[] { "co_rch_1842" }
+            effectSummary = "全网基础客流需求 +4%，客票营收结算 +3%", parents = new[] { "co_rch_1842", "co_inst_3_09" }
         },
         new CompanyTechNode {
             key = "co_mania_1845", eraGroup = 0, year = 1845, branch = 4,
             title = "铁路狂热泡沫", periodLabel = "1845 年 · 历史商海教训",
             desc = "1845—1846 年间上百家空壳路社扎堆募股引爆投机股灾，虽短期拖高合规审计开销，却倒逼出严格公司债法制。",
-            effectSummary = "历史教训：线路维保短期 +3%（债券与规范审计前置）", costCoins = 850, costRp = 4, parents = new[] { "co_fin_1" }
+            effectSummary = "历史教训：线路维保短期 +3%（债券与规范审计前置）", parents = new[] { "co_ops_1" }
         },
 
-        // 环 2：1846—1864 · 干线整并与基建融资
+        // 历史阶段：1846—1864 · 干线整并与基建融资
         new CompanyTechNode {
             key = "co_fin_2", eraGroup = 0, year = 1849, branch = 2,
             title = "铁路债券与优先股", periodLabel = "1849 年 · 长期公司债发行制度",
             desc = "投机泡沫退潮后，规范发行固定息票的公司债券与优先股取代高息短拆，为长周期铁路建设提供低息长期本金。",
-            effectSummary = "基建债券可贷本金 +20%，每期还本付息压力 -10%", costCoins = 1500, costRp = 9, parents = new[] { "co_mania_1845" }
+            effectSummary = "基建债券可贷本金 +4%，每期还本付息压力 -4%", parents = new[] { "co_mania_1845", "co_inst_2_33", "co_inst_2_08" }
         },
         new CompanyTechNode {
             key = "co_ops_3", eraGroup = 0, year = 1851, branch = 3,
             title = "万国博览假日套票", periodLabel = "1851 年 · 托马斯·库克专列",
             desc = "1851 年伦敦万国博览会期间，旅行包租专列与风景区往返套票爆红，开创“铁道+文旅”爆款营销先河。",
-            effectSummary = "含名胜车站的线路客票收入额外 +15%", costCoins = 1750, costRp = 10, parents = new[] { "co_fare_act_1844" }
+            effectSummary = "含名胜车站的线路客票收入额外 +4%", parents = new[] { "co_inst_3_34", "co_fare_act_1844" }
         },
         new CompanyTechNode {
             key = "co_hotel_1854", eraGroup = 0, year = 1854, branch = 1,
             title = "终点站大酒店", periodLabel = "1854 年 · 站城一体物业先驱",
             desc = "1854 年帕丁顿大西部酒店直通终点站月台开业，集住宿、宴会与商铺于一体，使铁路社从买路修桥迈向站前造城。",
-            effectSummary = "站前物业每日租金 +12%，名胜地标站点吸客 +5%", costCoins = 2100, costRp = 11, parents = new[] { "co_re_1" }
+            effectSummary = "站前物业每日租金 +4%，名胜地标站点吸客 +4%", parents = new[] { "co_ops_3", "co_re_1" }
         },
         new CompanyTechNode {
             key = "co_ops_2", eraGroup = 0, year = 1858, branch = 3,
             title = "电报总社联调", periodLabel = "1858 年 · 电报协同导视制",
             desc = "十九世纪中叶电报线沿路轨铺通，总社调度房与大站导视牌实时报信接续，极大减少了乘客跨线换乘等待。",
-            effectSummary = "跨线换乘惩罚再降 8%，全网车票营收结算 +5%", costCoins = 2300, costRp = 11, parents = new[] { "co_rch_1842" }
+            effectSummary = "跨线换乘惩罚再降 4%，全网车票营收结算 +4%", parents = new[] { "co_inst_0_36", "co_inst_2_28" }
         },
         new CompanyTechNode {
             key = "co_hr_3", eraGroup = 0, year = 1862, branch = 0,
             title = "机务师徒传帮带", periodLabel = "1862 年 · 机车城夜校与工坊",
             desc = "克鲁、斯温顿等铁路重镇兴办技校与工坊师徒制，老车长与大司炉言传身教，大幅摊薄人才进修耗费。",
-            effectSummary = "人才进修经费 -25%，每日自然实训经验 +50%", costCoins = 2200, costRp = 12, parents = new[] { "co_hr_1" }
+            effectSummary = "人才进修经费 -4%，每日自然实训经验 +4%", parents = new[] { "co_ops_2", "co_inst_0_06" }
         },
 
-        // 环 3：1865—1879 · 总社科层与远东初探
+        // 历史阶段：1865—1879 · 总社科层与远东初探
         new CompanyTechNode {
             key = "co_hr_2", eraGroup = 0, year = 1866, branch = 0,
             title = "总社董事议事厅", periodLabel = "1866 年 · 麦卡勒姆职能组织图",
             desc = "丹尼尔·麦卡勒姆绘制史上首张现代公司职能分部架构图，划分工务、机务、票务与督办董事常驻议事席。",
-            effectSummary = "董事会常驻高管席位 +1，人才编制上限再 +1", costCoins = 2900, costRp = 13, parents = new[] { "co_hr_3", "co_ops_2" }
+            effectSummary = "董事会常驻高管席位 +1，人才编制上限再 +1", parents = new[] { "co_inst_0_41", "co_inst_2_28" }
         },
         new CompanyTechNode {
             key = "co_pension_1868", eraGroup = 0, year = 1868, branch = 0,
             title = "员工互助抚恤金", periodLabel = "1868 年 · 司乘互助保障社",
             desc = "大型干线社自 1860 年代末普遍成立养老与伤残互助基金，骨干队伍高度稳定，日常实训事半功倍。",
-            effectSummary = "人才进修经费再 -10%，人才训练经验再 +10%", costCoins = 3400, costRp = 14, parents = new[] { "co_hr_2" }
+            effectSummary = "人才进修经费再 -4%，人才训练经验再 +4%", parents = new[] { "co_hr_2", "co_inst_0_31" }
         },
         new CompanyTechNode {
             key = "co_waybill_1871", eraGroup = 0, year = 1871, branch = 2,
             title = "联运提单押汇", periodLabel = "1871 年 · 路行票据结算制度",
             desc = "铁路货运单据纳入银行贴现押汇体系，货主与商家可凭路单融资，铁路社流动资金周转效率成倍加快。",
-            effectSummary = "线路与车辆日常维保费再 -5%", costCoins = 3800, costRp = 14, parents = new[] { "co_fin_2" }
+            effectSummary = "线路与车辆日常维保费再 -4%", parents = new[] { "co_inst_2_43", "co_inst_2_08" }
         },
         new CompanyTechNode {
             key = "co_woosung_1876", eraGroup = 0, year = 1876, branch = 4,
             title = "浅滩商办教训", periodLabel = "1876 年 · 滨海商路教训",
             desc = "1876 年海隅浅滩窄轨未获妥善征地公文即仓促通车，终被督署拆撤；警示海湾开站必先理顺市政契约。",
-            effectSummary = "历史教训：开站费短期 +3%（市政招标与官督商办前置）", costCoins = 4200, costRp = 12, parents = new[] { "co_waybill_1871", "co_hotel_1854" }
+            effectSummary = "历史教训：开站费短期 +3%（特许会计师年审后解除）", parents = new[] { "co_inst_1_47", "co_inst_4_35" }
         },
         new CompanyTechNode {
             key = "co_fin_3", eraGroup = 0, year = 1878, branch = 2,
             title = "市政招标规范道", periodLabel = "1878 年 · 公私合营工程标书",
             desc = "汲取早期征地纠葛教训，确立明文路权、分期工程赏金与履约验收条款的市政公开招标体系。",
-            effectSummary = "市政中标工程赏金 +20%，同时可挂牌标书上限 +1", costCoins = 4600, costRp = 15, parents = new[] { "co_woosung_1876" }
+            effectSummary = "市政中标工程赏金 +4%，同时可挂牌标书上限 +1", parents = new[] { "co_woosung_1876", "co_hr_2" }
         },
 
-        // 环 4：1880—1889 · 港埠骑楼与独立年审
+        // 历史阶段：1880—1889 · 港埠骑楼与独立年审
         new CompanyTechNode {
             key = "co_kaiping_1881", eraGroup = 0, year = 1881, branch = 3,
             title = "官督商办路政约", periodLabel = "1881 年 · 矿埠自办商路先声",
             desc = "1881 年海北矿务局自建矿区铁轨并首创商民自营商业运务，探索出兼顾督管与商股分红的本土章法。",
-            effectSummary = "全网基础客流需求 +4%，每日科研点产速 +10%", costCoins = 5200, costRp = 16, parents = new[] { "co_woosung_1876" }
+            effectSummary = "全网基础客流需求 +4%，每日科研点产速 +4%", parents = new[] { "co_fin_3" }
         },
         new CompanyTechNode {
             key = "co_re_2", eraGroup = 0, year = 1883, branch = 1,
             title = "骑楼连廊商圈", periodLabel = "1883 年 · 南岸港埠站前铺面",
             desc = "十九世纪八十年代三域埠岸兴建遮阳避雨的骑楼商廊，把下车旅客自然引入茶室银庄与杂货行。",
-            effectSummary = "所有已落成站前物业的每日租金收益 +20%", costCoins = 5600, costRp = 16, parents = new[] { "co_hotel_1854", "co_kaiping_1881" }
+            effectSummary = "所有已落成站前物业的每日租金收益 +4%", parents = new[] { "co_inst_1_52", "co_kaiping_1881" }
         },
         new CompanyTechNode {
             key = "co_audit_1885", eraGroup = 0, year = 1885, branch = 2,
             title = "特许会计师年审", periodLabel = "1885 年 · 独立路账年审制度",
             desc = "大型铁路公司延请外部特许会计师审计轨料折旧与客货票款，大幅增进银行信用并压缩筑路虚耗。",
-            effectSummary = "铺轨造价再 -5%，基建债券每期还款压力再 -5%", costCoins = 6000, costRp = 17, parents = new[] { "co_fin_3" }
+            effectSummary = "铺轨造价再 -4%，基建债券每期还款压力再 -4%", parents = new[] { "co_inst_4_50", "co_inst_2_53", "co_fin_3" }
         },
         new CompanyTechNode {
             key = "co_rateact_1887", eraGroup = 0, year = 1887, branch = 3,
             title = "跨埠公平运价约", periodLabel = "1887 年 · 公开透明运价条例",
             desc = "参照 1887 年公平运价法案禁止暗箱歧视加价与恶性割价竞争，稳定了长途与跨埠干线的合理利润率。",
-            effectSummary = "全网客票营收结算 +4%", costCoins = 6400, costRp = 17, parents = new[] { "co_audit_1885", "co_ops_3" }
+            effectSummary = "全网客票营收结算 +4%", parents = new[] { "co_audit_1885" }
         },
         new CompanyTechNode {
             key = "co_re_3", eraGroup = 0, year = 1888, branch = 1,
-            title = "望海奇峰缆车特许", periodLabel = "1888 年 · 青屿山顶缆车通车",
-            desc = "1888 年青屿山顶缆车通车，缔造观光交通与半山地产共荣典范，名胜车站由此成为全网客流高地。",
-            effectSummary = "名胜地标站点基础吸引客流再 +10%", costCoins = 6800, costRp = 18, parents = new[] { "co_re_2" }
+            title = "扯旗山缆车特许", periodLabel = "1888 年 · 香埠山顶缆车通车",
+            desc = "1888 年香埠山顶缆车通车，缔造观光交通与半山地产共荣典范，名胜车站由此成为全网客流高地。",
+            effectSummary = "名胜地标站点基础吸引客流再 +4%", parents = new[] { "co_rateact_1887", "co_inst_0_56" }
         },
 
-        // 环 5：1890—1899 · 海湾口岸与现代集团
+        // 历史阶段：1890—1899 · 海湾口岸与现代集团
         new CompanyTechNode {
             key = "co_hr_4", eraGroup = 0, year = 1891, branch = 0,
             title = "名宿礼遇与委任状", periodLabel = "1891 年 · 资深董事授衔章程",
             desc = "世纪末大型铁路集团向历任高管颁授礼遇与独立权责委任状，大幅化解部门本位掣肘与磨合内耗。",
-            effectSummary = "董事会高管负面特质削减 35%，常驻董事会席位再 +1", costCoins = 7400, costRp = 19, parents = new[] { "co_rateact_1887", "co_hr_2" }
+            effectSummary = "董事会高管负面特质削减 4%，常驻董事会席位再 +1", parents = new[] { "co_inst_0_56", "co_pension_1868" }
         },
         new CompanyTechNode {
             key = "co_ops_4", eraGroup = 0, year = 1893, branch = 3,
             title = "山海旅行手账刊", periodLabel = "1893 年 · 版画沿线风物指南",
             desc = "随车附赠精致的港口风光版画手册与名胜盖章本，使铁路品牌深入人心，屡夺年度行业评比桂冠。",
-            effectSummary = "全网基础客流需求再 +8%，年度铁道大赏赏金 +25%", costCoins = 7800, costRp = 20, parents = new[] { "co_re_3" }
+            effectSummary = "全网基础客流需求再 +4%，年度铁道大赏赏金 +4%", parents = new[] { "co_inst_3_59", "co_inst_2_63" }
         },
         new CompanyTechNode {
             key = "co_re_4", eraGroup = 0, year = 1898, branch = 1,
             title = "跨湾枢纽综合体", periodLabel = "1898 年 · 跨湾干线草约与总站规划",
-            desc = "1898 年锦川至青屿干线勘线草约签订，规划海港大枢纽与周边货栈商业街，打造跨城站城一体化枢纽。",
-            effectSummary = "站前物业总租金再 +25%，全网车站吞吐上限 +10%", costCoins = 8600, costRp = 21, parents = new[] { "co_re_2", "co_re_3" }
+            desc = "1898 年粤海至香埠干线勘线草约签订，规划海港大枢纽与周边货栈商业街，打造跨城站城一体化枢纽。",
+            effectSummary = "站前物业总租金再 +4%，全网车站吞吐上限 +4%", parents = new[] { "co_inst_0_70", "co_inst_3_64", "co_inst_4_73" }
         },
         new CompanyTechNode {
             key = "co_fin_4", eraGroup = 0, year = 1899, branch = 2,
             title = "跨境银团授信", periodLabel = "1899 年 · 十九世纪末银团联贷协议",
             desc = "世纪之交多家海湾银号结成跨境基础设施银团授信，以极低长期成本护航三域铁路总社跨入新纪元。",
-            effectSummary = "全网客票营收结算再 +8%，线路与列车维保费再 -10%", costCoins = 9800, costRp = 24, parents = new[] { "co_audit_1885", "co_hr_4", "co_re_4" }
-        }
+            effectSummary = "全网客票营收结算再 +4%，线路与列车维保费再 -4%", parents = new[] { "co_inst_2_68", "co_re_4", "co_inst_4_75" }
+        },
+
+        // 新增 75 项：年代为游戏中的制度推演定位，并非全部制度的首创年份。
+        new CompanyTechNode { key = "co_inst_0_01", eraGroup = 0, year = 1802, branch = 0, title = "雇员名册", periodLabel = "1802 年 · 十九世纪制度推演", desc = "统一登记工种与资历，减少班组交接遗漏。以书面规程和定期核验落实到日常经营。", effectSummary = "人才训练经验 +1%", effKind = "TrainXp", effVal = 0.01f, parents = new[] { "co_charter_1801" } },
+        new CompanyTechNode { key = "co_inst_1_02", eraGroup = 0, year = 1803, branch = 1, title = "站前货栈", periodLabel = "1803 年 · 十九世纪制度推演", desc = "按批次出租货位，让零担集散形成租金。以书面规程和定期核验落实到日常经营。", effectSummary = "物业租金 +2%", effKind = "Commercial", effVal = 0.02f, parents = new[] { "co_charter_1801" } },
+        new CompanyTechNode { key = "co_inst_2_03", eraGroup = 0, year = 1804, branch = 2, title = "汇票结算", periodLabel = "1804 年 · 十九世纪制度推演", desc = "用汇票核销沿线账款，减少票款损耗。以书面规程和定期核验落实到日常经营。", effectSummary = "客票营收 +3%", effKind = "Revenue", effVal = 0.03f, parents = new[] { "co_charter_1801" } },
+        new CompanyTechNode { key = "co_inst_3_04", eraGroup = 0, year = 1826, branch = 3, title = "行车时刻表册", periodLabel = "1826 年 · 十九世纪制度推演", desc = "向市集与旅店分发班次和接驳资料。以书面规程和定期核验落实到日常经营。", effectSummary = "基础客流 +4%", effKind = "Demand", effVal = 0.04f, parents = new[] { "co_shares_1825" } },
+        new CompanyTechNode { key = "co_inst_4_05", eraGroup = 0, year = 1822, branch = 4, title = "盲目圈地", periodLabel = "1822 年 · 十九世纪制度推演", desc = "未核实需求便囤积站前用地。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：开站造价短期 +2%（站前铺租契掌握后解除）", effKind = "OpenCost", effVal = 0.02f, resolvedBy = "co_inst_1_22", parents = new[] { "co_stock_1821" } },
+        new CompanyTechNode { key = "co_inst_0_06", eraGroup = 0, year = 1815, branch = 0, title = "站务培训", periodLabel = "1815 年 · 十九世纪制度推演", desc = "用岗位手册讲授售票、行包与月台引导。以书面规程和定期核验落实到日常经营。", effectSummary = "人才训练经验 +2%", effKind = "TrainXp", effVal = 0.02f, parents = new[] { "co_inst_0_01" } },
+        new CompanyTechNode { key = "co_inst_1_07", eraGroup = 0, year = 1810, branch = 1, title = "头等候车室", periodLabel = "1810 年 · 十九世纪制度推演", desc = "分区经营候车与茶点服务。以书面规程和定期核验落实到日常经营。", effectSummary = "物业租金 +3%", effKind = "Commercial", effVal = 0.03f, parents = new[] { "co_inst_1_02" } },
+        new CompanyTechNode { key = "co_inst_2_08", eraGroup = 0, year = 1832, branch = 2, title = "贴现银号", periodLabel = "1832 年 · 十九世纪制度推演", desc = "凭到期票据贴现，降低融资周转负担。以书面规程和定期核验落实到日常经营。", effectSummary = "债券偿付压力 -4%", effKind = "BondDue", effVal = -0.04f, parents = new[] { "co_fin_1" } },
+        new CompanyTechNode { key = "co_inst_3_09", eraGroup = 0, year = 1842, branch = 3, title = "埃德蒙森硬纸车票", periodLabel = "1842 年 · 十九世纪制度推演", desc = "以预印编号硬纸票核对售票与收入。以书面规程和定期核验落实到日常经营。", effectSummary = "客票营收 +1%", effKind = "Revenue", effVal = 0.01f, parents = new[] { "co_rch_1842" } },
+        new CompanyTechNode { key = "co_inst_4_10", eraGroup = 0, year = 1828, branch = 4, title = "账册混同", periodLabel = "1828 年 · 十九世纪制度推演", desc = "把资本支出混入日常账目。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：线路与车辆维保费短期 +3%（复式分账精算掌握后解除）", effKind = "Maint", effVal = 0.03f, resolvedBy = "co_fin_1", parents = new[] { "co_shares_1825" } },
+        new CompanyTechNode { key = "co_inst_0_11", eraGroup = 0, year = 1837, branch = 0, title = "轮班条例", periodLabel = "1837 年 · 十九世纪制度推演", desc = "按工时交接班，减少疲劳作业返修。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -3%", effKind = "Maint", effVal = -0.03f, parents = new[] { "co_hr_1", "co_inst_1_07" } },
+        new CompanyTechNode { key = "co_inst_1_12", eraGroup = 0, year = 1838, branch = 1, title = "车站书报亭", periodLabel = "1838 年 · 十九世纪制度推演", desc = "以特许租约经营沿线报刊摊位。以书面规程和定期核验落实到日常经营。", effectSummary = "物业租金 +4%", effKind = "Commercial", effVal = 0.04f, parents = new[] { "co_re_1", "co_inst_2_23" } },
+        new CompanyTechNode { key = "co_inst_2_13", eraGroup = 0, year = 1817, branch = 2, title = "工程预算册", periodLabel = "1817 年 · 十九世纪制度推演", desc = "逐项核算路基与材料预算。以书面规程和定期核验落实到日常经营。", effectSummary = "铺轨造价 -1%", effKind = "TrackBuild", effVal = -0.01f, parents = new[] { "co_inst_2_03" } },
+        new CompanyTechNode { key = "co_inst_3_14", eraGroup = 0, year = 1843, branch = 3, title = "托马斯·库克团体游", periodLabel = "1843 年 · 十九世纪制度推演", desc = "组织团体订座与统一接待。以书面规程和定期核验落实到日常经营。", effectSummary = "名胜线路票收 +2%", effKind = "Tourism", effVal = 0.02f, parents = new[] { "co_rch_1842" } },
+        new CompanyTechNode { key = "co_inst_4_15", eraGroup = 0, year = 1846, branch = 4, title = "削价恶性竞争", periodLabel = "1846 年 · 十九世纪制度推演", desc = "以低于成本的运价争抢客源。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：线路与车辆维保费短期 +2%（运价公示审计掌握后解除）", effKind = "Maint", effVal = 0.02f, resolvedBy = "co_inst_2_63", parents = new[] { "co_fare_act_1844", "co_inst_1_27" } },
+        new CompanyTechNode { key = "co_inst_0_16", eraGroup = 0, year = 1839, branch = 0, title = "宿舍补贴", periodLabel = "1839 年 · 十九世纪制度推演", desc = "为异地雇员安排宿舍，降低集中培训支出。以书面规程和定期核验落实到日常经营。", effectSummary = "人才进修经费 -4%", effKind = "TrainCost", effVal = -0.04f, parents = new[] { "co_inst_0_11", "co_inst_1_22" } },
+        new CompanyTechNode { key = "co_inst_1_17", eraGroup = 0, year = 1845, branch = 1, title = "马车接驳院", periodLabel = "1845 年 · 十九世纪制度推演", desc = "统一站前马车候客和行包装卸位置。以书面规程和定期核验落实到日常经营。", effectSummary = "跨线换乘阻力 -1%", effKind = "Transfer", effVal = -0.01f, parents = new[] { "co_inst_1_32", "co_inst_1_22" } },
+        new CompanyTechNode { key = "co_inst_2_18", eraGroup = 0, year = 1823, branch = 2, title = "股东查账权", periodLabel = "1823 年 · 十九世纪制度推演", desc = "开放账册核对，约束虚列运营开销。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -2%", effKind = "Maint", effVal = -0.02f, parents = new[] { "co_stock_1821" } },
+        new CompanyTechNode { key = "co_inst_3_19", eraGroup = 0, year = 1841, branch = 3, title = "邮政专车", periodLabel = "1841 年 · 十九世纪制度推演", desc = "按契约承运邮袋，稳定班次收入。以书面规程和定期核验落实到日常经营。", effectSummary = "客票营收 +3%", effKind = "Revenue", effVal = 0.03f, parents = new[] { "co_ops_1" } },
+        new CompanyTechNode { key = "co_inst_4_20", eraGroup = 0, year = 1846, branch = 4, title = "外包工程违约", periodLabel = "1846 年 · 十九世纪制度推演", desc = "承包商收款后延误或偷减材料。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：铺轨造价短期 +3%（担保责任书掌握后解除）", effKind = "TrackBuild", effVal = 0.03f, resolvedBy = "co_inst_2_33", parents = new[] { "co_inst_2_13", "co_inst_1_17" } },
+        new CompanyTechNode { key = "co_inst_0_21", eraGroup = 0, year = 1836, branch = 0, title = "车长考核", periodLabel = "1836 年 · 十九世纪制度推演", desc = "用行车记录考核车长，改善发车衔接。以书面规程和定期核验落实到日常经营。", effectSummary = "运营车速 +1%", effKind = "Speed", effVal = 0.01f, parents = new[] { "co_hr_1", "co_inst_3_04" } },
+        new CompanyTechNode { key = "co_inst_1_22", eraGroup = 0, year = 1829, branch = 1, title = "站前铺租契", periodLabel = "1829 年 · 十九世纪制度推演", desc = "明确商铺租约和修缮责任，减少筹备支出。以书面规程和定期核验落实到日常经营。", effectSummary = "开站造价 -2%", effKind = "OpenCost", effVal = -0.02f, parents = new[] { "co_inst_4_05", "co_booth_1826" } },
+        new CompanyTechNode { key = "co_inst_2_23", eraGroup = 0, year = 1827, branch = 2, title = "资本实缴册", periodLabel = "1827 年 · 十九世纪制度推演", desc = "核实筑站资金到账后再分期承包。以书面规程和定期核验落实到日常经营。", effectSummary = "开站造价 -3%", effKind = "OpenCost", effVal = -0.03f, parents = new[] { "co_shares_1825" } },
+        new CompanyTechNode { key = "co_inst_3_24", eraGroup = 0, year = 1847, branch = 3, title = "失物招领章", periodLabel = "1847 年 · 十九世纪制度推演", desc = "建立失物登记和认领手续。以书面规程和定期核验落实到日常经营。", effectSummary = "基础客流 +4%", effKind = "Demand", effVal = 0.04f, parents = new[] { "co_inst_0_21", "co_inst_1_12" } },
+        new CompanyTechNode { key = "co_inst_4_25", eraGroup = 0, year = 1855, branch = 4, title = "虚报客流丑闻", periodLabel = "1855 年 · 十九世纪制度推演", desc = "夸大客流误导股东扩建。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：线路与车辆维保费短期 +2%（独立监事掌握后解除）", effKind = "Maint", effVal = 0.02f, resolvedBy = "co_inst_2_28", parents = new[] { "co_hotel_1854", "co_inst_3_34" } },
+        new CompanyTechNode { key = "co_inst_0_26", eraGroup = 0, year = 1847, branch = 0, title = "双语站务", periodLabel = "1847 年 · 十九世纪制度推演", desc = "以双语告示疏导跨区旅客。以书面规程和定期核验落实到日常经营。", effectSummary = "跨线换乘阻力 -2%", effKind = "Transfer", effVal = -0.02f, parents = new[] { "co_inst_1_17", "co_inst_3_19" } },
+        new CompanyTechNode { key = "co_inst_1_27", eraGroup = 0, year = 1844, branch = 1, title = "月台广告牌", periodLabel = "1844 年 · 十九世纪制度推演", desc = "统一出租广告位置，形成固定租金。以书面规程和定期核验落实到日常经营。", effectSummary = "物业租金 +3%", effKind = "Commercial", effVal = 0.03f, parents = new[] { "co_inst_1_12", "co_inst_0_21" } },
+        new CompanyTechNode { key = "co_inst_2_28", eraGroup = 0, year = 1856, branch = 2, title = "独立监事", periodLabel = "1856 年 · 十九世纪制度推演", desc = "由监事复核支出与关联交易。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -4%", effKind = "Maint", effVal = -0.04f, parents = new[] { "co_inst_4_25", "co_inst_2_18" } },
+        new CompanyTechNode { key = "co_inst_3_29", eraGroup = 0, year = 1850, branch = 3, title = "行包联运票", periodLabel = "1850 年 · 十九世纪制度推演", desc = "凭同一行包票办理换线接续。以书面规程和定期核验落实到日常经营。", effectSummary = "跨线换乘阻力 -1%", effKind = "Transfer", effVal = -0.01f, parents = new[] { "co_inst_3_09", "co_inst_0_26" } },
+        new CompanyTechNode { key = "co_inst_4_30", eraGroup = 0, year = 1856, branch = 4, title = "关联采购回扣", periodLabel = "1856 年 · 十九世纪制度推演", desc = "关联供应商通过回扣抬价。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：铺轨造价短期 +3%（关联交易披露掌握后解除）", effKind = "TrackBuild", effVal = 0.03f, resolvedBy = "co_inst_2_58", parents = new[] { "co_inst_1_37", "co_inst_2_38" } },
+        new CompanyTechNode { key = "co_inst_0_31", eraGroup = 0, year = 1850, branch = 0, title = "工伤抚恤", periodLabel = "1850 年 · 十九世纪制度推演", desc = "建立工伤申报和互助程序，稳定机务队伍。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -3%", effKind = "Maint", effVal = -0.03f, parents = new[] { "co_inst_0_11", "co_inst_3_24" } },
+        new CompanyTechNode { key = "co_inst_1_32", eraGroup = 0, year = 1844, branch = 1, title = "铁道旅馆", periodLabel = "1844 年 · 十九世纪制度推演", desc = "把住宿与沿线游览接驳安排在一起。以书面规程和定期核验落实到日常经营。", effectSummary = "名胜吸客 +4%", effKind = "SceneryDemand", effVal = 0.04f, parents = new[] { "co_rch_1842" } },
+        new CompanyTechNode { key = "co_inst_2_33", eraGroup = 0, year = 1848, branch = 2, title = "担保责任书", periodLabel = "1848 年 · 十九世纪制度推演", desc = "明确承包商履约责任，减少返工。以书面规程和定期核验落实到日常经营。", effectSummary = "铺轨造价 -1%", effKind = "TrackBuild", effVal = -0.01f, parents = new[] { "co_inst_4_20", "co_inst_2_23" } },
+        new CompanyTechNode { key = "co_inst_3_34", eraGroup = 0, year = 1847, branch = 3, title = "观光套票", periodLabel = "1847 年 · 十九世纪制度推演", desc = "把往返车票和沿线游览合并售卖。以书面规程和定期核验落实到日常经营。", effectSummary = "名胜线路票收 +2%", effKind = "Tourism", effVal = 0.02f, parents = new[] { "co_inst_3_14", "co_inst_1_32" } },
+        new CompanyTechNode { key = "co_inst_4_35", eraGroup = 0, year = 1852, branch = 4, title = "征地契约纠纷", periodLabel = "1852 年 · 十九世纪制度推演", desc = "口头约定取代正式土地契约。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：开站造价短期 +2%（站前市集约掌握后解除）", effKind = "OpenCost", effVal = 0.02f, resolvedBy = "co_inst_1_62", parents = new[] { "co_fin_2" } },
+        new CompanyTechNode { key = "co_inst_0_36", eraGroup = 0, year = 1851, branch = 0, title = "调度总局", periodLabel = "1851 年 · 十九世纪制度推演", desc = "总局汇总沿线车报，统一编排交会。以书面规程和定期核验落实到日常经营。", effectSummary = "运营车速 +4%", effKind = "Speed", effVal = 0.04f, parents = new[] { "co_ops_1" } },
+        new CompanyTechNode { key = "co_inst_1_37", eraGroup = 0, year = 1853, branch = 1, title = "煤水补给契", periodLabel = "1853 年 · 十九世纪制度推演", desc = "以定期供给合同稳定煤水采购。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -1%", effKind = "Maint", effVal = -0.01f, parents = new[] { "co_inst_0_36", "co_inst_2_33" } },
+        new CompanyTechNode { key = "co_inst_2_38", eraGroup = 0, year = 1855, branch = 2, title = "设备抵押信托", periodLabel = "1855 年 · 十九世纪制度推演", desc = "以车辆设备收益保障长期借款。以书面规程和定期核验落实到日常经营。", effectSummary = "债券可贷本金 +2%", effKind = "BondCap", effVal = 0.02f, parents = new[] { "co_fin_2" } },
+        new CompanyTechNode { key = "co_inst_3_39", eraGroup = 0, year = 1857, branch = 3, title = "餐车服务", periodLabel = "1857 年 · 十九世纪制度推演", desc = "为长途旅客提供随车餐饮。以书面规程和定期核验落实到日常经营。", effectSummary = "客票营收 +3%", effKind = "Revenue", effVal = 0.03f, parents = new[] { "co_hotel_1854", "co_inst_3_29" } },
+        new CompanyTechNode { key = "co_inst_4_40", eraGroup = 0, year = 1859, branch = 4, title = "过度举债危机", periodLabel = "1859 年 · 十九世纪制度推演", desc = "用短债滚动填补长期建设缺口。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：债券偿付压力短期 +3%（债务偿付准备掌握后解除）", effKind = "BondDue", effVal = 0.03f, resolvedBy = "co_inst_2_53", parents = new[] { "co_inst_2_38", "co_inst_3_39" } },
+        new CompanyTechNode { key = "co_inst_0_41", eraGroup = 0, year = 1861, branch = 0, title = "工会章程", periodLabel = "1861 年 · 十九世纪制度推演", desc = "以书面章程协商工时与学徒培养。以书面规程和定期核验落实到日常经营。", effectSummary = "人才训练经验 +1%", effKind = "TrainXp", effVal = 0.01f, parents = new[] { "co_inst_0_31", "co_inst_0_16" } },
+        new CompanyTechNode { key = "co_inst_1_42", eraGroup = 0, year = 1863, branch = 1, title = "冷链仓库", periodLabel = "1863 年 · 十九世纪制度推演", desc = "出租冰藏货位并规定周转时限。以书面规程和定期核验落实到日常经营。", effectSummary = "物业租金 +2%", effKind = "Commercial", effVal = 0.02f, parents = new[] { "co_ops_2" } },
+        new CompanyTechNode { key = "co_inst_2_43", eraGroup = 0, year = 1865, branch = 2, title = "保险联保", periodLabel = "1865 年 · 十九世纪制度推演", desc = "按事故风险共同投保并核查保费。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -3%", effKind = "Maint", effVal = -0.03f, parents = new[] { "co_ops_2" } },
+        new CompanyTechNode { key = "co_inst_3_44", eraGroup = 0, year = 1867, branch = 3, title = "卧铺服务", periodLabel = "1867 年 · 十九世纪制度推演", desc = "用卧铺改善长途夜间旅行体验。以书面规程和定期核验落实到日常经营。", effectSummary = "基础客流 +4%", effKind = "Demand", effVal = 0.04f, parents = new[] { "co_inst_3_39", "co_inst_0_46" } },
+        new CompanyTechNode { key = "co_inst_4_45", eraGroup = 0, year = 1869, branch = 4, title = "票款挪用案", periodLabel = "1869 年 · 十九世纪制度推演", desc = "代理票房挪用尚未清分的票款。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：线路与车辆维保费短期 +2%（分局稽核制掌握后解除）", effKind = "Maint", effVal = 0.02f, resolvedBy = "co_inst_0_70", parents = new[] { "co_inst_3_29", "co_inst_3_44" } },
+        new CompanyTechNode { key = "co_inst_0_46", eraGroup = 0, year = 1864, branch = 0, title = "工务巡检册", periodLabel = "1864 年 · 十九世纪制度推演", desc = "逐段登记巡检责任，减少漏检。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -2%", effKind = "Maint", effVal = -0.02f, parents = new[] { "co_hr_3", "co_inst_1_37" } },
+        new CompanyTechNode { key = "co_inst_1_47", eraGroup = 0, year = 1872, branch = 1, title = "保税货场", periodLabel = "1872 年 · 十九世纪制度推演", desc = "分区保管待验货物，提供仓储租赁。以书面规程和定期核验落实到日常经营。", effectSummary = "物业租金 +3%", effKind = "Commercial", effVal = 0.03f, parents = new[] { "co_waybill_1871", "co_inst_1_42" } },
+        new CompanyTechNode { key = "co_inst_2_48", eraGroup = 0, year = 1873, branch = 2, title = "跨币结算", periodLabel = "1873 年 · 十九世纪制度推演", desc = "统一异地银钱折算与清分口径。以书面规程和定期核验落实到日常经营。", effectSummary = "客票营收 +4%", effKind = "Revenue", effVal = 0.04f, parents = new[] { "co_waybill_1871", "co_inst_0_26" } },
+        new CompanyTechNode { key = "co_inst_3_49", eraGroup = 0, year = 1875, branch = 3, title = "旅客赔付章", periodLabel = "1875 年 · 十九世纪制度推演", desc = "公示误点与行包赔付手续。以书面规程和定期核验落实到日常经营。", effectSummary = "基础客流 +1%", effKind = "Demand", effVal = 0.01f, parents = new[] { "co_inst_3_44", "co_inst_2_43" } },
+        new CompanyTechNode { key = "co_inst_4_50", eraGroup = 0, year = 1876, branch = 4, title = "煤料囤积失算", periodLabel = "1876 年 · 十九世纪制度推演", desc = "过量购煤导致仓储与损耗增加。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：线路与车辆维保费短期 +3%（特许会计师年审掌握后解除）", effKind = "Maint", effVal = 0.03f, resolvedBy = "co_audit_1885", parents = new[] { "co_inst_1_42", "co_inst_0_46" } },
+        new CompanyTechNode { key = "co_inst_0_51", eraGroup = 0, year = 1878, branch = 0, title = "职员申诉簿", periodLabel = "1878 年 · 十九世纪制度推演", desc = "设立申诉与复核手续，减少人员流失。以书面规程和定期核验落实到日常经营。", effectSummary = "人才进修经费 -3%", effKind = "TrainCost", effVal = -0.03f, parents = new[] { "co_pension_1868", "co_inst_3_49" } },
+        new CompanyTechNode { key = "co_inst_1_52", eraGroup = 0, year = 1880, branch = 1, title = "港埠联运仓", periodLabel = "1880 年 · 十九世纪制度推演", desc = "将码头与铁路货位接续，缩短换装等待。以书面规程和定期核验落实到日常经营。", effectSummary = "跨线换乘阻力 -4%", effKind = "Transfer", effVal = -0.04f, parents = new[] { "co_fin_3" } },
+        new CompanyTechNode { key = "co_inst_2_53", eraGroup = 0, year = 1881, branch = 2, title = "债务偿付准备", periodLabel = "1881 年 · 十九世纪制度推演", desc = "按期留存偿债资金，降低续借压力。以书面规程和定期核验落实到日常经营。", effectSummary = "债券偿付压力 -1%", effKind = "BondDue", effVal = -0.01f, parents = new[] { "co_inst_4_40", "co_inst_2_48" } },
+        new CompanyTechNode { key = "co_inst_3_54", eraGroup = 0, year = 1883, branch = 3, title = "夜班特快品牌", periodLabel = "1883 年 · 十九世纪制度推演", desc = "以稳定夜间快车班次建立品牌。以书面规程和定期核验落实到日常经营。", effectSummary = "运营车速 +2%", effKind = "Speed", effVal = 0.02f, parents = new[] { "co_re_2", "co_inst_3_49" } },
+        new CompanyTechNode { key = "co_inst_4_55", eraGroup = 0, year = 1884, branch = 4, title = "仓栈火险", periodLabel = "1884 年 · 十九世纪制度推演", desc = "仓栈防火责任和通道长期缺位。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：线路与车辆维保费短期 +2%（消防共保约掌握后解除）", effKind = "Maint", effVal = 0.02f, resolvedBy = "co_inst_1_67", parents = new[] { "co_re_2", "co_inst_1_47" } },
+        new CompanyTechNode { key = "co_inst_0_56", eraGroup = 0, year = 1886, branch = 0, title = "岗位晋级制", periodLabel = "1886 年 · 十九世纪制度推演", desc = "用实操成绩安排晋级，鼓励持续学习。以书面规程和定期核验落实到日常经营。", effectSummary = "人才训练经验 +4%", effKind = "TrainXp", effVal = 0.04f, parents = new[] { "co_inst_0_51", "co_hr_3" } },
+        new CompanyTechNode { key = "co_inst_1_57", eraGroup = 0, year = 1887, branch = 1, title = "行包寄存所", periodLabel = "1887 年 · 十九世纪制度推演", desc = "分离寄存和进出站动线，释放站厅容量。以书面规程和定期核验落实到日常经营。", effectSummary = "车站吞吐上限 +1%", effKind = "StationCap", effVal = 0.01f, parents = new[] { "co_audit_1885" } },
+        new CompanyTechNode { key = "co_inst_2_58", eraGroup = 0, year = 1889, branch = 2, title = "关联交易披露", periodLabel = "1889 年 · 十九世纪制度推演", desc = "公开材料采购关系，防止抬价承包。以书面规程和定期核验落实到日常经营。", effectSummary = "铺轨造价 -2%", effKind = "TrackBuild", effVal = -0.02f, parents = new[] { "co_inst_4_30", "co_audit_1885" } },
+        new CompanyTechNode { key = "co_inst_3_59", eraGroup = 0, year = 1890, branch = 3, title = "沿线旅行指南", periodLabel = "1890 年 · 十九世纪制度推演", desc = "介绍地方墟市与名胜接驳。以书面规程和定期核验落实到日常经营。", effectSummary = "名胜吸客 +3%", effKind = "SceneryDemand", effVal = 0.03f, parents = new[] { "co_re_3", "co_inst_1_57" } },
+        new CompanyTechNode { key = "co_inst_4_60", eraGroup = 0, year = 1891, branch = 4, title = "跨币汇兑亏损", periodLabel = "1891 年 · 十九世纪制度推演", desc = "收入和债务币种错配引发损失。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：债券偿付压力短期 +3%（风险准备金掌握后解除）", effKind = "BondDue", effVal = 0.03f, resolvedBy = "co_inst_2_68", parents = new[] { "co_inst_2_48", "co_inst_1_52" } },
+        new CompanyTechNode { key = "co_inst_0_61", eraGroup = 0, year = 1891, branch = 0, title = "夜校奖学金", periodLabel = "1891 年 · 十九世纪制度推演", desc = "补贴职员夜校，减轻进修开销。以书面规程和定期核验落实到日常经营。", effectSummary = "人才进修经费 -1%", effKind = "TrainCost", effVal = -0.01f, parents = new[] { "co_hr_4", "co_inst_2_58" } },
+        new CompanyTechNode { key = "co_inst_1_62", eraGroup = 0, year = 1892, branch = 1, title = "站前市集约", periodLabel = "1892 年 · 十九世纪制度推演", desc = "协商市集用地与道路边界，降低开站成本。以书面规程和定期核验落实到日常经营。", effectSummary = "开站造价 -2%", effKind = "OpenCost", effVal = -0.02f, parents = new[] { "co_inst_4_35", "co_re_3" } },
+        new CompanyTechNode { key = "co_inst_2_63", eraGroup = 0, year = 1892, branch = 2, title = "运价公示审计", periodLabel = "1892 年 · 十九世纪制度推演", desc = "核验收费与公示一致，减少结算争议。以书面规程和定期核验落实到日常经营。", effectSummary = "客票营收 +3%", effKind = "Revenue", effVal = 0.03f, parents = new[] { "co_inst_4_15", "co_rateact_1887" } },
+        new CompanyTechNode { key = "co_inst_3_64", eraGroup = 0, year = 1893, branch = 3, title = "服务质量稽查", periodLabel = "1893 年 · 十九世纪制度推演", desc = "按投诉和服务记录改善品牌信誉。以书面规程和定期核验落实到日常经营。", effectSummary = "年度大赏赏金 +4%", effKind = "Award", effVal = 0.04f, parents = new[] { "co_ops_4", "co_inst_0_61" } },
+        new CompanyTechNode { key = "co_inst_4_65", eraGroup = 0, year = 1893, branch = 4, title = "支线重复投资", periodLabel = "1893 年 · 十九世纪制度推演", desc = "邻近支线争夺同一小片货源。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：铺轨造价短期 +2%（分局稽核制掌握后解除）", effKind = "TrackBuild", effVal = 0.02f, resolvedBy = "co_inst_0_70", parents = new[] { "co_inst_3_54", "co_inst_1_62" } },
+        new CompanyTechNode { key = "co_inst_0_66", eraGroup = 0, year = 1894, branch = 0, title = "安全值勤证", periodLabel = "1894 年 · 十九世纪制度推演", desc = "重要岗位须经考核持证值勤。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -2%", effKind = "Maint", effVal = -0.02f, parents = new[] { "co_hr_4", "co_inst_0_51" } },
+        new CompanyTechNode { key = "co_inst_1_67", eraGroup = 0, year = 1894, branch = 1, title = "消防共保约", periodLabel = "1894 年 · 十九世纪制度推演", desc = "约定仓栈防火检查与共担修缮。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -3%", effKind = "Maint", effVal = -0.03f, parents = new[] { "co_inst_4_55", "co_inst_0_66" } },
+        new CompanyTechNode { key = "co_inst_2_68", eraGroup = 0, year = 1899, branch = 2, title = "风险准备金", periodLabel = "1899 年 · 十九世纪制度推演", desc = "为汇兑、保险、租约与债务风险分类提存准备并审核使用。以书面规程和定期核验落实到日常经营。", effectSummary = "线路与车辆维保费 -4%", effKind = "Maint", effVal = -0.04f, parents = new[] { "co_inst_4_60", "co_inst_4_72", "co_inst_4_73", "co_inst_4_74" } },
+        new CompanyTechNode { key = "co_inst_4_69", eraGroup = 0, year = 1895, branch = 4, title = "廉价工料返修", periodLabel = "1895 年 · 十九世纪制度推演", desc = "压低工料标准造成重复修缮。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：铺轨造价短期 +2%（分局稽核制掌握后解除）", effKind = "TrackBuild", effVal = 0.02f, resolvedBy = "co_inst_0_70", parents = new[] { "co_inst_0_46", "co_inst_2_58" } },
+        new CompanyTechNode { key = "co_inst_0_70", eraGroup = 0, year = 1897, branch = 0, title = "分局稽核制", periodLabel = "1897 年 · 十九世纪制度推演", desc = "分局定期上报营运数据供总局研究。以书面规程和定期核验落实到日常经营。", effectSummary = "科研产速 +2%", effKind = "Rp", effVal = 0.02f, parents = new[] { "co_inst_4_45", "co_inst_4_65", "co_inst_4_69", "co_inst_4_71" } },
+        new CompanyTechNode { key = "co_inst_4_71", eraGroup = 0, year = 1895, branch = 4, title = "无序兼并", periodLabel = "1895 年 · 十九世纪制度推演", desc = "未清点债务便吞并经营困难路社。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：线路与车辆维保费短期 +2%（分局稽核制掌握后解除）", effKind = "Maint", effVal = 0.02f, resolvedBy = "co_inst_0_70", parents = new[] { "co_ops_4", "co_inst_2_38" } },
+        new CompanyTechNode { key = "co_inst_4_72", eraGroup = 0, year = 1896, branch = 4, title = "保险漏保争议", periodLabel = "1896 年 · 十九世纪制度推演", desc = "重要设备未纳入保单清单。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：线路与车辆维保费短期 +3%（风险准备金掌握后解除）", effKind = "Maint", effVal = 0.03f, resolvedBy = "co_inst_2_68", parents = new[] { "co_inst_1_67", "co_waybill_1871" } },
+        new CompanyTechNode { key = "co_inst_4_73", eraGroup = 0, year = 1896, branch = 4, title = "站前租约失衡", periodLabel = "1896 年 · 十九世纪制度推演", desc = "长期低租约锁死改建空间。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：开站造价短期 +2%（风险准备金掌握后解除）", effKind = "OpenCost", effVal = 0.02f, resolvedBy = "co_inst_2_68", parents = new[] { "co_inst_1_62", "co_re_2" } },
+        new CompanyTechNode { key = "co_inst_4_74", eraGroup = 0, year = 1896, branch = 4, title = "债券到期挤兑", periodLabel = "1896 年 · 十九世纪制度推演", desc = "多批债券集中到期且缺少准备。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：债券偿付压力短期 +3%（风险准备金掌握后解除）", effKind = "BondDue", effVal = 0.03f, resolvedBy = "co_inst_2_68", parents = new[] { "co_inst_2_53", "co_kaiping_1881" } },
+        new CompanyTechNode { key = "co_inst_4_75", eraGroup = 0, year = 1896, branch = 4, title = "股息透支", periodLabel = "1896 年 · 十九世纪制度推演", desc = "以借款支付股息掏空偿债资金。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：债券偿付压力短期 +2%（跨境银团授信掌握后解除）", effKind = "BondDue", effVal = 0.02f, resolvedBy = "co_fin_4", parents = new[] { "co_inst_3_54", "co_inst_2_63" } }
     };
 
     void EnsureCoTechIndexBuilt()
@@ -282,7 +360,7 @@ public partial class DemoBootstrap
     {
         EnsureCoTechIndexBuilt();
         if (companyTechDone.Count == 0) return;
-        // 兼容 16 节点旧档：若玩家已解锁旧节点，为其平滑补齐新前置链，避免图谱出现悬空孤岛
+        // 兼容旧档：保留全部已掌握 key，并补齐当前 DAG 的祖先链，避免悬空孤岛
         bool added;
         do
         {
@@ -319,16 +397,7 @@ public partial class DemoBootstrap
         return c;
     }
 
-    int CoTechRingIndex(CompanyTechNode node)
-    {
-        if (node == null) return 0;
-        if (node.year < 1830) return 0;
-        if (node.year <= 1845) return 1;
-        if (node.year < 1865) return 2;
-        if (node.year < 1880) return 3;
-        if (node.year < 1890) return 4;
-        return 5;
-    }
+    int CoTechRingIndex(CompanyTechNode node) => node == null ? 0 : TreeRingIndex(node.year, node.eraGroup);
 
     bool IsCoTechVisible(CompanyTechNode node)
     {
@@ -348,32 +417,57 @@ public partial class DemoBootstrap
         return true;
     }
 
+    int CoTechCoinCost(CompanyTechNode node)
+    {
+        if (node == null || node.key == "co_charter_1801") return 0;
+        float t = Mathf.Clamp01((node.year - 1800f) / 99f);
+        float mult = node.branch == 4 ? 0.65f : 1f;
+        float raw = 200f * Mathf.Pow(5000f, t) * mult;
+        int step = raw >= 10000f ? 1000 : raw >= 1000f ? 100 : 10;
+        return Mathf.Clamp(Mathf.RoundToInt(raw / step) * step, 100, 1000000);
+    }
+    int CoTechRpCost(CompanyTechNode node)
+    {
+        if (node == null || node.key == "co_charter_1801") return 0;
+        float t = Mathf.Clamp01((node.year - 1800f) / 99f);
+        return Mathf.Clamp(Mathf.RoundToInt(1f + t * 14f), 1, 15);
+    }
+    float CoTechEffectMult(string kind)
+    {
+        EnsureCoTechIndexBuilt();
+        float result = 1f;
+        foreach (string key in companyTechDone)
+            if (coTechByKey.TryGetValue(key, out var node) && node.effKind == kind &&
+                (string.IsNullOrEmpty(node.resolvedBy) || !HasCoTech(node.resolvedBy))) result *= 1f + node.effVal;
+        return result;
+    }
+
     // ---------- 公司科技全局乘区（纯读取、与已有模型无缝相乘） ----------
     int CoTechExtraSeats() => (HasCoTech("co_hr_2") ? 1 : 0) + (HasCoTech("co_hr_4") ? 1 : 0);
-    float CoTechPartnerConMitigation() => HasCoTech("co_hr_4") ? 0.65f : 1f;
-    float CoTechTrainXpMult() => (HasCoTech("co_hr_1") ? 1.25f : 1f) * (HasCoTech("co_hr_3") ? 1.50f : 1f) * (HasCoTech("co_pension_1868") ? 1.10f : 1f);
-    float CoTechTrainCostMult() => (HasCoTech("co_hr_3") ? 0.75f : 1f) * (HasCoTech("co_pension_1868") ? 0.90f : 1f);
-    float CoTechOpenCostMult() => (HasCoTech("co_charter_1801") ? 0.97f : 1f) * (HasCoTech("co_booth_1826") ? 0.95f : 1f) * (HasCoTech("co_re_1") ? 0.93f : 1f) * (HasCoTech("co_woosung_1876") ? 1.03f : 1f);
-    float CoTechCommercialMult() => (HasCoTech("co_re_1") ? 1.06f : 1f) * (HasCoTech("co_hotel_1854") ? 1.12f : 1f) * (HasCoTech("co_re_2") ? 1.20f : 1f) * (HasCoTech("co_re_4") ? 1.25f : 1f);
-    float CoTechSceneryDemandMult() => (HasCoTech("co_hotel_1854") ? 1.05f : 1f) * (HasCoTech("co_re_3") ? 1.10f : 1f);
-    float CoTechStationCapMult() => HasCoTech("co_re_4") ? 1.10f : 1f;
-    float CoTechTrackBuildMult() => (HasCoTech("co_stock_1821") ? 0.96f : 1f) * (HasCoTech("co_fin_1") ? 0.94f : 1f) * (HasCoTech("co_audit_1885") ? 0.95f : 1f);
-    float CoTechMaintMult() => (HasCoTech("co_fin_1") ? 0.94f : 1f) * (HasCoTech("co_mania_1845") ? 1.03f : 1f) * (HasCoTech("co_waybill_1871") ? 0.95f : 1f) * (HasCoTech("co_fin_4") ? 0.90f : 1f);
-    float CoTechBondCapMult() => HasCoTech("co_fin_2") ? 1.20f : 1f;
-    float CoTechBondDueMult() => (HasCoTech("co_fin_2") ? 0.90f : 1f) * (HasCoTech("co_audit_1885") ? 0.95f : 1f);
+    float CoTechPartnerConMitigation() => HasCoTech("co_hr_4") ? 0.96f : 1f;
+    float CoTechTrainXpMult() => ((HasCoTech("co_hr_1") ? 1.04f : 1f) * (HasCoTech("co_hr_3") ? 1.04f : 1f) * (HasCoTech("co_pension_1868") ? 1.04f : 1f)) * CoTechEffectMult("TrainXp");
+    float CoTechTrainCostMult() => Mathf.Max(0.45f, ((HasCoTech("co_hr_3") ? 0.96f : 1f) * (HasCoTech("co_pension_1868") ? 0.96f : 1f)) * CoTechEffectMult("TrainCost"));
+    float CoTechOpenCostMult() => Mathf.Max(0.50f, ((HasCoTech("co_charter_1801") ? 0.97f : 1f) * (HasCoTech("co_booth_1826") ? 0.96f : 1f) * (HasCoTech("co_re_1") ? 0.96f : 1f) * (HasCoTech("co_woosung_1876") && !HasCoTech("co_audit_1885") ? 1.03f : 1f)) * CoTechEffectMult("OpenCost"));
+    float CoTechCommercialMult() => ((HasCoTech("co_re_1") ? 1.04f : 1f) * (HasCoTech("co_hotel_1854") ? 1.04f : 1f) * (HasCoTech("co_re_2") ? 1.04f : 1f) * (HasCoTech("co_re_4") ? 1.04f : 1f)) * CoTechEffectMult("Commercial");
+    float CoTechSceneryDemandMult() => ((HasCoTech("co_hotel_1854") ? 1.04f : 1f) * (HasCoTech("co_re_3") ? 1.04f : 1f)) * CoTechEffectMult("SceneryDemand");
+    float CoTechStationCapMult() => (HasCoTech("co_re_4") ? 1.04f : 1f) * CoTechEffectMult("StationCap");
+    float CoTechTrackBuildMult() => Mathf.Max(0.50f, ((HasCoTech("co_stock_1821") ? 0.96f : 1f) * (HasCoTech("co_fin_1") ? 0.96f : 1f) * (HasCoTech("co_audit_1885") ? 0.96f : 1f)) * CoTechEffectMult("TrackBuild"));
+    float CoTechMaintMult() => Mathf.Max(0.45f, ((HasCoTech("co_fin_1") ? 0.96f : 1f) * (HasCoTech("co_mania_1845") && !HasCoTech("co_fin_2") ? 1.03f : 1f) * (HasCoTech("co_waybill_1871") ? 0.96f : 1f) * (HasCoTech("co_fin_4") ? 0.96f : 1f)) * CoTechEffectMult("Maint"));
+    float CoTechBondCapMult() => (HasCoTech("co_fin_2") ? 1.04f : 1f) * CoTechEffectMult("BondCap");
+    float CoTechBondDueMult() => Mathf.Max(0.45f, ((HasCoTech("co_fin_2") ? 0.96f : 1f) * (HasCoTech("co_audit_1885") ? 0.96f : 1f)) * CoTechEffectMult("BondDue"));
     int CoTechContractCap() => HasCoTech("co_fin_3") ? 3 : 2;
-    float CoTechContractBonusMult() => HasCoTech("co_fin_3") ? 1.20f : 1f;
-    float CoTechSpeedMult() => HasCoTech("co_ops_1") ? 1.06f : 1f;
-    float CoTechRpMult() => (HasCoTech("co_ops_1") ? 1.15f : 1f) * (HasCoTech("co_kaiping_1881") ? 1.10f : 1f);
-    float CoTechTransferMult() => (HasCoTech("co_rch_1842") ? 0.92f : 1f) * (HasCoTech("co_ops_2") ? 0.92f : 1f);
-    float CoTechRevenueMult() => (HasCoTech("co_fare_act_1844") ? 1.03f : 1f) * (HasCoTech("co_ops_2") ? 1.05f : 1f) * (HasCoTech("co_rateact_1887") ? 1.04f : 1f) * (HasCoTech("co_fin_4") ? 1.08f : 1f);
-    float CoTechTourismLineMult() => HasCoTech("co_ops_3") ? 1.15f : 1f;
-    float CoTechBaseDemandMult() => (HasCoTech("co_fare_act_1844") ? 1.04f : 1f) * (HasCoTech("co_kaiping_1881") ? 1.04f : 1f) * (HasCoTech("co_ops_4") ? 1.08f : 1f);
-    float CoTechAwardMult() => HasCoTech("co_ops_4") ? 1.25f : 1f;
+    float CoTechContractBonusMult() => HasCoTech("co_fin_3") ? 1.04f : 1f;
+    float CoTechSpeedMult() => (HasCoTech("co_ops_1") ? 1.04f : 1f) * CoTechEffectMult("Speed");
+    float CoTechRpMult() => ((HasCoTech("co_ops_1") ? 1.04f : 1f) * (HasCoTech("co_kaiping_1881") ? 1.04f : 1f)) * CoTechEffectMult("Rp");
+    float CoTechTransferMult() => Mathf.Max(0.55f, ((HasCoTech("co_rch_1842") ? 0.96f : 1f) * (HasCoTech("co_ops_2") ? 0.96f : 1f)) * CoTechEffectMult("Transfer"));
+    float CoTechRevenueMult() => ((HasCoTech("co_fare_act_1844") ? 1.03f : 1f) * (HasCoTech("co_ops_2") ? 1.04f : 1f) * (HasCoTech("co_rateact_1887") ? 1.04f : 1f) * (HasCoTech("co_fin_4") ? 1.04f : 1f)) * CoTechEffectMult("Revenue");
+    float CoTechTourismLineMult() => (HasCoTech("co_ops_3") ? 1.04f : 1f) * CoTechEffectMult("Tourism");
+    float CoTechBaseDemandMult() => ((HasCoTech("co_fare_act_1844") ? 1.04f : 1f) * (HasCoTech("co_kaiping_1881") ? 1.04f : 1f) * (HasCoTech("co_ops_4") ? 1.04f : 1f)) * CoTechEffectMult("Demand");
+    float CoTechAwardMult() => (HasCoTech("co_ops_4") ? 1.04f : 1f) * CoTechEffectMult("Award");
 
     float MitigateCon(float rawDelta)
     {
-        // 例：rawDelta = 0.10f 表示负面增加 10%，减免 35% 后变为 +6.5%；若为 -0.05f 同样缩窄幅度
+        // 例：rawDelta = 0.10f 表示负面增加 10%，减免 4% 后变为 +9.6%；若为 -0.05f 同样缩窄幅度
         return 1f + rawDelta * CoTechPartnerConMitigation();
     }
 
@@ -474,6 +568,7 @@ public partial class DemoBootstrap
                 bio = TalentBios[(h / 13 + i) % TalentBios.Length]
             });
         }
+        SaveGame();
     }
 
     int TalentHireCost(SavedTalent cand)
@@ -638,17 +733,17 @@ public partial class DemoBootstrap
             Invoke(nameof(HideHistoryInfo), 2f);
             return;
         }
-        if (coins < node.costCoins)
+        if (coins < CoTechCoinCost(node))
         {
             PlayErrorSfx();
-            Toast("研发经费不足：还差 ¥" + FormatShortfall(node.costCoins - coins));
+            Toast("研发经费不足：还差 ¥" + FormatShortfall(CoTechCoinCost(node) - coins));
             if (historyCoinWidget) historyCoinWidget.Shake();
             return;
         }
-        if (rp < node.costRp)
+        if (rp < CoTechRpCost(node))
         {
             PlayErrorSfx();
-            Toast("科研点不足：需要 " + node.costRp + " RP（还差 " + Mathf.CeilToInt(node.costRp - rp) + " RP）");
+            Toast("科研点不足：需要 " + CoTechRpCost(node) + " RP（还差 " + Mathf.CeilToInt(CoTechRpCost(node) - rp) + " RP）");
             return;
         }
 
@@ -660,8 +755,8 @@ public partial class DemoBootstrap
         }
 
         BeginUndo("解锁企业治理科技");
-        coins -= node.costCoins;
-        rp -= node.costRp;
+        coins -= CoTechCoinCost(node);
+        rp -= CoTechRpCost(node);
         companyTechDone.Add(node.key);
         coTechSessionUnlocked.Add(node.key);
         coTechJustUnlocked = node.key;
@@ -672,9 +767,8 @@ public partial class DemoBootstrap
         EndUndo();
         PlayTechSfx();
         TriggerHaptic(22);
-        SaveGame();
         RefreshHUD();
-        OpenCompanyTechScreen(1);
+        RefreshTechTreeIncremental(true, node.key);
         Toast("企业治理升级：「" + node.title + "」已生效！");
     }
 
@@ -685,7 +779,7 @@ public partial class DemoBootstrap
         float poolH = 708f;
         float rosterH = Mathf.Max(280f, talents.Count * 246f + 130f);
         float totalH = poolH + rosterH + 60f;
-        var content = FleetScroll(page, 36f, PgH - 350f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 350f, totalH, scrollKey: "company:talents");
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
@@ -862,6 +956,7 @@ public partial class DemoBootstrap
         content.pivot = new Vector2(0f, 1f);
         content.anchoredPosition = Vector2.zero;
         scroll.content = content;
+        BindScrollPosition(scroll, "talent:assign:" + t.id);
 
         for (int i = 0; i < items.Count; i++)
         {

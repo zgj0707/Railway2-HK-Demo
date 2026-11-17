@@ -31,11 +31,11 @@ public partial class DemoBootstrap : MonoBehaviour
 
     [Serializable] public class Station {
         public string name; public float x, y; public int level; public bool built, closed; public int trafficEvent;
-        public bool portal, county; public string portalTo, portalTo2, city; public int administrativeCode; public string region = "青屿"; public float otherX, otherY, thirdX, thirdY;
+        public bool portal, county; public string portalTo, portalTo2, city; public int administrativeCode; public string region = "香埠"; public float otherX, otherY, thirdX, thirdY;
         public float riderBonus; public int facLevel;
         public Station(string n,float px,float py){name=n;x=px;y=py;level=1;}
     }
-    [Serializable] public class Scenery { public string name; public float x,y; public bool natural; public bool found, unlocked; public string triggerStation; public string region = "青屿"; }
+    [Serializable] public class Scenery { public string name; public float x,y; public bool natural; public bool found, unlocked; public string triggerStation; public string region = "香埠"; }
     [Serializable] public class Line {
         public int id; public string name; public Color color; public int skin = -1; public List<int> st = new List<int>();
         public int trains = 1;
@@ -65,7 +65,7 @@ public partial class DemoBootstrap : MonoBehaviour
     Dictionary<int, LineVisual> lineVisuals = new Dictionary<int, LineVisual>();
     List<string> techDone = new List<string>();
     Text coinTxt, incomeTxt, diamondTxt, progTxt, rpTxt, dayTxt;
-    string currentRegion = "青屿"; Text regionTitle; GameObject hkMapArt, macauMapArt, guangdongMapArt;
+    string currentRegion = "香埠"; Text regionTitle; GameObject hkMapArt, macauMapArt, guangdongMapArt;
     bool macauUnlocked, guangdongUnlocked;
     const float MacauIncomeRequired = 600f, GuangdongIncomeRequired = 1200f;
     RectTransform progFill;
@@ -91,6 +91,7 @@ public partial class DemoBootstrap : MonoBehaviour
     bool trafficHeatmapMode;
     float draftPreviewNeed = 0.5f;
     Color draftPreviewColor = new Color(0.95f, 0.58f, 0.32f, 0.90f);
+    [Serializable]
     sealed class DailyReportSnapshot
     {
         public int settledDay, bottleneckStation = -1;
@@ -255,101 +256,101 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         stations.Clear();
         sceneries.Clear();
-        Add("海晏埠", 0.575f, 0.285f); Add("鸣钟里", 0.64f, 0.315f); Add("铜鼓湾", 0.715f, 0.30f); Add("望北咀", 0.795f, 0.275f);
-        Add("翠沙咀", 0.59f, 0.418f); Add("丹崖口", 0.725f, 0.455f); Add("熙市角", 0.64f, 0.505f); Add("龙潭塘", 0.755f, 0.552f);
-        Add("白沙坪", 0.815f, 0.635f); Add("青墟镇", 0.825f, 0.735f); Add("香兰湾", 0.45f, 0.61f); Add("守望门", 0.30f, 0.61f);
-        Add("东溪涌", 0.24f, 0.305f); Add("云翼空港", 0.13f, 0.34f); Add("星梦乐园", 0.315f, 0.24f);
-        var luo = new Station("界桥关", 0.93f, 0.87f); luo.portal = true; luo.portalTo = "锦川"; luo.otherX = 0.70f; luo.otherY = 0.25f; stations.Add(luo);
-        var hz = new Station("三屿虹桥", 0.13f, 0.38f); hz.portal = true; hz.portalTo = "锦川"; hz.otherX = 0.535f; hz.otherY = 0.400f; hz.portalTo2 = "镜汀"; hz.thirdX = MacauX(113.576074f); hz.thirdY = MacauY(22.200356f); stations.Add(hz);
+        Add("石板街", 0.575f, 0.285f); Add("兵房山", 0.64f, 0.315f); Add("鹅颈桥", 0.715f, 0.30f); Add("炮台山", 0.795f, 0.275f);
+        Add("码头咀", 0.59f, 0.418f); Add("鲤鱼门", 0.725f, 0.455f); Add("芒角墟", 0.64f, 0.505f); Add("龙城寨", 0.755f, 0.552f);
+        Add("沥源围", 0.815f, 0.635f); Add("大步墟", 0.825f, 0.735f); Add("浅湾", 0.45f, 0.61f); Add("青山湾", 0.30f, 0.61f);
+        Add("东涌口", 0.24f, 0.305f); Add("启德坪", 0.13f, 0.34f); Add("竹篙湾", 0.315f, 0.24f);
+        var luo = new Station("桥头关", 0.93f, 0.87f); luo.portal = true; luo.portalTo = "粤海"; luo.otherX = 0.70f; luo.otherY = 0.25f; stations.Add(luo);
+        var hz = new Station("伶仃桥", 0.13f, 0.38f); hz.portal = true; hz.portalTo = "粤海"; hz.otherX = 0.535f; hz.otherY = 0.400f; hz.portalTo2 = "莲澳"; hz.thirdX = MacauX(113.576074f); hz.thirdY = MacauY(22.200356f); stations.Add(hz);
 
         // 追加车站，保留原有车站索引和既有线路。
-        Add("丰朗墟", 0.38f, 0.70f); Add("云水围", 0.27f, 0.73f);
-        Add("绣岭路", 0.48f, 0.67f); Add("清溪上", 0.78f, 0.86f);
-        Add("松烟岭", 0.70f, 0.81f); Add("安和里", 0.76f, 0.76f);
-        Add("书院坡", 0.86f, 0.70f); Add("翠围乡", 0.70f, 0.63f);
-        Add("青鞍麓", 0.91f, 0.66f); Add("东溟渔港", 0.94f, 0.60f);
-        Add("向阳里", 0.51f, 0.64f); Add("碧衫洲", 0.40f, 0.56f);
-        Add("鹏湾", 0.69f, 0.34f, "锦川"); Add("福坪", 0.57f, 0.33f, "锦川");
-        Add("安湾", 0.47f, 0.42f, "锦川"); Add("莞香坡", 0.58f, 0.55f, "锦川");
-        Add("鹅湖镇", 0.82f, 0.55f, "锦川"); Add("百花城", 0.40f, 0.72f, "锦川");
-        Add("禅溪", 0.23f, 0.66f, "锦川"); Add("翠香原", 0.30f, 0.48f, "锦川");
-        Add("珠屿", 0.23f, 0.34f, "锦川");
-        Add("清波湾", 0.83f, 0.255f);
-        AddMacau("古坊石街", 113.540845f, 22.197455f);
-        AddMacau("外海渡口", 113.557664f, 22.197471f); AddMacau("汀屿里", 113.556615f, 22.153493f);
-        AddMacau("连汀湾", 113.560200f, 22.142700f); AddMacau("松风渔村", 113.552522f, 22.117962f);
-        AddMacau("青芦洲", 113.537554f, 22.211585f); AddMacau("新潮岸", 113.550720f, 22.188997f);
-        AddMacau("海神阁", 113.529413f, 22.183668f); AddMacau("钟楼广场", 113.539900f, 22.193650f);
-        AddMacau("潮音苑", 113.541297f, 22.157843f); AddMacau("石角街", 113.554546f, 22.150870f);
-        AddMacau("镜汀空港", 113.574648f, 22.159403f); AddMacau("青莲渡", 113.559813f, 22.139520f);
-        AddMacau("叠石湾", 113.561542f, 22.131421f); AddMacau("玄沙湾", 113.569345f, 22.118802f);
+        Add("元朗墟", 0.38f, 0.70f); Add("米埔围", 0.27f, 0.73f);
+        Add("深水埗", 0.48f, 0.67f); Add("上水围", 0.78f, 0.86f);
+        Add("粉岭围", 0.70f, 0.81f); Add("沙头角", 0.76f, 0.76f);
+        Add("西贡墟", 0.86f, 0.70f); Add("将军澳", 0.70f, 0.63f);
+        Add("马鞍山", 0.91f, 0.66f); Add("塔门澳", 0.94f, 0.60f);
+        Add("葵涌", 0.51f, 0.64f); Add("青衣岛", 0.40f, 0.56f);
+        Add("新安城", 0.69f, 0.34f, "粤海"); Add("福田墟", 0.57f, 0.33f, "粤海");
+        Add("宝安墟", 0.47f, 0.42f, "粤海"); Add("石龙镇", 0.58f, 0.55f, "粤海");
+        Add("西湖墟", 0.82f, 0.55f, "粤海"); Add("五羊城", 0.40f, 0.72f, "粤海");
+        Add("祖庙镇", 0.23f, 0.66f, "粤海"); Add("石岐墟", 0.30f, 0.48f, "粤海");
+        Add("香山湾", 0.23f, 0.34f, "粤海");
+        Add("浅水湾", 0.83f, 0.255f);
+        AddMacau("茨林围", 113.540845f, 22.197455f);
+        AddMacau("外港码头", 113.557664f, 22.197471f); AddMacau("潭仔", 113.556615f, 22.153493f);
+        AddMacau("龙环村", 113.560200f, 22.142700f); AddMacau("荔枝碗", 113.552522f, 22.117962f);
+        AddMacau("青洲", 113.537554f, 22.211585f); AddMacau("新口岸", 113.550720f, 22.188997f);
+        AddMacau("阿妈阁", 113.529413f, 22.183668f); AddMacau("议事亭", 113.539900f, 22.193650f);
+        AddMacau("望厦村", 113.541297f, 22.157843f); AddMacau("官也街", 113.554546f, 22.150870f);
+        AddMacau("北安港", 113.574648f, 22.159403f); AddMacau("路氹口", 113.559813f, 22.139520f);
+        AddMacau("石排湾", 113.561542f, 22.131421f); AddMacau("黑沙湾", 113.569345f, 22.118802f);
 
         ApplyGuangdongStations();
-        var zhuhai = stations.Find(s => s.region == "锦川" && s.name == "珠屿");
+        var zhuhai = stations.Find(s => s.region == "粤海" && s.name == "香山湾");
         if (zhuhai != null)
         {
-            zhuhai.name = "珠屿（北关）"; zhuhai.portal = true; zhuhai.portalTo = "镜汀";
+            zhuhai.name = "香山（北关）"; zhuhai.portal = true; zhuhai.portalTo = "莲澳";
             zhuhai.otherX = MacauX(113.549205f); zhuhai.otherY = MacauY(22.215939f);
         }
-        AddMacauGateway("西岸工坊区", 113.534457f, 22.212157f, 0.466f, 0.416f);
-        AddMacauGateway("玉琴关", 113.544850f, 22.140669f, 0.474f, 0.402f);
-        luo.otherX = 0.585f; luo.otherY = 0.466f; luo.administrativeCode = 100101; luo.city = "鹏湾府";
+        AddMacauGateway("拱北口", 113.534457f, 22.212157f, 0.466f, 0.416f);
+        AddMacauGateway("莲花口", 113.544850f, 22.140669f, 0.474f, 0.402f);
+        luo.otherX = 0.585f; luo.otherY = 0.466f; luo.administrativeCode = 100101; luo.city = "新安府";
         // 跨区门户节点。
-        var shenzhen = stations.Find(s => s.region == "锦川" && s.name == "鹏湾");
+        var shenzhen = stations.Find(s => s.region == "粤海" && s.name == "新安城");
         if (shenzhen != null)
         {
-            shenzhen.name = "鹏湾（西渡）"; shenzhen.portal = true; shenzhen.portalTo = "青屿";
+            shenzhen.name = "新安（西渡）"; shenzhen.portal = true; shenzhen.portalTo = "香埠";
             shenzhen.otherX = 0.548f; shenzhen.otherY = 0.440f;
         }
 
-        sceneries.Add(new Scenery{name="望海奇峰", x=0.478f,y=0.238f,natural=true,triggerStation="海晏埠"});
-        sceneries.Add(new Scenery{name="银潮百帆港", x=0.665f,y=0.375f,natural=true,triggerStation="翠沙咀"});
-        sceneries.Add(new Scenery{name="云顶禅刹", x=0.20f,y=0.235f,natural=false,triggerStation="东溪涌"});
-        sceneries.Add(new Scenery{name="千灯夜市", x=0.545f,y=0.475f,natural=false,triggerStation="熙市角"});
-        sceneries.Add(new Scenery{name="清波湾", x=0.855f,y=0.185f,natural=true,triggerStation="清波湾"});
-        sceneries.Add(new Scenery{name="伏狮翠岭", x=0.76f,y=0.60f,natural=true,triggerStation="龙潭塘"});
+        sceneries.Add(new Scenery{name="扯旗山", x=0.478f,y=0.238f,natural=true,triggerStation="石板街"});
+        sceneries.Add(new Scenery{name="鲤鱼门海角", x=0.665f,y=0.375f,natural=true,triggerStation="码头咀"});
+        sceneries.Add(new Scenery{name="宝莲寺", x=0.20f,y=0.235f,natural=false,triggerStation="东涌口"});
+        sceneries.Add(new Scenery{name="榕树头", x=0.545f,y=0.475f,natural=false,triggerStation="芒角墟"});
+        sceneries.Add(new Scenery{name="浅水湾", x=0.855f,y=0.185f,natural=true,triggerStation="浅水湾"});
+        sceneries.Add(new Scenery{name="狮子山", x=0.76f,y=0.60f,natural=true,triggerStation="龙城寨"});
 
-        sceneries.Add(new Scenery{name="松鹤古观", x=0.78f,y=0.52f,natural=false,triggerStation="龙潭塘"});
-        sceneries.Add(new Scenery{name="芦苇飞鹭苑", x=0.23f,y=0.78f,natural=true,triggerStation="云水围"});
-        sceneries.Add(new Scenery{name="东溟碧崖", x=0.98f,y=0.57f,natural=true,triggerStation="东溟渔港"});
+        sceneries.Add(new Scenery{name="黄大仙祠", x=0.78f,y=0.52f,natural=false,triggerStation="龙城寨"});
+        sceneries.Add(new Scenery{name="米埔芦滩", x=0.23f,y=0.78f,natural=true,triggerStation="米埔围"});
+        sceneries.Add(new Scenery{name="破边洲", x=0.98f,y=0.57f,natural=true,triggerStation="塔门澳"});
 
-        sceneries.Add(new Scenery{name="古坊石门楼", x=0.31345f,y=0.74189f,natural=false,triggerStation="古坊石街",region="镜汀"});
-        sceneries.Add(new Scenery{name="海神望海阁", x=0.30253f,y=0.65772f,natural=false,triggerStation="海神阁",region="镜汀"});
-        sceneries.Add(new Scenery{name="青石风味坊", x=0.55992f,y=0.42471f,natural=false,triggerStation="汀屿里",region="镜汀"});
-        sceneries.Add(new Scenery{name="玄沙听涛滩", x=0.68345f,y=0.11927f,natural=true,triggerStation="玄沙湾",region="镜汀"});
-        sceneries.Add(new Scenery{name="海角钟楼堂", x=0.42496f,y=0.12521f,natural=false,triggerStation="松风渔村",region="镜汀"});
+        sceneries.Add(new Scenery{name="大三巴", x=0.31345f,y=0.74189f,natural=false,triggerStation="茨林围",region="莲澳"});
+        sceneries.Add(new Scenery{name="妈阁庙", x=0.30253f,y=0.65772f,natural=false,triggerStation="阿妈阁",region="莲澳"});
+        sceneries.Add(new Scenery{name="官也老街", x=0.55992f,y=0.42471f,natural=false,triggerStation="潭仔",region="莲澳"});
+        sceneries.Add(new Scenery{name="黑沙滩", x=0.68345f,y=0.11927f,natural=true,triggerStation="黑沙湾",region="莲澳"});
+        sceneries.Add(new Scenery{name="东望洋塔", x=0.42496f,y=0.12521f,natural=false,triggerStation="荔枝碗",region="莲澳"});
 
         var l1 = new Line { id = 1, name = "1 号线", color = LineColors[0] };
         l1.st.Add(0); l1.st.Add(1); l1.st.Add(2);
         lines.Add(l1);
         foreach (int index in l1.st) stations[index].built = true;
     }
-    void Add(string n, float x, float y, string region = "青屿") { stations.Add(new Station(n, x, y) { region = region }); }
-    // 镜汀底图范围：经度 113.505–113.605，纬度 22.100–22.235。
+    void Add(string n, float x, float y, string region = "香埠") { stations.Add(new Station(n, x, y) { region = region }); }
+    // 莲澳底图范围：经度 113.505–113.605，纬度 22.100–22.235。
     float MacauX(float longitude) { return (longitude - 113.505f) / 0.100f; }
     float MacauY(float latitude) { return (latitude - 22.100f) / 0.135f; }
-    void AddMacau(string n, float longitude, float latitude) { Add(n, MacauX(longitude), MacauY(latitude), "镜汀"); }
+    void AddMacau(string n, float longitude, float latitude) { Add(n, MacauX(longitude), MacauY(latitude), "莲澳"); }
 
     [Serializable] sealed class GuangdongStationList { public GuangdongStationRecord[] stations; }
     [Serializable] sealed class GuangdongStationRecord { public string name, city; public int code; public float x, y; public bool legacy; }
     void ApplyGuangdongStations()
     {
         var file = Resources.Load<TextAsset>("MapData/guangdong_stations");
-        if (!file) { Debug.LogError("锦川乡镇站点数据缺失"); return; }
+        if (!file) { Debug.LogError("粤海乡镇站点数据缺失"); return; }
         var data = JsonUtility.FromJson<GuangdongStationList>(file.text);
         foreach (var record in data.stations)
         {
-            var station = record.legacy ? stations.Find(s => s.region == "锦川" && s.name == record.name) : null;
-            if (station == null) { station = new Station(record.name, record.x, record.y) { region = "锦川" }; stations.Add(station); }
+            var station = record.legacy ? stations.Find(s => s.region == "粤海" && s.name == record.name) : null;
+            if (station == null) { station = new Station(record.name, record.x, record.y) { region = "粤海" }; stations.Add(station); }
             station.x = record.x; station.y = record.y; station.city = record.city;
             station.county = !record.legacy; station.administrativeCode = record.code;
         }
     }
     void SetMacauGateway(string name, float x, float y)
     {
-        var station = stations.Find(s => s.region == "镜汀" && s.name == name);
+        var station = stations.Find(s => s.region == "莲澳" && s.name == name);
         if (station == null) return;
-        station.portal = true; station.portalTo = "锦川"; station.otherX = x; station.otherY = y;
+        station.portal = true; station.portalTo = "粤海"; station.otherX = x; station.otherY = y;
     }
     void AddMacauGateway(string name, float longitude, float latitude, float x, float y)
     {
@@ -363,14 +364,14 @@ public partial class DemoBootstrap : MonoBehaviour
     string StationDisplayName(int index, string region)
     {
         var station = stations[index];
-        return DisplayPlaceAliases(station.name == "鹏湾（西渡）" && region == "青屿" ? "西渡（鹏湾）" : station.name);
+        return DisplayPlaceAliases(station.name == "新安（西渡）" && region == "香埠" ? "西渡（新安城）" : station.name);
     }
     string PortalSubtitle(Station station, string region)
     {
-        if (station.name == "鹏湾（西渡）") return region == "青屿" ? "鹏湾" : "青屿";
-        if (station.name == "三屿虹桥")
-            return region == "镜汀" ? "锦川/青屿" : region == "青屿" ? "锦川/镜汀" : "青屿/镜汀";
-        if (station.region == "镜汀") return region == "镜汀" ? "锦川" : "镜汀";
+        if (station.name == "新安（西渡）") return region == "香埠" ? "新安城" : "香埠";
+        if (station.name == "伶仃桥")
+            return region == "莲澳" ? "粤海/香埠" : region == "香埠" ? "粤海/莲澳" : "香埠/莲澳";
+        if (station.region == "莲澳") return region == "莲澳" ? "粤海" : "莲澳";
         return region == station.region ? station.portalTo : station.region;
     }
 
@@ -496,7 +497,7 @@ public partial class DemoBootstrap : MonoBehaviour
         var tape = Rect("CapTape", cap.transform, 130, 150, 140, 24);
         var tapeIm = Img(tape, new Color(0.88f, 0.78f, 0.62f, 0.75f), spriteRound); tapeIm.type = Image.Type.Sliced; tapeIm.raycastTarget = false;
         tape.transform.localRotation = Quaternion.Euler(0, 0, -1.5f);
-        string regTitle = currentRegion == "青屿" ? "青 屿" : currentRegion == "镜汀" ? "镜 汀" : "锦 川";
+        string regTitle = currentRegion == "香埠" ? "香 埠" : currentRegion == "莲澳" ? "莲 澳" : "粤 海";
         var title = Txt(cap.transform, regTitle, 48, Ink, 0, 106, 400, 52, TextAnchor.MiddleCenter);
         title.fontSize = ScaledFontSize(48, 1.22f);
         regionTitle = title;
@@ -548,7 +549,7 @@ public partial class DemoBootstrap : MonoBehaviour
         mapWheelZoom = mapZoom;
         mapZoom.map = mapRect; mapZoom.viewport = root;
         mapZoom.canZoom = () => !dragging && !lineInsertActive && pageRoot == null && activePanel == null && sceneryViewer == null;
-        mapZoom.maxZoom = () => currentRegion == "锦川" ? 12f : 2.5f;
+        mapZoom.maxZoom = () => currentRegion == "粤海" ? 12f : 2.5f;
         mapZoom.onPanStart = () => { pressing = false; pressIdx = -1; HidePressRing(); };
         hkMapArt = Rect("HongKongArt", map.transform, 0, 0, W, H);
         BuildRasterMap(hkMapArt.transform);
@@ -600,11 +601,11 @@ public partial class DemoBootstrap : MonoBehaviour
         AttachSubCanvas(floaterLayer.gameObject, false);
 
         Label(hkMapArt.GetComponent<RectTransform>(), "北 岭", 34, 0.55f, 0.90f, new Color(0.40f,0.38f,0.32f,0.75f), 180);
-        Label(hkMapArt.GetComponent<RectTransform>(), "青屿本岛", 26, 0.50f, 0.170f, new Color(0.40f,0.38f,0.32f,0.72f), 150);
+        Label(hkMapArt.GetComponent<RectTransform>(), "香埠本岛", 26, 0.50f, 0.170f, new Color(0.40f,0.38f,0.32f,0.72f), 150);
         Label(hkMapArt.GetComponent<RectTransform>(), "苍岚岛", 24, 0.20f, 0.105f, new Color(0.40f,0.38f,0.32f,0.70f), 140);
         Label(hkMapArt.GetComponent<RectTransform>(), "银潮湾", 18, 0.40f, 0.360f, new Color(0.33f,0.48f,0.53f,0.80f), 190);
-        PortalLabel(hkMapArt.GetComponent<RectTransform>(), 0.80f, 0.925f, "→ 鹏湾");
-        PortalLabel(hkMapArt.GetComponent<RectTransform>(), 0.25f, 0.505f, "→ 珠屿 / 镜汀");
+        PortalLabel(hkMapArt.GetComponent<RectTransform>(), 0.80f, 0.925f, "→ 新安城");
+        PortalLabel(hkMapArt.GetComponent<RectTransform>(), 0.25f, 0.505f, "→ 香山湾 / 莲澳");
 
         // 顶部/底部奶油渐隐，让悬浮 UI 压得住地图
         Color fadeCol = Themes[Mathf.Clamp(currentTheme, 0, Themes.Length - 1)].fade;
@@ -624,8 +625,8 @@ public partial class DemoBootstrap : MonoBehaviour
         FreezeRegionTraffic();
         ClearStationOdArcs();
         ClosePage(); CloseLineBubble(); CancelDraft(); ClearFloaters(); currentRegion = destination;
-        hkMapArt.SetActive(currentRegion == "青屿"); macauMapArt.SetActive(currentRegion == "镜汀");
-        guangdongMapArt.SetActive(currentRegion == "锦川");
+        hkMapArt.SetActive(currentRegion == "香埠"); macauMapArt.SetActive(currentRegion == "莲澳");
+        guangdongMapArt.SetActive(currentRegion == "粤海");
         SyncRegionMapTextureMemory();
         RequestResourceTrim(false);
         trainsDirty = true;
@@ -647,7 +648,7 @@ public partial class DemoBootstrap : MonoBehaviour
         RefreshSceneryViews();
         LayoutStationLabels();
         UpdateRegionalMarkers(true);
-        regionTitle.text = DisplayPlaceAliases(currentRegion == "青屿" ? "青 屿" : currentRegion == "镜汀" ? "镜 汀" : "锦 川");
+        regionTitle.text = DisplayPlaceAliases(currentRegion == "香埠" ? "香 埠" : currentRegion == "莲澳" ? "莲 澳" : "粤 海");
         CreateLineVisuals(); RefreshStationDots();
         RecalcIncome(); RefreshHUD();
         PlayRegionCurtain(currentRegion);
@@ -660,7 +661,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     bool RegionUnlocked(string region)
     {
-        return region == "青屿" || (region == "镜汀" && macauUnlocked) || (region == "锦川" && guangdongUnlocked);
+        return region == "香埠" || (region == "莲澳" && macauUnlocked) || (region == "粤海" && guangdongUnlocked);
     }
     int ConnectedOrdinaryStations(string region)
     {
@@ -671,10 +672,10 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     void UpdateRegionUnlocks()
     {
-        if (!macauUnlocked && income >= MacauIncomeRequired && ConnectedOrdinaryStations("青屿") >= 4)
-        { macauUnlocked = true; Toast("镜汀区域已解锁"); QueueStory("macau_open", "海的另一边", "镜汀发来一封简短的邀请：客流已经准备好了，缺的只是一条可靠的线路。\n下一站，去海的另一边。"); }
-        if (macauUnlocked && !guangdongUnlocked && income >= GuangdongIncomeRequired && ConnectedOrdinaryStations("镜汀") >= 2)
-        { guangdongUnlocked = true; Toast("锦川区域已解锁"); QueueStory("guangdong_open", "向北的邀请", "镜汀的站台刚刚热闹起来，锦川的合作邀请便送到了桌上。\n这一次，你要把一座城市的故事，接到更远的地方。"); }
+        if (!macauUnlocked && income >= MacauIncomeRequired && ConnectedOrdinaryStations("香埠") >= 4)
+        { macauUnlocked = true; Toast("莲澳区域已解锁"); QueueStory("macau_open", "海的另一边", "莲澳发来一封简短的邀请：客流已经准备好了，缺的只是一条可靠的线路。\n下一站，去海的另一边。"); }
+        if (macauUnlocked && !guangdongUnlocked && income >= GuangdongIncomeRequired && ConnectedOrdinaryStations("莲澳") >= 2)
+        { guangdongUnlocked = true; Toast("粤海区域已解锁"); QueueStory("guangdong_open", "向北的邀请", "莲澳的站台刚刚热闹起来，粤海的合作邀请便送到了桌上。\n这一次，你要把一座城市的故事，接到更远的地方。"); }
     }
 
     void BuildStationViews()
@@ -906,7 +907,7 @@ public partial class DemoBootstrap : MonoBehaviour
     int MarkerRank(int i)
     {
         if (dragging && (i == dragFrom || i == hoverStation)) return -2;
-        if (currentRegion == "锦川" && stations[i].name == "鹏湾（西渡）") return -1;
+        if (currentRegion == "粤海" && stations[i].name == "新安（西渡）") return -1;
         if (IsOpen(i) || stations[i].portal) return 0;
         return stations[i].county ? 2 : 1;
     }
@@ -914,8 +915,8 @@ public partial class DemoBootstrap : MonoBehaviour
     bool MatchesStationFilter(int i)
     {
         var station = stations[i];
-        // 青屿/镜汀使用站区而非县级行政区；保留所有交界站与本地站点。
-        if (currentRegion != "锦川" || station.portal || stationFilter == 0) return true;
+        // 香埠/莲澳使用站区而非县级行政区；保留所有交界站与本地站点。
+        if (currentRegion != "粤海" || station.portal || stationFilter == 0) return true;
         int code = station.administrativeCode;
         bool prefecture = code > 0 && code % 100 == 0;
         bool countyCity = code > 0 && code % 100 >= 81;
@@ -1622,43 +1623,93 @@ public partial class DemoBootstrap : MonoBehaviour
         selected = Mathf.Clamp(selected, 0, opts.Count - 1);
         var sel = opts[selected];
         string title = sel.isNew ? ("开通 " + nextLineId + " 号线") : ("延长 " + sel.line.name);
-        float h = 360f + Mathf.Min(opts.Count, 5) * 112f;
+        const float rowStep = 106f, rowH = 96f, pathViewW = 750f;
+        float viewHeight = Mathf.Min(opts.Count, 5) * rowStep;
+        float h = 264f + viewHeight;
         var p = OpenBubble(title, h, 920, Pos(snapshot[snapshot.Count - 1]), "connect_opts_" + from);
-        Txt(p.transform, "从 " + StationDisplayName(from, currentRegion) + " 起 · 新增 " + (UniqueCount(snapshot) - 1) + " 站 · 造价 ¥" + cost, 22, InkSoft, 30, h - 118, 820, 32, TextAnchor.MiddleLeft);
-        float viewHeight = Mathf.Min(opts.Count, 5) * 112f;
-        var view = Rect("OptionsViewport", p.transform, 24, 140, 872, viewHeight);
+        Txt(p.transform, "从 " + StationDisplayName(from, currentRegion) + " 起 · 新增 " + (UniqueCount(snapshot) - 1) + " 站 · 造价 ¥" + cost, 22, InkSoft, 30, h - 114, 820, 30, TextAnchor.MiddleLeft);
+        var view = Rect("OptionsViewport", p.transform, 24, 122, 872, viewHeight);
         Img(view, new Color(1,1,1,0.01f)); var mask = view.AddComponent<Mask>(); mask.showMaskGraphic = false;
         var scroll = view.AddComponent<ScrollRect>(); scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 100f;
         scroll.viewport = view.GetComponent<RectTransform>();
-        var content = Rect("Options", view.transform, 0, 0, 872, opts.Count * 112f);
+        var content = Rect("Options", view.transform, 0, 0, 872, opts.Count * rowStep);
         var contentRt = content.GetComponent<RectTransform>(); contentRt.anchorMin = contentRt.anchorMax = new Vector2(0,1);
         contentRt.pivot = new Vector2(0,1); contentRt.anchoredPosition = Vector2.zero; scroll.content = contentRt;
+        BindScrollPosition(scroll, "connect:" + from);
         for (int i = 0; i < opts.Count; i++)
         {
             var opt = opts[i]; int k = i;
-            var row = Rect("Opt"+i, content.transform, 0, opts.Count * 112f - 106 - i*112, 872, 100);
+            var row = Rect("Opt"+i, content.transform, 0, opts.Count * rowStep - (rowH + 5f) - i * rowStep, 872, rowH);
             Rounded(row, i == selected ? new Color(0.985f,0.948f,0.862f,1f) : new Color(1,1,1,0.94f));
             SoftShadow(row);
             Color accent = opt.isNew ? Vermilion : opt.line.color;
-            Img(Rect("Bar", row.transform, 0, 22, 7, 56), accent, spriteRound);
+            Img(Rect("Bar", row.transform, 0, 20, 7, 56), accent, spriteRound);
             string t1 = opt.isNew ? "开通新线路" : ("延长 " + opt.line.name);
             string route = opt.isNew ? (nextLineId + " 号线 · " + UniqueCount(snapshot) + " 站") : (UniquePathText(opt.line.st) + "  +" + (snapshot.Count - 1) + " 站");
             int gain = i == selected ? Mathf.RoundToInt(EstimateNetworkDelta(opt.line, opt.isNew ? snapshot : opt.path, opt.isNew)) : 0;
             string t2 = route + (i == selected ? " · 预计 " + (gain >= 0 ? "+" : "") + gain + "/天" : " · 选择后查看预计收益");
-            Txt(row.transform, t1, 30, Ink, 28, 54, 520, 42, TextAnchor.MiddleLeft);
-            Txt(row.transform, t2, 23, InkSoft, 28, 16, 750, 34, TextAnchor.MiddleLeft);
-            if (i == selected) Txt(row.transform, "✓", 34, Gold, 800, 30, 48, 44, TextAnchor.MiddleCenter);
+            Txt(row.transform, t1, 30, Ink, 28, 50, 520, 38, TextAnchor.MiddleLeft);
+            var pathView = Rect("PathViewport", row.transform, 28, 11, pathViewW, 34);
+            var pathHit = Img(pathView, new Color(1, 1, 1, 0.004f));
+            pathView.AddComponent<RectMask2D>();
+            var pathContent = Rect("PathContent", pathView.transform, 0, 0, pathViewW, 34);
+            var pathContentRt = pathContent.GetComponent<RectTransform>();
+            pathContentRt.anchorMin = new Vector2(0, 0.5f); pathContentRt.anchorMax = new Vector2(0, 0.5f);
+            pathContentRt.pivot = new Vector2(0, 0.5f); pathContentRt.anchoredPosition = Vector2.zero;
+            var pathLabel = Txt(pathContent.transform, t2, 23, InkSoft, 0, 0, pathViewW, 34, TextAnchor.MiddleLeft);
+            pathLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+            pathLabel.verticalOverflow = VerticalWrapMode.Overflow;
+            pathLabel.raycastTarget = false;
+            float pathW = Mathf.Max(pathViewW, Mathf.Ceil(pathLabel.preferredWidth) + 12f);
+            pathLabel.rectTransform.sizeDelta = new Vector2(pathW, 34);
+            pathContentRt.sizeDelta = new Vector2(pathW, 34);
+            bool needHScroll = pathW > pathViewW + 2f;
+            pathHit.raycastTarget = needHScroll;
+            if (needHScroll)
+            {
+                var pathScroll = pathView.AddComponent<ScrollRect>();
+                pathScroll.horizontal = true; pathScroll.vertical = false;
+                pathScroll.inertia = true; pathScroll.decelerationRate = 0.12f;
+                pathScroll.scrollSensitivity = 60f;
+                pathScroll.movementType = ScrollRect.MovementType.Elastic;
+                pathScroll.viewport = pathView.GetComponent<RectTransform>();
+                pathScroll.content = pathContentRt;
+                var passClick = pathView.AddComponent<ConnectRowPathClick>();
+                passClick.onClick = () => ShowConnectPopup(from, snapshot, cost, k);
+                passClick.parentScroll = scroll;
+                passClick.selfScroll = pathScroll;
+            }
+            if (i == selected) Txt(row.transform, "✓", 34, Gold, 800, 26, 48, 44, TextAnchor.MiddleCenter);
             var btn = row.AddComponent<Button>(); btn.targetGraphic = row.GetComponent<Image>();
             btn.onClick.AddListener(() => ShowConnectPopup(from, snapshot, cost, k));
         }
         if (opts.Count > 5) scroll.verticalNormalizedPosition = 1f - Mathf.Clamp01((float)selected / (opts.Count - 5));
-        var ok = Btn(p.transform, "Ok", "确 认", 28, 24, 28, 422, 92, Vermilion, () => {
+        var ok = Btn(p.transform, "Ok", "确 认", 28, 24, 22, 422, 84, Vermilion, () => {
             if (sel.isNew) CommitNewLine(snapshot, cost);
             else CommitExtend(sel.line, sel.path, snapshot, cost);
         });
         TInk(ok, Color.white);
-        var no = Btn(p.transform, "No", "取 消", 28, 474, 28, 422, 92, new Color(0.92f,0.89f,0.83f), () => { ClosePanel(); CancelDraft(); });
+        var no = Btn(p.transform, "No", "取 消", 28, 474, 22, 422, 84, new Color(0.92f,0.89f,0.83f), () => { ClosePanel(); CancelDraft(); });
         TInk(no, Ink);
+    }
+    sealed class ConnectRowPathClick : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
+    {
+        public Action onClick;
+        public ScrollRect parentScroll, selfScroll;
+        bool routeToParent;
+        public void OnPointerClick(PointerEventData e) { if (!e.dragging) onClick?.Invoke(); }
+        public void OnBeginDrag(PointerEventData e)
+        {
+            routeToParent = parentScroll && Mathf.Abs(e.delta.y) > Mathf.Abs(e.delta.x);
+            if (routeToParent) { if (selfScroll) selfScroll.enabled = false; parentScroll.OnBeginDrag(e); }
+        }
+        public void OnDrag(PointerEventData e) { if (routeToParent && parentScroll) parentScroll.OnDrag(e); }
+        public void OnEndDrag(PointerEventData e)
+        {
+            if (routeToParent && parentScroll) parentScroll.OnEndDrag(e);
+            if (selfScroll) selfScroll.enabled = true;
+            routeToParent = false;
+        }
     }
     // ---------- draft drag visuals ----------
     List<GameObject> draftSegs = new List<GameObject>();
@@ -1707,7 +1758,7 @@ public partial class DemoBootstrap : MonoBehaviour
                 int la = l.st[k], lb = l.st[k + 1];
                 string sr = SegmentRegion(la, lb);
                 if (string.IsNullOrEmpty(sr)) continue;
-                int regCode = sr == "青屿" ? 1 : sr == "镜汀" ? 2 : 3;
+                int regCode = sr == "香埠" ? 1 : sr == "莲澳" ? 2 : 3;
                 int lo = Mathf.Min(la, lb), hi = Mathf.Max(la, lb);
                 long key = ((long)regCode << 40) | ((long)lo << 20) | (uint)hi;
                 if (!sharedSegMap.TryGetValue(key, out var list)) sharedSegMap[key] = list = new List<int>();
@@ -1719,7 +1770,7 @@ public partial class DemoBootstrap : MonoBehaviour
         Vector2 ComputeCachedOffset(int lineId, int a, int b, string sr)
         {
             if (string.IsNullOrEmpty(sr)) return Vector2.zero;
-            int regCode = sr == "青屿" ? 1 : sr == "镜汀" ? 2 : 3;
+            int regCode = sr == "香埠" ? 1 : sr == "莲澳" ? 2 : 3;
             int lo = Mathf.Min(a, b), hi = Mathf.Max(a, b);
             long key = ((long)regCode << 40) | ((long)lo << 20) | (uint)hi;
             if (!sharedSegMap.TryGetValue(key, out var list) || list.Count <= 1) return Vector2.zero;
@@ -2013,7 +2064,7 @@ public partial class DemoBootstrap : MonoBehaviour
         if (!string.IsNullOrEmpty(targetReg) && targetReg != currentRegion && RegionUnlocked(targetReg))
             SwitchRegion(targetReg);
         if (!mapWheelZoom) mapWheelZoom = mapRect.GetComponent<MapWheelZoom>();
-        float minFocused = currentRegion == "锦川" ? 2.1f : 1.45f;
+        float minFocused = currentRegion == "粤海" ? 2.1f : 1.45f;
         float maxZ = mapWheelZoom != null && mapWheelZoom.maxZoom != null ? mapWheelZoom.maxZoom() : 2.5f;
         float scale = Mathf.Clamp(Mathf.Max(mapRect.localScale.x, minFocused), 1f, maxZ);
         mapRect.localScale = Vector3.one * scale;
@@ -2042,9 +2093,9 @@ public partial class DemoBootstrap : MonoBehaviour
     bool StationInRegion(int i, string region) { return stations[i].region == region || (stations[i].portal && (stations[i].portalTo == region || stations[i].portalTo2 == region)); }
     string SegmentRegion(int a, int b)
     {
-        if (StationInRegion(a, "青屿") && StationInRegion(b, "青屿")) return "青屿";
-        if (StationInRegion(a, "镜汀") && StationInRegion(b, "镜汀")) return "镜汀";
-        if (StationInRegion(a, "锦川") && StationInRegion(b, "锦川")) return "锦川";
+        if (StationInRegion(a, "香埠") && StationInRegion(b, "香埠")) return "香埠";
+        if (StationInRegion(a, "莲澳") && StationInRegion(b, "莲澳")) return "莲澳";
+        if (StationInRegion(a, "粤海") && StationInRegion(b, "粤海")) return "粤海";
         return null;
     }
     Vector2 PosInRegion(int i, string region)
@@ -2117,7 +2168,7 @@ public partial class DemoBootstrap : MonoBehaviour
             TickDragEdgeAutoPan(dt);
 
             Vector2 local; RectTransformUtility.ScreenPointToLocalPointInRectangle(mapRect, Input.mousePosition, null, out local);
-            float snapR = (currentRegion == "锦川" || currentRegion == "镜汀") ? 44f / Mathf.Max(1f, mapRect.localScale.x) : 44f;
+            float snapR = (currentRegion == "粤海" || currentRegion == "莲澳") ? 44f / Mathf.Max(1f, mapRect.localScale.x) : 44f;
             int near = NearestStationAny(local, snapR);
             bool backtracked = HandleDraftRevisit(near);
             int hov = near >= 0 && !draft.Contains(near) && !IsLoop(draft) ? near : -1;
@@ -2694,6 +2745,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void ClosePanel(bool force)
     {
+        CaptureScrollPositions();
         if (!force && Time.frameCount <= panelOpenedFrame) return;
         StopBubbleAnim();
         if (!force && activePanel) { PlayCloseSfx(); suppressNextBtnClickSfx = false; }
@@ -2829,6 +2881,7 @@ public partial class DemoBootstrap : MonoBehaviour
         var text = Txt(content.transform, value, size, color, 0, 0, width, rt.sizeDelta.y, TextAnchor.UpperLeft);
         var scroll = view.AddComponent<ScrollRect>(); scroll.viewport = view.GetComponent<RectTransform>();
         scroll.content = rt; scroll.horizontal = false; scroll.vertical = true; scroll.scrollSensitivity = 70;
+        BindScrollPosition(scroll, "text:" + (value == null ? 0 : value.GetHashCode()));
         return text;
     }
     Button Btn(Transform p, string name, string label, int size, float x, float y, float w, float h, Color c, Action onClick)

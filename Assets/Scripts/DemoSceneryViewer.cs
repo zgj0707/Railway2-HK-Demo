@@ -12,29 +12,29 @@ public partial class DemoBootstrap
     {
         switch (sc.name)
         {
-            case "银潮百帆港":
+            case "鲤鱼门海角":
                 imagePath = "Scenery/victoria_harbour";
-                description = "银潮百帆港夹于青屿本岛与九曲岸之间，入夜后两岸灯火映照海面，展现青屿独特的港湾风景。";
+                description = "鲤鱼门海角夹于香埠本岛与九曲岸之间，入夜后两岸灯火映照海面，展现香埠独特的港湾风景。";
                 return true;
-            case "望海奇峰":
+            case "扯旗山":
                 imagePath = "Scenery/victoria_peak";
-                description = "望海奇峰俯瞰青屿本岛与银潮百帆港，山径和观景点展现山海相连的海湾景色。";
+                description = "扯旗山俯瞰香埠本岛与鲤鱼门海角，山径和观景点展现山海相连的海湾景色。";
                 return true;
-            case "伏狮翠岭":
+            case "狮子山":
                 imagePath = "Scenery/lion_rock";
-                description = "伏狮翠岭位于九曲岸与北郊之间，山脊形似伏狮，是青屿的山水地标之一。";
+                description = "狮子山位于九曲岸与北郊之间，山脊形似伏狮，是香埠的山水地标之一。";
                 return true;
-            case "千灯夜市":
+            case "榕树头":
                 imagePath = "Scenery/temple_street_clean";
-                description = "入夜后的千灯街灯火渐亮，摊档、招牌与骑楼街巷交织，展现青屿热闹的市井风情。";
+                description = "入夜后的千灯街灯火渐亮，摊档、招牌与骑楼街巷交织，展现香埠热闹的市井风情。";
                 return true;
-            case "云顶禅刹":
+            case "宝莲寺":
                 imagePath = "Scenery/tian_tan_buddha_clean";
-                description = "云顶禅刹坐落于苍岚岛山巅，云雾群山环绕，是青屿著名的古迹人文景观。";
+                description = "宝莲寺坐落于苍岚岛山巅，云雾群山环绕，是香埠著名的古迹人文景观。";
                 return true;
-            case "清波湾":
+            case "浅水湾":
                 imagePath = "Scenery/repulse_bay_clean";
-                description = "清波湾位于青屿本岛南部，海湾与青翠山坡相映，沿岸可以欣赏悠闲的海滨风光。";
+                description = "浅水湾位于香埠本岛南部，海湾与青翠山坡相映，沿岸可以欣赏悠闲的海滨风光。";
                 return true;
             default:
                 imagePath = null; description = null;

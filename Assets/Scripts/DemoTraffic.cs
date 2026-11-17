@@ -69,13 +69,13 @@ public partial class DemoBootstrap
     float CityDemandWeight(Station station)
     {
         if (station.portal) return 1.6f;
-        if (station.region == "青屿") return 1.25f;
-        if (station.region == "镜汀") return 0.75f;
+        if (station.region == "香埠") return 1.25f;
+        if (station.region == "莲澳") return 0.75f;
         switch (station.city)
         {
-            case "百花府": case "鹏湾府": return station.county ? 1.1f : 1.7f;
-            case "禅溪府": case "莞香府": return station.county ? 0.95f : 1.35f;
-            case "鹅湖府": case "珠屿府": case "翠香府": case "五津府": return station.county ? 0.8f : 1.1f;
+            case "五羊府": case "新安府": return station.county ? 1.1f : 1.7f;
+            case "祖庙府": case "莞城府": return station.county ? 0.95f : 1.35f;
+            case "惠州府": case "香山府": case "岐江府": case "五邑府": return station.county ? 0.8f : 1.1f;
             default: return station.county ? 0.65f : 0.9f;
         }
     }
@@ -85,8 +85,8 @@ public partial class DemoBootstrap
         float baseValue = 80f;
         switch (s.name)
         {
-            case "白沙坪": case "翠围乡": case "云水围": case "丰朗墟": case "清溪上": case "松烟岭": case "香兰湾": case "守望门": case "汀屿里": case "青芦洲": case "叠石湾": baseValue *= 1.25f; break;
-            case "海晏埠": case "鸣钟里": case "翠沙咀": case "熙市角": case "铜鼓湾": case "古坊石街": case "海神阁": case "镜汀空港": case "鹏湾": case "百花城": baseValue *= 1.30f; break;
+            case "沥源围": case "将军澳": case "米埔围": case "元朗墟": case "上水围": case "粉岭围": case "浅湾": case "青山湾": case "潭仔": case "青洲": case "石排湾": baseValue *= 1.25f; break;
+            case "石板街": case "兵房山": case "码头咀": case "芒角墟": case "鹅颈桥": case "茨林围": case "阿妈阁": case "北安港": case "新安城": case "五羊城": baseValue *= 1.30f; break;
         }
         foreach (var sc in sceneries) if (sc.triggerStation == s.name && s.region == sc.region) { baseValue *= 1.15f; break; }
         return baseValue * CityDemandWeight(s);
@@ -108,8 +108,8 @@ public partial class DemoBootstrap
         string name = stations[i].name;
         switch (name)
         {
-            case "白沙坪": case "翠围乡": case "云水围": case "丰朗墟": case "清溪上": case "松烟岭": case "香兰湾": case "守望门": case "汀屿里": case "青芦洲": case "叠石湾": return 1;
-            case "海晏埠": case "鸣钟里": case "翠沙咀": case "熙市角": case "铜鼓湾": case "百花城": case "鹏湾（西渡）": return 2;
+            case "沥源围": case "将军澳": case "米埔围": case "元朗墟": case "上水围": case "粉岭围": case "浅湾": case "青山湾": case "潭仔": case "青洲": case "石排湾": return 1;
+            case "石板街": case "兵房山": case "码头咀": case "芒角墟": case "鹅颈桥": case "五羊城": case "新安（西渡）": return 2;
         }
         foreach (var sc in sceneries) if (sc.triggerStation == name && sc.region == stations[i].region) return 3;
         return stations[i].portal ? 4 : 0;
@@ -221,26 +221,26 @@ public partial class DemoBootstrap
     Vector2 EconomicPosition(int index)
     {
         var station=stations[index];
-        if (StationInRegion(index,"锦川")) return PosInRegion(index,"锦川");
-        if (station.region == "青屿") {
-            if (hkEconomicAnchor == -2) hkEconomicAnchor = stations.FindIndex(x=>x.name=="鹏湾（西渡）");
+        if (StationInRegion(index,"粤海")) return PosInRegion(index,"粤海");
+        if (station.region == "香埠") {
+            if (hkEconomicAnchor == -2) hkEconomicAnchor = stations.FindIndex(x=>x.name=="新安（西渡）");
             int anchor = hkEconomicAnchor;
-            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"锦川") : new Vector2(615,900);
-            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"青屿") : new Vector2(590,865);
-            return origin+(PosInRegion(index,"青屿")-localAnchor)*0.4f;
+            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"粤海") : new Vector2(615,900);
+            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"香埠") : new Vector2(590,865);
+            return origin+(PosInRegion(index,"香埠")-localAnchor)*0.4f;
         }
-        if (station.region == "镜汀") {
-            if (macauEconomicAnchor == -2) macauEconomicAnchor = stations.FindIndex(x=>x.name=="珠屿（北关）");
+        if (station.region == "莲澳") {
+            if (macauEconomicAnchor == -2) macauEconomicAnchor = stations.FindIndex(x=>x.name=="香山（北关）");
             int anchor = macauEconomicAnchor;
-            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"锦川") : new Vector2(540,850);
-            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"镜汀") : new Vector2(540,900);
-            return origin+(PosInRegion(index,"镜汀")-localAnchor)*0.4f;
+            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"粤海") : new Vector2(540,850);
+            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"莲澳") : new Vector2(540,900);
+            return origin+(PosInRegion(index,"莲澳")-localAnchor)*0.4f;
         }
         return Pos(index);
     }
     float EconomicSegmentDistance(int a,int b,string region)
     {
-        float scale = region == "锦川" ? 1f : 0.4f;
+        float scale = region == "粤海" ? 1f : 0.4f;
         return Vector2.Distance(PosInRegion(a,region),PosInRegion(b,region))*scale;
     }
     float EconomicPathLength(List<int> path)
@@ -997,6 +997,9 @@ public partial class DemoBootstrap
         } finally { dayClock = savedClock; }
         foreach (var f in lineForecasts.Values) f.tax = Mathf.Max(0f,f.gross-f.vehicle-f.track)*0.1f;
         forecastSignature=signature; hasForecastSignature=true;
+        // Explicit rebuilds can follow invalidations beyond the signature fields.
+        // Speculative research/restore passes must not evict other node estimates.
+        if (!estimatingResearchProfit) unchecked { researchForecastEpoch++; }
     }
     LineForecastData ForecastFor(Line line) { return lineForecasts.TryGetValue(line,out var f) ? f : new LineForecastData(); }
     struct OperatingRates { public float gross, vehicle, track; }

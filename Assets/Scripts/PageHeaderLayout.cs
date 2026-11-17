@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 public class PageHeaderLayout : MonoBehaviour
@@ -22,7 +22,9 @@ public class PageHeaderLayout : MonoBehaviour
         if (!target) return;
         target.anchorMin = target.anchorMax = Vector2.zero;
         target.pivot = new Vector2(0, 1);
-        extraTopLeftTargets.Add(new TopOffsetEntry { target = target, offsetFromSafeTopLeft = offsetFromSafeTopLeft });
+        int existing = extraTopLeftTargets.FindIndex(entry => entry.target == target);
+        var value = new TopOffsetEntry { target = target, offsetFromSafeTopLeft = offsetFromSafeTopLeft };
+        if (existing >= 0) extraTopLeftTargets[existing] = value; else extraTopLeftTargets.Add(value);
         lastExtraCount = -1;
         Apply(true);
     }

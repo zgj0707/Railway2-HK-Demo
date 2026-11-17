@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -145,6 +145,8 @@ public partial class DemoBootstrap
     void ClosePage() => ClosePage(true);
     void ClosePage(bool syncAudio)
     {
+        refreshHistoryTree = null; incrementalHistoryPage = null;
+        CaptureScrollPositions();
         StopPageAnim();
         bool hadHeavyPage = pageRoot != null && (activePageKey == "fleet_shop" || activePageKey == "company" || activePageKey == "scenery" || activePageKey == "line_info" || activePageKey == "tech");
         if (pageRoot) Destroy(pageRoot);
@@ -160,7 +162,7 @@ public partial class DemoBootstrap
     void GoHome()
     {
         PlayCloseSfx();
-        pageBack = null; fleetBack = null;
+        pageBack = null; fleetBack = null; lineFleetBackAction = null; lineFleetOriginFleetBack = null; lineFleetLineId = 0; lineFleetSlot = -1; lineFleetAmount = 0; lineFleetShopReturn = null;
         if (sceneryViewer) Destroy(sceneryViewer);
         sceneryViewer = null;
         panelClosed = null;
@@ -201,7 +203,7 @@ public partial class DemoBootstrap
     {
         new RegionShowcaseSpec
         {
-            key = "青屿",
+            key = "香埠",
             bgPath = "PageArt/region_hk_bg",
             titleMaskPath = "",
             subtitle = "行书手泽风韵  ·  山海港湾都会",
@@ -211,7 +213,7 @@ public partial class DemoBootstrap
         },
         new RegionShowcaseSpec
         {
-            key = "镜汀",
+            key = "莲澳",
             bgPath = "PageArt/region_macau_bg",
             titleMaskPath = "",
             subtitle = "行草手泽风韵  ·  青花海湾古街",
@@ -221,7 +223,7 @@ public partial class DemoBootstrap
         },
         new RegionShowcaseSpec
         {
-            key = "锦川",
+            key = "粤海",
             bgPath = "PageArt/region_gd_bg",
             titleMaskPath = "",
             subtitle = "端雅楷书风韵  ·  骑楼春潮水乡",
@@ -236,7 +238,7 @@ public partial class DemoBootstrap
         var pg = OpenPage("切换区域", "各区依次解锁。每区线路上限为站点数的一半；交界站计入所连地区。", "PageArt/line_watercolor", "regions");
         const float cardH = 492f, cardGap = 34f, topPad = 24f, botPad = 34f;
         float totalH = topPad + RegionShowcaseSpecs.Length * cardH + (RegionShowcaseSpecs.Length - 1) * cardGap + botPad;
-        var content = FleetScroll(pg.transform, 32f, PgH - 188f, totalH);
+        var content = FleetScroll(pg.transform, 32f, PgH - 188f, totalH, scrollKey: "regions");
         float topY = content.sizeDelta.y, cardX = 4f, innerW = content.sizeDelta.x - 8f;
         for (int i = 0; i < RegionShowcaseSpecs.Length; i++)
         {
@@ -325,9 +327,9 @@ public partial class DemoBootstrap
         string infoText = available
             ? "线路 " + RegionLineCount(region) + " / " + RegionLineLimit(region) + "  ·  普通站已连 " + ConnectedOrdinaryStations(region)
                 + (active ? "   ·   正在巡视本区" : "   ·   轻触明信片前往 →")
-            : region == "镜汀"
-                ? "解锁条件：青屿普通站 " + Mathf.Min(4, ConnectedOrdinaryStations("青屿")) + "/4  ·  日利润 ¥" + FormatCoins(income) + "/600"
-                : "解锁条件：开放镜汀  ·  镜汀普通站 " + Mathf.Min(2, ConnectedOrdinaryStations("镜汀")) + "/2  ·  日利润 ¥" + FormatCoins(income) + "/1,200";
+            : region == "莲澳"
+                ? "解锁条件：香埠普通站 " + Mathf.Min(4, ConnectedOrdinaryStations("香埠")) + "/4  ·  日利润 ¥" + FormatCoins(income) + "/600"
+                : "解锁条件：开放莲澳  ·  莲澳普通站 " + Mathf.Min(2, ConnectedOrdinaryStations("莲澳")) + "/2  ·  日利润 ¥" + FormatCoins(income) + "/1,200";
         float pillW = available ? 690f : 860f;
         var pill = Rect("StatusPill", artClip.transform, (artW - pillW) * 0.5f, 22f, pillW, 56f);
         Rounded(pill, neon ? new Color(0.08f, 0.11f, 0.24f, 0.88f) : new Color(0.99f, 0.975f, 0.945f, 0.92f));
@@ -367,7 +369,7 @@ public partial class DemoBootstrap
             TInk(alertBar, Vermilion);
             scrollTop = PgH - 544;
         }
-        var list = FleetScroll(pg.transform, 36, scrollTop, Mathf.Max(1, regionalLines.Count) * 188f + 24);
+        var list = FleetScroll(pg.transform, 36, scrollTop, Mathf.Max(1, regionalLines.Count) * 188f + 24, scrollKey: "lines:" + currentRegion);
         float top = list.sizeDelta.y - 184f;
         for (int i = 0; i < regionalLines.Count; i++)
         {
@@ -402,7 +404,7 @@ public partial class DemoBootstrap
             : " · 峰段负荷 " + Mathf.RoundToInt(peakRatio * 100f) + "%";
         Txt(fleet.transform, "配属 " + line.trains + " 列 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line,2)*100) + "%" + loadTag, 26, Ink, 24, 115, 950, 45, TextAnchor.MiddleLeft);
         Txt(fleet.transform, "重联叠加运力，速度与养护成本按车队均值核算。", 23, InkSoft, 24, 68, 950, 38, TextAnchor.MiddleLeft);
-        var fleetButton=Btn(fleet.transform,"Fleet","机车配属",25,24,8,450,55,Indigo,()=>OpenLineFleet(line));TInk(fleetButton,Color.white);
+        var fleetButton=Btn(fleet.transform,"Fleet","机车配属",25,24,8,450,55,Indigo,()=>OpenLineFleet(line, () => OpenLineScreen(line.id)));TInk(fleetButton,Color.white);
         var operations=Btn(fleet.transform,"Operations","票价与调度",25,495,8,450,55,Indigo,()=>OpenLineOperations(line));TInk(operations,Color.white);
         Txt(pg.transform, "沿线", 28, InkSoft, 28, PgH-800, 160, 38, TextAnchor.MiddleLeft);
         Txt(pg.transform, UniquePathText(line.st), 26, Ink, 28, PgH-870, W-56, 60, TextAnchor.UpperLeft);
@@ -425,6 +427,8 @@ public partial class DemoBootstrap
     // ---------- 调度 / 车库 / 商店 ----------
     int fleetPowerFilter, fleetUseFilter, fleetRegionFilter, shopCategory;
     Action fleetBack;
+    Action lineFleetBackAction, lineFleetOriginFleetBack, lineFleetShopReturn;
+    int lineFleetLineId, lineFleetSlot = -1, lineFleetAmount;
     static readonly string[] FleetPowerFilters = { "全部动力", "蒸汽", "内燃", "电力", "氢能", "双动力", "其他" };
     static readonly string[] FleetUseFilters = { "全部用途", "客运优先", "货运优先", "客货兼顾" };
     static readonly string[] FleetRegionFilters = { "全部地区", "英国", "美国", "德国", "印度", "法国", "青锦域" };
@@ -514,7 +518,69 @@ public partial class DemoBootstrap
             item.AddComponent<FleetPressFeedback>();
         }
     }
-    RectTransform FleetScroll(Transform page, float bottom, float top, float requiredHeight, float leftInset = 0f)
+    readonly Dictionary<string, float> scrollPositions = new Dictionary<string, float>();
+    readonly Dictionary<string, ScrollRect> scrollViews = new Dictionary<string, ScrollRect>();
+    readonly Dictionary<string, int> scrollBindingVersions = new Dictionary<string, int>();
+    static float ClampedScrollY(float position, float height, float viewHeight)
+        => float.IsNaN(position) || float.IsInfinity(position) ? 0f : Mathf.Clamp(position, 0f, Mathf.Max(0f, height - viewHeight));
+    float RememberScrollPosition(string key, float position, float height, float viewHeight)
+    {
+        float y = ClampedScrollY(position, height, viewHeight);
+        scrollPositions[key] = y;
+        return y;
+    }
+    float SavedScrollPosition(string key, float height, float viewHeight)
+        => ClampedScrollY(scrollPositions.TryGetValue(key, out float y) ? y : 0f, height, viewHeight);
+    void RestoreScrollPosition(ScrollRect scroll, string key)
+    {
+        if (!scroll || !scroll.content || !scroll.viewport) return;
+        float y = SavedScrollPosition(key, scroll.content.rect.height, scroll.viewport.rect.height);
+        scroll.StopMovement();
+        scroll.content.anchoredPosition = new Vector2(scroll.content.anchoredPosition.x, y);
+        scrollPositions[key] = y;
+    }
+    void BindScrollPosition(ScrollRect scroll, string key)
+    {
+        if (string.IsNullOrEmpty(key)) throw new ArgumentException("Scroll memory needs a stable key", nameof(key));
+        int version = NextScrollBinding(key);
+        scrollViews[key] = scroll;
+        RestoreScrollPosition(scroll, key);
+        scroll.onValueChanged.AddListener(_ => {
+            // A destroyed/replaced view can still emit once in the same frame.
+            if (scroll && scroll.content && scroll.viewport && IsCurrentScrollBinding(key, version))
+                RememberScrollPosition(key, scroll.content.anchoredPosition.y, scroll.content.rect.height, scroll.viewport.rect.height);
+        });
+    }
+    int NextScrollBinding(string key)
+    {
+        int version = scrollBindingVersions.TryGetValue(key, out int previous) ? previous + 1 : 1;
+        scrollBindingVersions[key] = version;
+        return version;
+    }
+    bool IsCurrentScrollBinding(string key, int version)
+        => scrollBindingVersions.TryGetValue(key, out int current) && current == version;
+    void CaptureScrollPositions()
+    {
+        foreach (var entry in scrollViews)
+        {
+            var scroll = entry.Value;
+            if (scroll && scroll.content && scroll.viewport)
+                RememberScrollPosition(entry.Key, scroll.content.anchoredPosition.y, scroll.content.rect.height, scroll.viewport.rect.height);
+        }
+    }
+    void ResetScrollPosition(string key)
+    {
+        scrollPositions[key] = 0f;
+        if (scrollViews.TryGetValue(key, out var scroll) && scroll) RestoreScrollPosition(scroll, key);
+    }
+    string FleetCollectionScrollKey(int tab) => "fleet:collection:" + tab;
+    void ResetFleetFilterScrolls()
+    {
+        // These filters are shared by both the garage and locomotive shop.
+        ResetScrollPosition(FleetCollectionScrollKey(1));
+        ResetScrollPosition(FleetCollectionScrollKey(2));
+    }
+    RectTransform FleetScroll(Transform page, float bottom, float top, float requiredHeight, float leftInset = 0f, string scrollKey = null)
     {
         float viewHeight = top - bottom;
         float width = W - 56 - leftInset;
@@ -528,11 +594,12 @@ public partial class DemoBootstrap
         var content = Rect("FleetContent", view.transform, 0, 0, width, height);
         var rt = content.GetComponent<RectTransform>(); rt.anchorMin = rt.anchorMax = new Vector2(0, 1);
         rt.pivot = new Vector2(0, 1); rt.anchoredPosition = Vector2.zero; scroll.content = rt;
+        BindScrollPosition(scroll, scrollKey ?? (activePageKey + ":" + page.name));
         return rt;
     }
     void BuildFleetDispatch(Transform page)
     {
-        var content = FleetScroll(page, 172, PgH - 182, Mathf.Max(1, lines.Count) * 360f + 24);
+        var content = FleetScroll(page, 172, PgH - 182, Mathf.Max(1, lines.Count) * 360f + 24, scrollKey: "fleet:dispatch:" + currentRegion);
         float height = content.sizeDelta.y;
         if (lines.Count == 0) Txt(content, "还没有运营中的线路", 30, InkSoft, 20, height - 180, W - 96, 80, TextAnchor.MiddleCenter);
         for (int i = 0; i < lines.Count; i++)
@@ -545,7 +612,7 @@ public partial class DemoBootstrap
             var lineStats = Txt(card.transform, UniqueCount(line.st) + " 站 · " + line.trains + " 列 · 预计日利润 " + Mathf.RoundToInt(LineDaily(line)), 24, InkSoft, 28, 205, 940, 38, TextAnchor.MiddleLeft);
             var assigned = researchVehicles.Find(v => v.lineId == line.id);
             Txt(card.transform, "配置：" + (assigned == null ? "默认机车" : LocoNames[assigned.node]), 24, InkSoft, 28, 156, 940, 34, TextAnchor.MiddleLeft);
-            var fleetButton = Btn(card.transform, "Fleet", "机车配属", 25, 28, 38, 450, 88, Indigo, () => OpenLineFleet(line)); TInk(fleetButton, Color.white);
+            var fleetButton = Btn(card.transform, "Fleet", "机车配属", 25, 28, 38, 450, 88, Indigo, () => OpenLineFleet(line, () => OpenFleetTab(0))); TInk(fleetButton, Color.white);
             var operations = Btn(card.transform, "Operations", "票价与调度", 25, 495, 38, 450, 88, Indigo, () => OpenLineOperations(line)); TInk(operations, Color.white);
             { var entry = card.AddComponent<FleetCardEntrance>(); entry.delay = Mathf.Min(i, 6) * 0.032f; }
         }
@@ -555,11 +622,11 @@ public partial class DemoBootstrap
         Button power = null, use = null, region = null;
         float left = tab == 2 ? 178 : 28, width = tab == 2 ? 282 : 326, gap = tab == 2 ? 14 : 23;
         power = Btn(page, "PowerFilter", "动力：" + FleetPowerFilters[fleetPowerFilter] + "  ▾", 22, left, PgH - 285, width, 72,
-            new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, power.transform, FleetPowerFilters, fleetPowerFilter, value => { fleetPowerFilter = value; OpenFleetTab(tab); }));
+            new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, power.transform, FleetPowerFilters, fleetPowerFilter, value => { if (fleetPowerFilter != value) { fleetPowerFilter = value; ResetFleetFilterScrolls(); } OpenFleetTab(tab); }));
         use = Btn(page, "UseFilter", "用途：" + FleetUseFilters[fleetUseFilter] + "  ▾", 22, left + width + gap, PgH - 285, width, 72,
-            new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, use.transform, FleetUseFilters, fleetUseFilter, value => { fleetUseFilter = value; OpenFleetTab(tab); }));
+            new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, use.transform, FleetUseFilters, fleetUseFilter, value => { if (fleetUseFilter != value) { fleetUseFilter = value; ResetFleetFilterScrolls(); } OpenFleetTab(tab); }));
         region = Btn(page, "RegionFilter", "地区：" + FleetRegionFilters[fleetRegionFilter] + "  ▾", 22, left + 2 * (width + gap), PgH - 285, width, 72,
-            new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, region.transform, FleetRegionFilters, fleetRegionFilter, value => { fleetRegionFilter = value; OpenFleetTab(tab); }));
+            new Color(0.93f, 0.90f, 0.84f), () => ShowFleetDropdown(page, region.transform, FleetRegionFilters, fleetRegionFilter, value => { if (fleetRegionFilter != value) { fleetRegionFilter = value; ResetFleetFilterScrolls(); } OpenFleetTab(tab); }));
         TInk(power, Ink); TInk(use, Ink); TInk(region, Ink);
         if (!power.GetComponent<FleetPressFeedback>()) power.gameObject.AddComponent<FleetPressFeedback>();
         if (!use.GetComponent<FleetPressFeedback>()) use.gameObject.AddComponent<FleetPressFeedback>();
@@ -614,7 +681,7 @@ public partial class DemoBootstrap
                 new Color(0.93f, 0.89f, 0.81f), () => OpenSceneryTab(1));
             TInk(albumBtn, Ink);
         }
-        var content = FleetScroll(page, 172, PgH - 354, Mathf.Max(1, count) * 218f + 20, inset);
+        var content = FleetScroll(page, 172, PgH - 354, Mathf.Max(1, count) * 218f + 20, inset, scrollKey: FleetCollectionScrollKey(tab));
         float height = content.sizeDelta.y;
         float cardWidth = content.sizeDelta.x, artWidth = tab == 2 ? 210f : 270f;
         float textX = tab == 2 ? 240f : 304f, actionWidth = tab == 2 ? 180f : 234f;
@@ -690,6 +757,7 @@ public partial class DemoBootstrap
         var content = Rect("LineOptions", view.transform, 0, 0, 700, contentHeight);
         var contentRt = content.GetComponent<RectTransform>(); contentRt.anchorMin = contentRt.anchorMax = new Vector2(0,1);
         contentRt.pivot = new Vector2(0,1); contentRt.anchoredPosition = Vector2.zero; scroll.content = contentRt;
+        BindScrollPosition(scroll, "fleet:choose-line");
         if (item.lineId != 0)
         {
             var unassign = Btn(content.transform, "Unassign", "返回车库待命", 25, 0, contentHeight - (availableLines.Count + 1) * 78, 700, 66, Paper2, () => {
@@ -722,7 +790,7 @@ public partial class DemoBootstrap
         if (!PathTouchesRegion(line.st, currentRegion)) { Toast("请先切换到该线路所在地区调整调度"); return; }
         if (!techDone.Contains("dispatch_basic")) { Toast("请先研究铁路时刻表"); return; }
         amount = Mathf.Clamp(amount, 0, 8);
-        if (amount > line.trains) { OpenLineFleetSupply(line, slot, amount); return; }
+        if (amount > line.trains) { OpenLineFleet(line, () => OpenLineOperations(line), slot, amount); return; }
         BeginUndo("调整调度");
         if (!techDone.Contains("dispatch_peak")) for (int i=0;i<4;i++) line.dispatch[i]=amount;
         else line.dispatch[slot]=amount;
@@ -770,38 +838,138 @@ public partial class DemoBootstrap
         }
         Txt(page.transform, "高阶机车优先上线；各时段数据按全日口径折算，税费于每日结算扣除。", 22, InkSoft, 32, Mathf.Max(70f, PgH-1320), 1000, 100, TextAnchor.UpperLeft);
     }
-    void OpenLineFleet(Line line)
+    void ConfigureLineFleetContext(Line line, Action returnAction, int slot, int amount)
+    {
+        if (returnAction != null || lineFleetLineId != line.id || lineFleetBackAction == null)
+        {
+            lineFleetOriginFleetBack = lineFleetShopReturn != null && fleetBack == lineFleetShopReturn ? lineFleetOriginFleetBack : fleetBack;
+            lineFleetBackAction = returnAction ?? (() => OpenLineScreen(line.id));
+            lineFleetLineId = line.id; lineFleetSlot = -1; lineFleetAmount = 0;
+        }
+        if (slot >= 0 && slot < 4 && amount > 0)
+        {
+            lineFleetSlot = slot; lineFleetAmount = Mathf.Clamp(amount, 1, 8);
+        }
+        // Returning from the shop restores the caller's navigation context; its
+        // temporary shop callback must not become the garage's own back action.
+        fleetBack = lineFleetOriginFleetBack;
+    }
+    string LineFleetMoveError(Line line, ResearchVehicle vehicle, bool assign)
+    {
+        if (line == null || !lines.Contains(line) || vehicle == null || !researchVehicles.Contains(vehicle)) return "车辆或线路已变化，请重新进入";
+        if (!PathTouchesRegion(line.st, currentRegion)) return "请先切换到该线路所在地区调整机车";
+        if (assign)
+        {
+            if (vehicle.lineId != 0) return "该机车已配属其他线路";
+            int assigned = 0; foreach (var item in researchVehicles) if (item.lineId == line.id) assigned++;
+            if (line.trains >= 8 || assigned >= 7) return "该线路最多配属 8 列车";
+        }
+        else if (vehicle.lineId != line.id) return "该机车已不在本线";
+        return null;
+    }
+    void ApplyPendingLineFleetDispatch(Line line)
+    {
+        if (line.id != lineFleetLineId || lineFleetSlot < 0 || !techDone.Contains("dispatch_basic")) return;
+        int amount = Mathf.Clamp(lineFleetAmount, 0, line.trains);
+        if (!techDone.Contains("dispatch_peak")) for (int i = 0; i < 4; i++) line.dispatch[i] = amount;
+        else line.dispatch[lineFleetSlot] = amount;
+        if (line.trains >= lineFleetAmount) { lineFleetSlot = -1; lineFleetAmount = 0; }
+    }
+    void ReturnFromLineFleet()
+    {
+        lineFleetSlot = -1; lineFleetAmount = 0;
+        lineFleetBackAction?.Invoke();
+    }
+    bool MoveLineFleetVehicle(Line line, ResearchVehicle vehicle, bool assign)
+    {
+        if (LineFleetMoveError(line, vehicle, assign) != null) return false;
+        vehicle.lineId = assign ? line.id : 0;
+        SyncLineFleet(line);
+        if (assign) ApplyPendingLineFleetDispatch(line);
+        hasForecastSignature = false; operatingRates.Clear();
+        return true;
+    }
+    void ChangeLineFleetVehicle(Line line, ResearchVehicle vehicle, bool assign)
+    {
+        string error = LineFleetMoveError(line, vehicle, assign);
+        if (error != null) { Toast(error); return; }
+        BeginUndo(assign ? "调入机车" : "撤回机车");
+        MoveLineFleetVehicle(line, vehicle, assign);
+        RecalcIncome(); EndUndo(); RefreshHUD();
+        OpenLineFleet(line);
+        Toast(assign ? "机车已调入本线" : "机车已返回车库，调度已同步调整");
+    }
+    sealed class FleetModelGroup
+    {
+        public int node, count;
+        public ResearchVehicle first;
+    }
+    List<FleetModelGroup> FleetGroupsByLine(int targetLineId)
+    {
+        var groups = new SortedDictionary<int, FleetModelGroup>();
+        foreach (var vehicle in researchVehicles)
+        {
+            if (vehicle.lineId != targetLineId || vehicle.node < 0 || vehicle.node >= LocoNames.Length) continue;
+            if (!groups.TryGetValue(vehicle.node, out var group))
+                groups[vehicle.node] = group = new FleetModelGroup { node = vehicle.node, first = vehicle };
+            group.count++;
+        }
+        return new List<FleetModelGroup>(groups.Values);
+    }
+    static int LineFleetEra(int node) => node < 9 ? 0 : node < 14 ? 1 : 2;
+    static float LineFleetListHeight(int assigned, int models, int eras)
+        => 24f + 60f + 150f + assigned * 166f + 72f + (models == 0 ? 130f : eras * 54f + models * 166f) + 24f;
+    string LineFleetVehicleStats(int node)
+        => "运力 " + Mathf.RoundToInt(FleetCapacityTraits[node] * 100) + "% · 速度 " + Mathf.RoundToInt(FleetSpeedTraits[node] * 100)
+            + "% · 维护 " + Mathf.RoundToInt(FleetMaintenanceTraits[node] * 100) + "%";
+    void OpenLineFleet(Line line, Action returnAction = null, int slot = -1, int amount = 0)
     {
         if (line == null || !lines.Contains(line)) { OpenLinesScreen(); return; }
-        var page=OpenPage("机车配属", "统筹本线牵引动力与编制配属。", "FleetArt/garage_watercolor");
-        pageBack=()=>OpenLineScreen(line.id);
-        Txt(page.transform, line.name + " · 已配属 " + line.trains + " 列", 32, Ink, 32, PgH-300, 1000, 44, TextAnchor.MiddleLeft);
-        Txt(page.transform, "当前单向区段运力 " + Mathf.RoundToInt(FleetCapacity(line)) + " 人次/日 · 中途上下车可复用座位", 24, InkSoft, 32, PgH-360, 1000, 45, TextAnchor.MiddleLeft);
-        Txt(page.transform, "平均速度 " + Mathf.RoundToInt(FleetTrait(line,2)*100) + "% · 平均维护 " + Mathf.RoundToInt(FleetTrait(line,0)*100) + "%", 24, InkSoft, 32, PgH-410, 1000, 45, TextAnchor.MiddleLeft);
-        Txt(page.transform,"配属车辆：线路基础车辆 ×1",27,Ink,32,PgH-500,1000,40,TextAnchor.MiddleLeft);
-        float y=PgH-555; foreach(var v in researchVehicles) if(v.lineId==line.id) { Txt(page.transform,LocoNames[v.node] + " · 运力 " + Mathf.RoundToInt(FleetCapacityTraits[v.node]*100) + "% · 成本 " + Mathf.RoundToInt(FleetMaintenanceTraits[v.node]*100) + "% · 速度 " + Mathf.RoundToInt(FleetSpeedTraits[v.node]*100) + "%",22,InkSoft,48,y,970,36,TextAnchor.MiddleLeft); y-=46; }
-        var add=Btn(page.transform,"AddVehicle","调入或购买机车",26,28,260,W-56,84,Indigo,()=>{if(line.trains>=8){Toast("该线路最多配属 8 列车");return;}OpenLineFleetSupply(line,-1,0);}); TInk(add,Color.white);
-        Txt(page.transform,"研发新机车后可自车库调拨或直购增编。",22,InkSoft,32,195,1000,45,TextAnchor.MiddleLeft);
-    }
-
-    void OpenLineFleetSupply(Line line, int slot, int amount)
-    {
-        if (!PathTouchesRegion(line.st, currentRegion)) { Toast("请先切换到该线路所在地区调整机车"); return; }
-        var page=OpenPage("配属机车", "从在库车队调拨或直购已研发车型。", "PageArt/line_watercolor");
-        AttachPageCurrencyBadge(false);
-        pageBack=()=> { if(slot<0) OpenLineFleet(line); else OpenLineOperations(line); };
-        var free=new List<ResearchVehicle>(); foreach(var v in researchVehicles) if(v.lineId==0) free.Add(v);
-        var models=new List<int>(); for(int i=0;i<LocoNames.Length;i++) if(techDone.Contains(LocoKey(i))) models.Add(i);
-        int count=free.Count+models.Count; var content=FleetScroll(page.transform,72,PgH-235,Mathf.Max(180,count*128+20)); float h=content.sizeDelta.y; int rowIndex=0;
-        if(count==0) Txt(content,"没有空闲或已解锁的机车，请先研究机车节点。",26,InkSoft,20,h-100,960,60,TextAnchor.MiddleCenter);
-        foreach(var v in free) { var item=v; int row=rowIndex++; var button=Btn(content,"Free"+row,"调入  "+LocoNames[item.node],25,12,h-120-row*128,940,100,Paper2,()=>{
-            BeginUndo("调入机车"); item.lineId=line.id; SyncLineFleet(line); if(slot>=0) { if(!techDone.Contains("dispatch_peak")) for(int k=0;k<4;k++)line.dispatch[k]=amount; else line.dispatch[slot]=amount; }
-            RecalcIncome();EndUndo();RefreshHUD();if(slot<0)OpenLineFleet(line);else OpenLineOperations(line);Toast("机车已调入"); });TInk(button,Ink); }
-        foreach(int n in models) { int model=n,row=rowIndex++; var button=Btn(content,"Buy"+row,"购买  "+LocoNames[model]+"  ¥"+LocoPrice(model),25,12,h-120-row*128,940,100,Paper2,()=>{
-            int cost=LocoPrice(model);if(coins<cost){Toast("金币不足，还差 ¥"+FormatShortfall(cost-coins));return;}
-            BeginUndo("购买并配属机车"); coins-=cost; researchVehicles.Add(new ResearchVehicle{node=model,lineId=line.id}); SyncLineFleet(line);
-            if(slot>=0) { if(!techDone.Contains("dispatch_peak")) for(int k=0;k<4;k++)line.dispatch[k]=amount; else line.dispatch[slot]=amount; }
-            RecalcIncome();EndUndo();RefreshHUD();if(slot<0)OpenLineFleet(line);else OpenLineOperations(line);Toast("机车已购买并配属"); });TInk(button,Ink); }
+        ConfigureLineFleetContext(line, returnAction, slot, amount);
+        var page = OpenPage("调配机车", "本线车辆与车库闲车统一调配；新车请前往机车商店购买。", "FleetArt/garage_watercolor", "line_fleet");
+        pageBack = ReturnFromLineFleet;
+        Txt(page.transform, line.name + " · 已配属 " + line.trains + " / 8 列", 32, Ink, 32, PgH - 258, 1000, 46, TextAnchor.MiddleLeft);
+        string summary = "单向区段运力 " + Mathf.RoundToInt(FleetCapacity(line)) + " · 速度 " + Mathf.RoundToInt(FleetTrait(line, 2) * 100)
+            + "% · 维护 " + Mathf.RoundToInt(FleetTrait(line, 0) * 100) + "%";
+        if (lineFleetSlot >= 0) summary = "补充至 " + lineFleetAmount + " 列后，自动回写" + (techDone.Contains("dispatch_peak") ? DispatchNames[lineFleetSlot] : "全天统一调度");
+        var summaryText = Txt(page.transform, summary, 23, InkSoft, 32, PgH - 312, 1000, 40, TextAnchor.MiddleLeft); FitSingleLine(summaryText, 23);
+        var assignedGroups = FleetGroupsByLine(line.id);
+        var groups = FleetGroupsByLine(0); var eras = new HashSet<int>();
+        foreach (var group in groups) eras.Add(LineFleetEra(group.node));
+        var content = FleetScroll(page.transform, 168, PgH - 340, LineFleetListHeight(assignedGroups.Count, groups.Count, eras.Count), scrollKey: "line:fleet:" + line.id);
+        float width = content.sizeDelta.x, y = content.sizeDelta.y - 24f;
+        Txt(content, "分组一 · 本线已配属车辆", 28, Ink, 16, y - 46, width - 32, 44, TextAnchor.MiddleLeft); y -= 60;
+        var basic = Rect("BaseVehicle", content, 0, y - 140, width, 140); Rounded(basic, CardBg);
+        Txt(basic.transform, "线路基础车辆 ×1", 29, Ink, 24, 82, width - 48, 42, TextAnchor.MiddleLeft);
+        Txt(basic.transform, "基础编制固定保留；其余配属机车可随时撤回车库。", 23, InkSoft, 24, 24, width - 48, 40, TextAnchor.MiddleLeft); y -= 150;
+        foreach (var group in assignedGroups)
+        {
+            var item = group.first; int model = group.node;
+            var card = Rect("AssignedModel" + model, content, 0, y - 156, width, 156); Rounded(card, CardBg);
+            var title = Txt(card.transform, LocoNames[model] + " ×" + group.count, 30, Ink, 24, 94, width - 270, 44, TextAnchor.MiddleLeft); FitSingleLine(title, 30);
+            var stats = Txt(card.transform, LineFleetVehicleStats(model), 23, InkSoft, 24, 30, width - 270, 44, TextAnchor.MiddleLeft); FitSingleLine(stats, 23);
+            var withdraw = Btn(card.transform, "WithdrawVehicle", "撤回", 25, width - 218, 39, 194, 76, Paper2, () => ChangeLineFleetVehicle(line, item, false)); TInk(withdraw, Ink);
+            y -= 166;
+        }
+        Txt(content, "分组二 · 车库空闲机车", 28, Ink, 16, y - 58, width - 32, 46, TextAnchor.MiddleLeft); y -= 72;
+        if (groups.Count == 0) Txt(content, "暂无空闲机车\n可撤回其他线路车辆，或点击下方「购买机车」。", 25, InkSoft, 24, y - 120, width - 48, 100, TextAnchor.MiddleCenter);
+        int previousEra = -1;
+        string[] eraNames = { "19C · 蒸汽机车", "20C · 内燃电气", "21C · 高速动车" };
+        foreach (var group in groups)
+        {
+            int era = LineFleetEra(group.node);
+            if (era != previousEra) { Txt(content, eraNames[era], 24, Indigo, 20, y - 44, width - 40, 38, TextAnchor.MiddleLeft); y -= 54; previousEra = era; }
+            var item = group.first;
+            var card = Rect("IdleModel" + group.node, content, 0, y - 156, width, 156); Rounded(card, CardBg);
+            var title = Txt(card.transform, LocoNames[group.node] + " · 可用 " + group.count + " 辆", 29, Ink, 24, 94, width - 270, 44, TextAnchor.MiddleLeft); FitSingleLine(title, 29);
+            var stats = Txt(card.transform, LineFleetVehicleStats(group.node), 23, InkSoft, 24, 30, width - 270, 44, TextAnchor.MiddleLeft); FitSingleLine(stats, 23);
+            var assign = Btn(card.transform, "AssignVehicle", "调入本线", 25, width - 218, 39, 194, 76, Indigo, () => ChangeLineFleetVehicle(line, item, true)); TInk(assign, Color.white);
+            y -= 166;
+        }
+        var footer = Rect("LineFleetActions", page.transform, 0, 0, W, 148); Rounded(footer, CardBg);
+        var buy = Btn(footer.transform, "BuyLocomotive", "购买机车 ▸", 30, 28, 28, W - 56, 88, Indigo, () => {
+            shopCategory = 0; lineFleetShopReturn = () => OpenLineFleet(line); fleetBack = lineFleetShopReturn; OpenFleetTab(2);
+        }); TInk(buy, Color.white);
     }
 
     readonly HashSet<int> ownedLineSkins = new HashSet<int>();
@@ -884,6 +1052,7 @@ public partial class DemoBootstrap
         var content = Rect("SkinOptions", view.transform, 0, 0, 744, LineSkinNames.Length * rowHeight);
         var contentRt = content.GetComponent<RectTransform>(); contentRt.anchorMin = contentRt.anchorMax = new Vector2(0, 1);
         contentRt.pivot = new Vector2(0, 1); contentRt.anchoredPosition = Vector2.zero; scroll.content = contentRt;
+        BindScrollPosition(scroll, "line:skins:" + line.id);
         int activeSkin = GetLineSkin(line);
         for (int i = 0; i < LineSkinNames.Length; i++)
         {
@@ -903,7 +1072,7 @@ public partial class DemoBootstrap
                 var btn = Btn(row.transform, "Skin" + i, selected ? "使用中 ✓" : "换装", 25, 520, 18, 204, 74, selected ? Matcha : Paper2, () => {
                     if (selected) { Toast("当前已使用此涂装"); return; }
                     ApplySkinToLine(line, skin, false);
-                    ClosePanel(true); OpenLineScreen(line.id);
+                    ClosePanel(true); OpenLineScreen(line.id); OpenLineSkins(line);
                 });
                 TInk(btn, selected ? Color.white : Ink);
             }
@@ -911,14 +1080,14 @@ public partial class DemoBootstrap
             {
                 var buyBtn = Btn(row.transform, "SkinBuy" + i, freeScenery ? "名胜免费领" : "¥" + LineSkinPrices[i], 23, 444, 18, 148, 74, freeScenery ? Matcha : Paper2, () => {
                     ApplySkinToLine(line, skin, true);
-                    if (ownedLineSkins.Contains(skin)) { ClosePanel(true); OpenLineScreen(line.id); }
+                    if (ownedLineSkins.Contains(skin)) { ClosePanel(true); OpenLineScreen(line.id); OpenLineSkins(line); }
                 });
                 TInk(buyBtn, freeScenery ? Color.white : Ink);
                 var adBtn = Btn(row.transform, "SkinAd" + i, "看片领", 23, 602, 18, 122, 74, Indigo, () => {
                     PromptRewardedAd("skin_" + skin, 1, LineSkinNames[skin], () => {
                         ownedLineSkins.Add(skin);
                         ApplySkinToLine(line, skin, false);
-                        OpenLineScreen(line.id);
+                        OpenLineScreen(line.id); OpenLineSkins(line);
                     });
                 });
                 TInk(adBtn, Color.white);
@@ -938,6 +1107,7 @@ public partial class DemoBootstrap
         var content = Rect("Lines", view.transform, 0, 0, 664, lines.Count * 84f);
         var crt = content.GetComponent<RectTransform>(); crt.anchorMin = crt.anchorMax = new Vector2(0, 1);
         crt.pivot = new Vector2(0, 1); crt.anchoredPosition = Vector2.zero; scroll.content = crt;
+        BindScrollPosition(scroll, "skin:choose-line:" + skin);
         for (int i = 0; i < lines.Count; i++)
         {
             var target = lines[i];
@@ -955,7 +1125,7 @@ public partial class DemoBootstrap
     void BuildShopLiveries(Transform page)
     {
         Txt(page, "线路涂装馆 · 15 款双色涂装（含流派增益 · 可看片免费领）", 23, InkSoft, 178, PgH - 235, 860, 38, TextAnchor.MiddleLeft);
-        var content = FleetScroll(page, 172, PgH - 255, LineSkinNames.Length * 158f + 24, 150f);
+        var content = FleetScroll(page, 172, PgH - 255, LineSkinNames.Length * 158f + 24, 150f, scrollKey: "shop:liveries");
         float height = content.sizeDelta.y;
         float cardWidth = content.sizeDelta.x;
         for (int i = 0; i < LineSkinNames.Length; i++)
@@ -997,7 +1167,7 @@ public partial class DemoBootstrap
     void BuildShopThemes(Transform page)
     {
         Txt(page, "全局界面风格馆 · 更换纸面、夜图与 UI 色系；购买前可免费实机预览", 22, InkSoft, 178, PgH - 235, 860, 36, TextAnchor.MiddleLeft);
-        var content = FleetScroll(page, 172, PgH - 255, Themes.Length * 256f + 24, 150f);
+        var content = FleetScroll(page, 172, PgH - 255, Themes.Length * 256f + 24, 150f, scrollKey: "shop:themes");
         float height = content.sizeDelta.y;
         float cardWidth = content.sizeDelta.x;
         for (int i = 0; i < Themes.Length; i++)
@@ -1342,7 +1512,7 @@ public partial class DemoBootstrap
     void BuildCompanyOverviewTab(Transform page, float cardW)
     {
         float totalH = 2074f;
-        var content = FleetScroll(page, 36f, PgH - 270f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 270f, totalH, scrollKey: "company:overview");
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
@@ -1534,7 +1704,7 @@ public partial class DemoBootstrap
     void BuildCompanyBoardTab(Transform page, float cardW)
     {
         float totalH = 1412f;
-        var content = FleetScroll(page, 36f, PgH - 350f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 350f, totalH, scrollKey: "company:board");
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
@@ -1671,7 +1841,7 @@ public partial class DemoBootstrap
     void BuildCompanyFinanceTab(Transform page, float cardW)
     {
         float totalH = 1280f;
-        var content = FleetScroll(page, 36f, PgH - 270f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 270f, totalH, scrollKey: "company:finance");
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
@@ -1842,7 +2012,7 @@ public partial class DemoBootstrap
     void BuildCompanyPrivilegeTab(Transform page, float cardW)
     {
         float totalH = 1210f;
-        var content = FleetScroll(page, 36f, PgH - 270f, totalH);
+        var content = FleetScroll(page, 36f, PgH - 270f, totalH, scrollKey: "company:privileges");
         float topY = content.sizeDelta.y;
         float cardX = 4f, innerW = cardW - 8f, cW = innerW - 64f;
 
@@ -2113,7 +2283,7 @@ public partial class DemoBootstrap
     int sceneryCategory;
     int sceneryRegionFilter;
     static readonly string[] SceneryCategories = { "全部名胜", "自然景观", "人文景观" };
-    static readonly string[] SceneryRegions = { "全部", "青屿", "镜汀", "锦川" };
+    static readonly string[] SceneryRegions = { "全部", "香埠", "莲澳", "粤海" };
     void OpenSceneryScreen()
     {
         SyncCulturalCollection(false);
@@ -2164,20 +2334,20 @@ public partial class DemoBootstrap
         }
         Button filter = null;
         filter = Btn(pg.transform, "SceneryFilter", SceneryCategories[sceneryCategory] + "  ▾", 24, 694, PgH - 366, 330, 64,
-            new Color(0.91f,0.88f,0.80f,0.98f), () => ShowFleetDropdown(pg.transform, filter.transform, SceneryCategories, sceneryCategory, value => { sceneryCategory = value; OpenSceneryScreen(); }));
+            new Color(0.91f,0.88f,0.80f,0.98f), () => ShowFleetDropdown(pg.transform, filter.transform, SceneryCategories, sceneryCategory, value => { if (sceneryCategory != value) { sceneryCategory = value; ResetScrollPosition("scenery:places"); } OpenSceneryScreen(); }));
         TInk(filter, Ink); if (!filter.GetComponent<FleetPressFeedback>()) filter.gameObject.AddComponent<FleetPressFeedback>();
         for (int i = 0; i < SceneryRegions.Length; i++) {
             int region = i;
             var tab = Btn(pg.transform, "SceneryRegion" + i, SceneryRegions[i], 23, 28 + i * 258, PgH - 440, 246, 58,
                 i == sceneryRegionFilter ? new Color(0.75f,0.82f,0.68f,0.98f) : new Color(0.96f,0.94f,0.88f,0.98f),
-                () => { sceneryRegionFilter = region; OpenSceneryScreen(); });
+                () => { if (sceneryRegionFilter != region) { sceneryRegionFilter = region; ResetScrollPosition("scenery:places"); } OpenSceneryScreen(); });
             TInk(tab, Ink);
         }
         int count = 0;
         foreach (var item in sceneries)
             if ((sceneryRegionFilter == 0 || item.region == SceneryRegions[sceneryRegionFilter]) &&
                 (sceneryCategory == 0 || (sceneryCategory == 1 && item.natural) || (sceneryCategory == 2 && !item.natural))) count++;
-        var content = FleetScroll(pg.transform, 72, PgH - 456, Mathf.CeilToInt(count / 2f) * 440f + 20);
+        var content = FleetScroll(pg.transform, 72, PgH - 456, Mathf.CeilToInt(count / 2f) * 440f + 20, scrollKey: "scenery:places");
         float contentHeight = content.sizeDelta.y;
         int visible = 0;
         if (count == 0) Txt(content, "这里还没有旅行记忆\n换个分类看看吧", 30, InkSoft, 40, contentHeight - 240, W - 136, 150, TextAnchor.MiddleCenter);
@@ -2192,7 +2362,7 @@ public partial class DemoBootstrap
             visible++;
             Rounded(card, new Color(1f,0.985f,0.95f,0.97f)); SoftShadow(card);
             StampFineRuleFrame(card.transform, 500f, 410f, 8f, new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.14f));
-            string scOrn = (sc.region == "青屿" || sc.region == "镜汀") ? "orn_bauhinia_lotus" : "orn_kapok_bamboo";
+            string scOrn = (sc.region == "香埠" || sc.region == "莲澳") ? "orn_bauhinia_lotus" : "orn_kapok_bamboo";
             StampBotanicalSprig(card.transform, scOrn, 412f, 8f, 76f, 76f, sc.found ? 0.18f : 0.10f, true, true);
             var photo = Rect("PostcardPhoto", card.transform, 20, 168, 460, 218);
             var photoBg = Img(photo, new Color(0.88f,0.91f,0.84f,1f), spriteRound); photoBg.type = Image.Type.Sliced; photoBg.raycastTarget = false;

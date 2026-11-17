@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
@@ -219,7 +219,7 @@ public partial class DemoBootstrap
         string modeDesc = bgmPlayMode == 1
             ? "始终播放经典长曲《Between the Bow and Breath》"
             : bgmPlayMode == 2
-                ? "始终随「青屿 / 镜汀 / 锦川」切换区域配乐"
+                ? "始终随「香埠 / 莲澳 / 粤海」切换区域配乐"
                 : "地图播区域曲，进入内页自动淡入经典长曲（记忆进度）";
         var modeHint = Txt(bgmCard.transform, modeDesc, 23, InkSoft, cardPad, 92f, cardInnerW, 38f, TextAnchor.MiddleLeft);
         FitSingleLine(modeHint, 23);
@@ -306,8 +306,13 @@ public partial class DemoBootstrap
         var resetBtn = Btn(parent, "ResetLocalSave", "开启新周目（清空本机存档）", 25, pad, curY, innerW, 82f, Vermilion, () => {
             Confirm("开启新周目", "确认从第 1 日序章《青湾初笛》重新开始体验完整剧情引导吗？当前本机进度将被重置。", () => {
 #if UNITY_EDITOR
-                DevTestSaveSyncEnabled = false;
+                // A new local run isolates its source without overwriting the user sync preference.
+                // Loading the bundled test save or toggling sync exits this mode.
+                DevLocalOnlyRun = true;
 #endif
+                // Scene teardown calls OnDisable/OnApplicationQuit on the old run.
+                // Block those writes before deleting the local save.
+                saveReady = false; saveBlocked = true;
                 PlayerPrefs.DeleteKey(SaveKey);
                 PlayerPrefs.Save();
                 UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
@@ -444,6 +449,7 @@ public partial class DemoBootstrap
                 dailyStationBaseline = DailyConnectedCount();
                 RollTrafficEvents();
                 RefreshNoticeUnreadDot();
+                SaveGame();
             }
         }
         UpdateTimeText();
@@ -541,41 +547,41 @@ public partial class DemoBootstrap
         var station = stations[index];
         switch (station.name)
         {
-            case "百花城": return "沧海之畔的商贸名城，街巷烟火与繁华市集交融。";
-            case "鹏湾（西渡）": return "连接青屿与锦川的跨区域交通节点。";
-            case "珠屿（北关）": return "海岛与海湾相映的滨海城镇，邻接镜汀。";
-            case "莞香坡": return "水乡与手工作坊交织，城镇生活充满活力。";
-            case "鹅湖镇": return "山海相依，湖光与海岸风景相伴。";
-            case "禅溪": return "南溟水乡与传统手艺相映的城市。";
-            case "翠香原": return "水网密布的滨海侨乡，延续着古朴文脉。";
-            case "韶溪镇": return "山水环绕的北岭门户，奇峰丹崖风光闻名。";
-            case "鮀海港": return "滨海商埠，海派食肆与古港记忆交织。";
-            case "五津镇": return "五津水乡，骑楼与老街故事相伴。";
-            case "湛溟港": return "沧海半岛上的滨海港城，面海而兴。";
-            case "茂林城": return "西海之滨城市，海岸与百果林乡相伴。";
-            case "端溪城": return "西川之畔，山水与古砚文脉相映。";
-            case "嘉应驿": return "山间古驿之乡，围屋与乡村风物相连。";
-            case "善浦港": return "依山面海的城市，渔港与海岸风光相伴。";
-            case "槎溪城": return "山水相依的东溪上游城市。";
-            case "鼍阳港": return "滨海山城，以海景与传统铁艺工坊闻名。";
-            case "清溪镇": return "北溪穿城而过，山水与温泉相伴。";
-            case "凤岭城": return "青溪之畔的古城，保留着传统古街风韵。";
-            case "榕浦城": return "海滨平原上的城镇，绿榕水穿城而过。";
-            case "石泉城": return "群山之间的采石之乡，依西川而展。";
-            case "界桥关": return "连接两地的口岸站，旅客往来频繁。";
-            case "三屿虹桥": return "跨越海湾的交通节点，连接三地。";
-            case "海晏埠": return "海港边的商业街区，都市与山景相邻。";
-            case "翠沙咀": return "临海的繁华街区，可远眺银潮百帆港。";
-            case "东溪涌": return "苍岚岛北岸的社区，邻近山海风景。";
-            case "熙市角": return "街市与商铺密集，生活气息浓厚。";
-            case "古坊石街": return "老城街巷环绕，留存着历史建筑风貌。";
-            case "汀屿里": return "海岛社区与街巷美食交融的区域。";
-            case "松风渔村": return "海岸与山林相伴，保留宁静的岛屿风貌。";
+            case "五羊城": return "沧海之畔的商贸名城，街巷烟火与繁华市集交融。";
+            case "新安（西渡）": return "连接香埠与粤海的跨区域交通节点。";
+            case "香山（北关）": return "海岛与海湾相映的滨海城镇，邻接莲澳。";
+            case "石龙镇": return "水乡与手工作坊交织，城镇生活充满活力。";
+            case "西湖墟": return "山海相依，湖光与海岸风景相伴。";
+            case "祖庙镇": return "南溟水乡与传统手艺相映的城市。";
+            case "石岐墟": return "水网密布的滨海侨乡，延续着古朴文脉。";
+            case "曲江口": return "山水环绕的北岭门户，奇峰丹崖风光闻名。";
+            case "樟林港": return "滨海商埠，海派食肆与古港记忆交织。";
+            case "蓬江墟": return "五津水乡，骑楼与老街故事相伴。";
+            case "赤坎埠": return "沧海半岛上的滨海港城，面海而兴。";
+            case "高凉城": return "西海之滨城市，海岸与百果林乡相伴。";
+            case "端州墟": return "西川之畔，山水与古砚文脉相映。";
+            case "松口镇": return "山间古驿之乡，围屋与乡村风物相连。";
+            case "汕尾港": return "依山面海的城市，渔港与海岸风光相伴。";
+            case "东江埠": return "山水相依的东溪上游城市。";
+            case "海陵港": return "滨海山城，以海景与传统铁艺工坊闻名。";
+            case "清远墟": return "北溪穿城而过，山水与温泉相伴。";
+            case "牌坊街": return "青溪之畔的古城，保留着传统古街风韵。";
+            case "榕城墟": return "海滨平原上的城镇，绿榕水穿城而过。";
+            case "罗定墟": return "群山之间的采石之乡，依西川而展。";
+            case "桥头关": return "连接两地的口岸站，旅客往来频繁。";
+            case "伶仃桥": return "跨越海湾的交通节点，连接三地。";
+            case "石板街": return "海港边的商业街区，都市与山景相邻。";
+            case "码头咀": return "临海的繁华街区，可远眺鲤鱼门海角。";
+            case "东涌口": return "苍岚岛北岸的社区，邻近山海风景。";
+            case "芒角墟": return "街市与商铺密集，生活气息浓厚。";
+            case "茨林围": return "老城街巷环绕，留存着历史建筑风貌。";
+            case "潭仔": return "海岛社区与街巷美食交融的区域。";
+            case "荔枝碗": return "海岸与山林相伴，保留宁静的岛屿风貌。";
         }
         if (!string.IsNullOrEmpty(station.city))
             return "位于" + station.city + "，连接周边城镇与社区。";
-        if (station.region == "镜汀") return "镜汀的沿线区域，山海古韵交融。";
-        if (station.region == "青屿") return "青屿的沿线区域，山海与城市相伴。";
+        if (station.region == "莲澳") return "莲澳的沿线区域，山海古韵交融。";
+        if (station.region == "香埠") return "香埠的沿线区域，山海与城市相伴。";
         return "沿线城镇与社区相连的地区。";
     }
 
@@ -807,6 +813,7 @@ public partial class DemoBootstrap
             objectiveHint = "",
             allowSkip = false
         });
+        SaveGame();
     }
     void TickStory()
     {

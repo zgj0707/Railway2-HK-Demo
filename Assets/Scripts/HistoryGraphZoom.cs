@@ -61,11 +61,19 @@ public class HistoryGraphZoom : MonoBehaviour, IScrollHandler
 public class HistoryTooltipFollow : MonoBehaviour
 {
     public RectTransform page, target;
+    public CanvasGroup visibility;
+    readonly Vector3[] corners = new Vector3[4];
     void LateUpdate()
+    {
+        if (visibility && visibility.alpha <= 0f) return;
+        RefreshPosition();
+    }
+
+    public void RefreshPosition()
     {
         if (!page || !target) return;
         var tooltip = (RectTransform)transform;
-        var corners = new Vector3[4]; target.GetWorldCorners(corners);
+        target.GetWorldCorners(corners);
         Vector2 topScreen = RectTransformUtility.WorldToScreenPoint(null, (corners[1] + corners[2]) * 0.5f);
         Vector2 bottomScreen = RectTransformUtility.WorldToScreenPoint(null, (corners[0] + corners[3]) * 0.5f);
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(page, topScreen, null, out var top) ||
@@ -83,7 +91,7 @@ public class HistoryTooltipFollow : MonoBehaviour
             if (right > left && topEdge > bottomEdge) bounds = Rect.MinMaxRect(left, bottomEdge, right, topEdge);
         }
 
-        const float margin = 16f;
+        const float margin = 24f; // 包括跨出纸页顶边的胶带
         // 顶部为宿主胶囊与导航预留空间，气泡不要进入该区域。
         if (bounds.height > 320f) bounds.yMax -= 160f;
         float availableWidth = Mathf.Max(1, bounds.width - 2 * margin);

@@ -37,16 +37,16 @@ public partial class DemoBootstrap
 
     static string RegionBgmResource(string region)
     {
-        if (region == "镜汀") return "Audio/bgm_macau";
-        if (region == "锦川") return "Audio/bgm_guangdong";
+        if (region == "莲澳") return "Audio/bgm_macau";
+        if (region == "粤海") return "Audio/bgm_guangdong";
         return "Audio/bgm_hk";
     }
 
     static string RegionShortBgmTitle(string region)
     {
-        if (region == "镜汀") return HasCustomBgm("镜汀") ? "《镜汀石板微风》" : "《Between the Bow and Breath》";
-        if (region == "锦川") return HasCustomBgm("锦川") ? "《锦川江潮汽笛》" : "《Between the Bow and Breath》";
-        return HasCustomBgm("青屿") ? "《青屿茶室晨曦》" : "《Between the Bow and Breath》";
+        if (region == "莲澳") return HasCustomBgm("莲澳") ? "《莲澳石板微风》" : "《Between the Bow and Breath》";
+        if (region == "粤海") return HasCustomBgm("粤海") ? "《粤海江潮汽笛》" : "《Between the Bow and Breath》";
+        return HasCustomBgm("香埠") ? "《香埠茶室晨曦》" : "《Between the Bow and Breath》";
     }
 
     bool IsInnerMusicActive() => pageRoot != null || sceneryViewer != null;

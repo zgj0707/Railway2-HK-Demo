@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -53,9 +53,20 @@ public class HistoryNodeReveal : MonoBehaviour
     void Start()
     {
         rect = (RectTransform)transform;
-        var size = rect.sizeDelta; rect.pivot = new Vector2(0.5f, 0.5f); rect.anchoredPosition += size * 0.5f;
-        group = gameObject.AddComponent<CanvasGroup>(); group.alpha = 0;
+        var size = rect.sizeDelta;
+        Vector2 center = rect.anchoredPosition + Vector2.Scale(new Vector2(0.5f, 0.5f) - rect.pivot, size);
+        rect.pivot = new Vector2(0.5f, 0.5f); rect.anchoredPosition = center;
+        group = GetComponent<CanvasGroup>(); if (!group) group = gameObject.AddComponent<CanvasGroup>(); group.alpha = 0;
         rect.localScale = Vector3.one * 0.35f;
+    }
+    public void FinishImmediately()
+    {
+        enabled = false;
+        foreach (var spark in sparks) if (spark) Destroy(spark.gameObject);
+        if (halo) Destroy(halo.gameObject);
+        if (rect) rect.localScale = Vector3.one;
+        if (group) group.alpha = 1f;
+        Destroy(this);
     }
     void Update()
     {

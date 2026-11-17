@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -18,7 +18,7 @@ public partial class DemoBootstrap
         Leaderboard
     }
 
-    int storyStage = 0; // 0: 青湾初笛, 1: 蒸汽与时刻, 2: 青屿烟火气, 3: 立社挂牌, 4: 潮涌山海湾, 5: 全章圆满
+    int storyStage = 0; // 0: 青湾初笛, 1: 蒸汽与时刻, 2: 香埠烟火气, 3: 立社挂牌, 4: 潮涌山海湾, 5: 全章圆满
     bool tutorialSkipped = false;
     GameObject storyObjectiveBannerGo;
     Text storyObjectiveText;
@@ -35,7 +35,7 @@ public partial class DemoBootstrap
             stage = 0, key = "ch0_harbor_whistle",
             chapterTag = "序章 · 青湾初笛", speaker = "规划署嘱托",
             title = "第一张摊开的手绘图",
-            body = "晨雾还未散尽，你把青屿海岸线的手绘草图摊在木桌上。\n这片城市每天都在奔忙，却还缺一条真正连贯的铁道动脉。\n长按地图上任意两座相邻车站相连，试着点亮我们的第一班列车吧！",
+            body = "晨雾还未散尽，你把香埠海岸线的手绘草图摊在木桌上。\n这片城市每天都在奔忙，却还缺一条真正连贯的铁道动脉。\n长按地图上任意两座相邻车站相连，试着点亮我们的第一班列车吧！",
             objective = "目标：铺设首条线路或接入 2 座车站（解锁「列车」与「科技」）"
         },
         new StoryChapterSpec {
@@ -47,7 +47,7 @@ public partial class DemoBootstrap
         },
         new StoryChapterSpec {
             stage = 2, key = "ch2_harbor_life",
-            chapterTag = "第二章 · 青屿烟火气", speaker = "文史编辑 · 陈素心",
+            chapterTag = "第二章 · 香埠烟火气", speaker = "文史编辑 · 陈素心",
             title = "车窗外的人间四时",
             body = "一位女摄影师拿着手帐本走进总站，里面夹着刚刚印出的景点明信片。\n『每当线路路过名胜站，旅人总会在站台多停留十分钟——点开左栏「图鉴」留影打卡，再点车站「详情」添置茶室书局吧。』",
             objective = "目标：连通 6 座车站（筹备总社挂牌，解锁「公司经营」与「人才招募」）"
@@ -57,13 +57,13 @@ public partial class DemoBootstrap
             chapterTag = "第三章 · 立社挂牌", speaker = "执行总长 · 林先生",
             title = "铜牌挂上总社大门",
             body = "今日红绸落下，你的铁道公司正式挂牌！\n底栏「公司」总台与「企业治理树」现已全面启用：\n任命高管、猎聘才俊并派驻大站或骨干线，让专业团队替你撑起整张山海路网。",
-            objective = "目标：扩展运营并冲击日利润 ¥600（开拓跨海镜汀与全套「金融招投标」）"
+            objective = "目标：扩展运营并冲击日利润 ¥600（开拓跨海莲澳与全套「金融招投标」）"
         },
         new StoryChapterSpec {
             stage = 4, key = "ch4_greater_bay",
             chapterTag = "第四章 · 潮涌山海湾", speaker = "海湾联席特使",
             title = "越过海湾，向北延伸",
-            body = "青屿的灯火已连成诗行，海的另一端与更北方的锦川名城也正发出邀约。\n『债券融资、市政招标、跨区接驳与排行榜』现已全面解禁——用铁轨把整片山海湾连成一个温暖的圆吧！",
+            body = "香埠的灯火已连成诗行，海的另一端与更北方的粤海名城也正发出邀约。\n『债券融资、市政招标、跨区接驳与排行榜』现已全面解禁——用铁轨把整片山海湾连成一个温暖的圆吧！",
             objective = "自由经营阶段：连结三地门户，建设你的山海百年铁道！"
         }
     };
@@ -99,12 +99,12 @@ public partial class DemoBootstrap
             case GameFeature.TechPage:
                 return "完成「序章 · 开通首条线路（连通 2 站）」后解锁！";
             case GameFeature.SceneryAndCommercial:
-                return "推进至「第二章 · 青屿烟火气（连通 4 站或研发 1 项科技）」后解锁！";
+                return "推进至「第二章 · 香埠烟火气（连通 4 站或研发 1 项科技）」后解锁！";
             case GameFeature.CompanyCore:
                 return "推进至「第三章 · 立社挂牌（连通 6 座车站）」后解锁！";
             case GameFeature.CompanyFinanceAndBoard:
             case GameFeature.Leaderboard:
-                return "推进至「第四章 · 潮涌山海湾（连通 9 站或开放镜汀）」后解锁！";
+                return "推进至「第四章 · 潮涌山海湾（连通 9 站或开放莲澳）」后解锁！";
             default:
                 return "继续扩展路网后解锁";
         }
@@ -120,6 +120,7 @@ public partial class DemoBootstrap
             foreach (var ch in StoryChapters) storySeen.Add(ch.key);
             RefreshFeatureGateVisuals();
             UpdateStoryObjectiveBanner();
+            if (allowTriggerPopups) SaveGame();
             return;
         }
 
@@ -130,6 +131,7 @@ public partial class DemoBootstrap
             return;
         }
 
+        int stageBefore = storyStage;
         // 新手期按里程碑流转推进
         int conn = DailyConnectedCount();
         int nextTargetStage = storyStage;
@@ -160,6 +162,7 @@ public partial class DemoBootstrap
 
         RefreshFeatureGateVisuals();
         UpdateStoryObjectiveBanner();
+        if (storyStage != stageBefore) SaveGame();
     }
 
     void TickStoryProgressionTimer(float dt)
@@ -182,6 +185,7 @@ public partial class DemoBootstrap
             objectiveHint = ch.objective,
             allowSkip = storyStage < 4
         });
+        SaveGame();
     }
 
     void SkipTutorialFlow()
@@ -266,7 +270,7 @@ public partial class DemoBootstrap
     {
         var pg = OpenPage("山海手帐 · 剧情档案", "重温旅途关键篇章与各阶段引导目标，亦可随时自由切换剧情引导开关。", "PageArt/album_watercolor");
         float totalH = StoryChapters.Length * 294f + 160f;
-        var content = FleetScroll(pg.transform, 36f, PgH - 250f, totalH);
+        var content = FleetScroll(pg.transform, 36f, PgH - 250f, totalH, scrollKey: "story:archive");
         float topY = content.sizeDelta.y;
         float cardW = W - 72f;
 

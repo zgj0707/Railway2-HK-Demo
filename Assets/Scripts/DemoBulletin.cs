@@ -157,7 +157,7 @@ public partial class DemoBootstrap
             accentColor = Matcha,
             body = links > 0
                 ? CrossBaySynergySummary() + "\n继续贯通其余跨区门户可进一步叠加口岸补贴与全网客流吸引力。"
-                : "当青屿、镜汀与锦川的运营线路在「界桥关 / 鹏湾（西渡）」「珠屿（北关）/ 玉琴关」「三屿虹桥」等门户两侧同时接通时，即可激活每日跨区联运补贴与客流加成。"
+                : "当香埠、莲澳与粤海的运营线路在「桥头关 / 新安（西渡）」「香山（北关）/ 莲花口」「伶仃桥」等门户两侧同时接通时，即可激活每日跨区联运补贴与客流加成。"
         });
 
         // 5. 常规社务公告
@@ -209,9 +209,11 @@ public partial class DemoBootstrap
         scroll.scrollSensitivity = 95f; scroll.movementType = ScrollRect.MovementType.Elastic;
 
         int expandedIndex = total > 0 ? 0 : -1;
+        bool scrollBound = false;
 
         void RebuildNoticeList()
         {
+            if (scrollBound) RememberScrollPosition("notice:board", contentRt.anchoredPosition.y, contentRt.rect.height, viewH);
             for (int c = content.transform.childCount - 1; c >= 0; c--)
                 Destroy(content.transform.GetChild(c).gameObject);
 
@@ -293,6 +295,8 @@ public partial class DemoBootstrap
             }
 
             contentRt.sizeDelta = new Vector2(viewW, Mathf.Max(viewH, cursorY + 8f));
+            if (!scrollBound) { BindScrollPosition(scroll, "notice:board"); scrollBound = true; }
+            else RestoreScrollPosition(scroll, "notice:board");
         }
 
         RebuildNoticeList();
@@ -333,7 +337,7 @@ public partial class DemoBootstrap
                 isPlayer = true
             },
             new LeaderboardOperator {
-                name = "青屿电铁局",
+                name = "香埠电铁局",
                 tag = "老牌港岛干线",
                 motto = "青湾南岸高密度通勤网络",
                 stations = 4 + Mathf.Min(18, d / 3),
@@ -342,16 +346,16 @@ public partial class DemoBootstrap
                 score = 1100 + d * 195
             },
             new LeaderboardOperator {
-                name = "锦川快轨集团",
+                name = "粤海快轨集团",
                 tag = "南溟城际联营",
-                motto = "主打百花—鹏湾—莞香跨城大站快线",
+                motto = "主打百花—新安城—莞香跨城大站快线",
                 stations = 3 + Mathf.Min(26, d / 2),
                 linesCount = 1 + Mathf.Min(8, d / 6),
                 dailyProfit = 240 + d * 56,
                 score = 920 + d * 245
             },
             new LeaderboardOperator {
-                name = "镜汀轻轨社",
+                name = "莲澳轻轨社",
                 tag = "海湾文旅专线",
                 motto = "深耕半岛与连汀海湾接驳",
                 stations = 2 + Mathf.Min(12, d / 4),
@@ -393,7 +397,7 @@ public partial class DemoBootstrap
         for (int i = 0; i < list.Count; i++) if (list[i].isPlayer) { playerRank = i + 1; break; }
 
         float contentH = 420f + list.Count * 158f + 360f;
-        var content = FleetScroll(page.transform, 36f, PgH - 306f, contentH);
+        var content = FleetScroll(page.transform, 36f, PgH - 306f, contentH, scrollKey: "leaderboard");
         float topY = content.sizeDelta.y;
         float cardW = content.sizeDelta.x;
         float innerW = cardW - 8f;
@@ -403,7 +407,7 @@ public partial class DemoBootstrap
         float y = topY - 12f - heroH;
         var hero = Rect("RankingHeroCard", content, 4f, y, innerW, heroH);
         Rounded(hero, CardBg); SoftShadow(hero); JournalTape(hero.transform, innerW * 0.5f - 72f, heroH - 17f, 144f);
-        int palette = currentRegion == "镜汀" ? 2 : currentRegion == "锦川" ? 1 : 0;
+        int palette = currentRegion == "莲澳" ? 2 : currentRegion == "粤海" ? 1 : 0;
         var posterTex = EraPosterGenerator.GetCustomPoster("rank_" + currentRegion, "RAILWAY", palette, 4, 768, 220, 1);
         var posterFrame = CreateNeonPosterFrame(hero.transform, "RankingNeonPoster", 24f, 134f, innerW - 48f, 214f, posterTex, 9f);
         var badge = Rect("RegionTag", posterFrame.transform, 18f, 16f, 240f, 38f);
@@ -444,8 +448,8 @@ public partial class DemoBootstrap
         string[] milestones = {
             (lines.Count >= 1 ? "✓ " : "○ ") + "青湾初笛：开通首条商业线路",
             (FoundCount() >= 3 ? "✓ " : "○ ") + "山海留影：累计收录 3 处以上名胜风光（当前 " + FoundCount() + " 处）",
-            (macauUnlocked ? "✓ " : "○ ") + "越海镜汀：解锁并通车镜汀版图",
-            (guangdongUnlocked ? "✓ " : "○ ") + "北上锦川：解锁并贯通锦川路网",
+            (macauUnlocked ? "✓ " : "○ ") + "越海莲澳：解锁并通车莲澳版图",
+            (guangdongUnlocked ? "✓ " : "○ ") + "北上粤海：解锁并贯通粤海路网",
             (CrossBaySynergyLinkCount() >= 1 ? "✓ " : "○ ") + "山海直通：打通跨区口岸联运走廊（" + CrossBaySynergyLinkCount() + "/3）",
             (income >= 2000f ? "✓ " : "○ ") + "金字招牌：全网预期日利润突破 ¥2,000（当前 " + FormatSignedCoins(income) + "）"
         };
