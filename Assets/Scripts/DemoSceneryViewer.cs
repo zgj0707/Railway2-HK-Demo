@@ -36,6 +36,38 @@ public partial class DemoBootstrap
                 imagePath = "Scenery/repulse_bay_clean";
                 description = "清波湾位于汐港本岛南部，海湾与青翠山坡相映，沿岸可以欣赏悠闲的海滨风光。";
                 return true;
+            case "白鹤古观":
+                imagePath = "Scenery/baihe_ancient_temple";
+                description = "白鹤古观依山而建，飞檐黛瓦隐于松柏烟岚之间，是汐港北郊颇具古韵的人文胜景。";
+                return true;
+            case "飞鹭芦滩":
+                imagePath = "Scenery/egret_reed_marsh";
+                description = "飞鹭芦滩水网交错、芦苇连绵，暮色时分常有成群白鹭掠水归巢，尽显海湾湿地生机。";
+                return true;
+            case "碧海石崖":
+                imagePath = "Scenery/emerald_sea_cliff";
+                description = "碧海石崖矗立于汐港东岸，六角柱状海蚀峭壁直面苍茫碧浪，是观海听涛的绝佳去处。";
+                return true;
+            case "石门古坊":
+                imagePath = "Scenery/stone_arch_gate";
+                description = "石门古坊雄踞镜屿老城石阶之上，雕花石壁历经海风洗礼，见证数百年海港市集变迁。";
+                return true;
+            case "望海灯楼":
+                imagePath = "Scenery/sea_beacon_pavilion";
+                description = "望海灯楼临海岬而立，古树垂荫、石阶蜿蜒，自古为镜屿南岸归航渔船指引航向。";
+                return true;
+            case "饼家老街":
+                imagePath = "Scenery/bakery_old_street";
+                description = "饼家老街青石铺路、骑楼相连，入夜后灯笼暖光与饼香飘散街巷，满载镜屿烟火气。";
+                return true;
+            case "墨沙海滩":
+                imagePath = "Scenery/ink_sand_beach";
+                description = "墨沙海滩以细腻乌亮的黑沙闻名镜屿南端，松林环抱新月海湾，潮汐拍岸清幽宁静。";
+                return true;
+            case "白塔山":
+                imagePath = "Scenery/white_pagoda_hill";
+                description = "白塔山高踞镜屿翠岭之上，素雅白塔远眺木船湾与海天一色，是镜屿最醒目的登高地标。";
+                return true;
             default:
                 imagePath = null; description = null;
                 return false;
