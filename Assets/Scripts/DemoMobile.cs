@@ -69,10 +69,10 @@ public partial class DemoBootstrap
     }
     int fontSizeTier = 1; // 0: 紧凑, 1: 标准, 2: 偏大, 3: 特大
     static readonly string[] FontSizeTierNames = { "紧凑", "标准", "偏大", "特大" };
-    static readonly float[] FontSizeScales = { 0.90f, 1.00f, 1.16f, 1.32f };
+    static readonly float[] FontSizeScales = { 1.04f, 1.16f, 1.32f, 1.48f };
     float UiFontScale => FontSizeScales[Mathf.Clamp(fontSizeTier, 0, FontSizeScales.Length - 1)];
-    int ScaledFontSize(int baseSize, float maxScale = 1.32f)
-        => Mathf.Max(16, Mathf.RoundToInt(baseSize * Mathf.Min(UiFontScale, maxScale)));
+    int ScaledFontSize(int baseSize, float maxScale = 1.48f)
+        => Mathf.Max(18, Mathf.RoundToInt(baseSize * Mathf.Min(UiFontScale, maxScale)));
     void SetFontSizeTier(int tier)
     {
         fontSizeTier = Mathf.Clamp(tier, 0, FontSizeScales.Length - 1);
@@ -601,10 +601,30 @@ public partial class DemoBootstrap
         float statusH = Mathf.Max(64, MeasureTextHeight(status, 24, 492) + 10);
         float introY = statusY + statusH + 10;
         float introH = Mathf.Max(38, MeasureTextHeight(StationIntroduction(index), 24, 492) + 8);
-        var p = OpenBubble(StationDisplayName(index, currentRegion), introY + introH + 80, 548, anchor);
+        float bubbleH = introY + introH + 80;
+        var p = OpenBubble(StationDisplayName(index, currentRegion), bubbleH, 548, anchor);
+        if (p)
+        {
+            var prt = p.GetComponent<RectTransform>();
+            GetSafeMarginsInRoot(out float safeL, out float safeR, out float safeT, out float safeB);
+            float sc = prt.localScale.x;
+            float halfW = 548f * sc * 0.5f;
+            float halfH = bubbleH * sc * 0.5f;
+            float leftX = safeL + 20f + halfW;
+            float topY = Mathf.Max(safeB + 180f + halfH, RootH - safeT - 245f - halfH);
+            prt.anchoredPosition = new Vector2(leftX, topY);
+            var bgImg = p.GetComponent<Image>();
+            if (bgImg) bgImg.raycastTarget = true;
+            var drag = p.AddComponent<DraggablePanel>();
+            drag.target = prt;
+            drag.bounds = root;
+            drag.padding = new Vector4(safeL + 12f, safeR + 12f, safeT + 12f, safeB + 12f);
+        }
         var intro = Txt(p.transform, StationIntroduction(index), 24, InkSoft, 28, introY, 492, introH, TextAnchor.MiddleLeft);
         intro.name = "StationIntroduction";
-        Txt(p.transform, status, 24, InkSoft, 28, statusY, 492, statusH, TextAnchor.UpperLeft);
+        intro.raycastTarget = false;
+        var statusTxt = Txt(p.transform, status, 24, InkSoft, 28, statusY, 492, statusH, TextAnchor.UpperLeft);
+        statusTxt.raycastTarget = false;
         if (lineCount > 0) {
             var remove = Btn(p.transform, "RemoveWaystation", "移除线路途经站", 25, 28, 102, 492, 74, Paper2, () => OpenRemoveStationLines(index, 0));
             TInk(remove, Ink);
@@ -757,11 +777,16 @@ public partial class DemoBootstrap
         var station = stations[index];
         string description = StationTrafficDescription(index);
         float contentHeight = Mathf.Clamp(MeasureTextHeight(description, 28, 884) + 16, 100, H - 740);
-        var p = OpenPopup(StationDisplayName(index, currentRegion) + " · Lv." + station.level, contentHeight + 510, 960, "station_info_" + index);
+        string titleText = StationDisplayName(index, currentRegion) + " · Lv." + station.level
+            + (!string.IsNullOrEmpty(station.customName) ? "  <size=22><color=#787266>（原名：" + station.name + "）</color></size>" : "");
+        var p = OpenPopup(titleText, contentHeight + 510, 960, "station_info_" + index);
         AttachPopupCurrencyChip(p, 960f, contentHeight + 510);
         stationTrafficPanel = p; stationTrafficIndex = index;
         stationTrafficLabel = ScrollableText(p.transform, description, 28, InkSoft, 38, 420, 884, contentHeight);
-        int cost = Mathf.RoundToInt(180f * Mathf.Pow(1.85f, station.level - 1) / 10f) * 10;
+        float hubCostScale = Mathf.Clamp(Mathf.Sqrt(Mathf.Max(80f, StationBaselineDemand(index)) / 100f), 1f, 1.85f);
+        int rawCost = Mathf.RoundToInt(320f * Mathf.Pow(2.05f, station.level - 1) * hubCostScale);
+        int step = rawCost >= 5000 ? 100 : 10;
+        int cost = Mathf.Max(10, Mathf.RoundToInt((float)rawCost / step) * step);
         var upgrade = Btn(p.transform, "UpgradeStation", station.level >= 10 ? "已满级" : "扩建升级  ¥" + cost, 27, 38, 275, 420, 92, Matcha, () => {
             if (!station.built) { Toast("请先开站"); return; }
             if (station.level >= 10) { Toast("车站已满级"); return; }
@@ -779,9 +804,11 @@ public partial class DemoBootstrap
         int facCost = FacilityUpgradeCost(curFac);
         int nextRent = curFac < 3 ? StationFacilityRents[curFac + 1] : 0;
         int curRent = StationFacilityRents[curFac];
+        int nextPct = curFac < 3 ? Mathf.RoundToInt((StationFacilityDemandMults[curFac + 1] - 1f) * 100f) : 0;
+        int curPct = Mathf.RoundToInt((FacilityDemandFactor(station) - 1f) * 100f);
         string facLabel = curFac < 3
-            ? "站前物业 · 建设「" + StationFacilityNames[curFac + 1] + "」 (¥" + facCost + " · 日租 ¥" + nextRent + ")"
-            : "站前物业 · " + StationFacilityNames[curFac] + "（满级 · 日租 ¥" + Mathf.RoundToInt(curRent * TechMult() * (HasPartner(1) ? 1.25f : 1f)) + "）";
+            ? "站前物业 · 建「" + StationFacilityNames[curFac + 1] + "」(¥" + facCost + " · 客流+" + nextPct + "% · 租¥" + nextRent + ")"
+            : "站前物业 · " + StationFacilityNames[curFac] + "（满级 · 客流+" + curPct + "% · 日租¥" + Mathf.RoundToInt(curRent * TechMult() * (HasPartner(1) ? 1.25f : 1f)) + "）";
         var facBtn = Btn(p.transform, "StationFacility", facLabel, 24, 38, 155, 882, 92, curFac < 3 ? new Color(0.76f, 0.50f, 0.16f) : new Color(0.86f, 0.84f, 0.78f), () => {
             if (!IsFeatureUnlocked(GameFeature.SceneryAndCommercial)) { PlayErrorSfx(); Toast(FeatureLockHint(GameFeature.SceneryAndCommercial)); return; }
             if (!station.built) { Toast("请先开站"); return; }

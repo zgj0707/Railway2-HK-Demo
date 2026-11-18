@@ -108,7 +108,7 @@ public partial class DemoBootstrap
         bool isScenery = StationHasScenery(i);
         float policyDemandMult = (companyPolicy == 1 ? 1.12f : 1f) * (companyPolicy == 3 && isScenery ? 1.35f : 1f);
         float companyMult = PartnerDemandFactor(isScenery) * CycleDemandFactor(isScenery) * StationTalentDemandMult(i) * CrossBayDemandMult(i);
-        return StationBaselineDemand(i) * (0.72f + 0.30f * morning + 0.30f * evening + 0.14f * leisure) * TrafficEventFactors[s.trafficEvent] * ResearchFactor(ResearchEffect.Demand) * policyDemandMult * companyMult;
+        return StationBaselineDemand(i) * (0.72f + 0.30f * morning + 0.30f * evening + 0.14f * leisure) * TrafficEventFactors[s.trafficEvent] * ResearchFactor(ResearchEffect.Demand) * policyDemandMult * companyMult * FacilityDemandFactor(s);
     }
     int StationKind(int i)
     {
@@ -155,7 +155,7 @@ public partial class DemoBootstrap
             : kind == 4 ? (0.45f + 0.55f * (morning + evening))
             : (0.40f + 0.50f * (morning + evening));
         float wTourism = (kind == 4 ? 0.55f : 0.28f) + (StationHasScenery(origin) ? 0.25f : 0.42f) * noon;
-        float wLeisure = 0.38f + 0.40f * noon + 0.35f * evening;
+        float wLeisure = (0.38f + 0.40f * noon + 0.35f * evening) * (1f + Mathf.Clamp(stations[origin].facLevel, 0, 3) * 0.25f);
         float sum = Mathf.Max(0.01f, wCommute + wTourism + wLeisure);
         commuteShare = wCommute / sum;
         tourismShare = wTourism / sum;
@@ -190,7 +190,7 @@ public partial class DemoBootstrap
             float crossMult = stations[origin].region != stations[dest].region ? 1.35f : 1f;
             return baseD * sceneryMult * crossMult / distDenom;
         }
-        float leisureMult = dKind == 2 ? 1.35f : dKind == 3 ? 1.15f : dKind == 4 ? 1.25f : 0.90f;
+        float leisureMult = (dKind == 2 ? 1.35f : dKind == 3 ? 1.15f : dKind == 4 ? 1.25f : 0.90f) * FacilityLeisureAttrFactor(stations[dest]);
         return baseD * destDir[dest] * leisureMult / distDenom;
     }
     int DispatchSlot() { float h = dayClock / GameDaySeconds * 24f; return h >= 6f && h < 10f ? 0 : h >= 10f && h < 16f ? 1 : h >= 16f && h < 20f ? 2 : 3; }
@@ -228,7 +228,15 @@ public partial class DemoBootstrap
         line.trains = count;
         for (int i=0;i<line.dispatch.Length;i++) line.dispatch[i]=Mathf.Min(line.dispatch[i],count);
     }
-    float StationCapacity(int i) { return (180f + (stations[i].level - 1) * 100f) * PassengerScale * ResearchFactor(ResearchEffect.Station) * CoTechStationCapMult() * StationTalentCapMult(i); }
+    float StationCapacity(int i)
+    {
+        int lvl = Mathf.Clamp(stations[i].level, 1, 10);
+        // 随等级递增步长（Lv.1=180, Lv.5=1200, Lv.10=4500），匹配指数级扩建成本投入。
+        float levelCap = 180f + 120f * (lvl - 1) + 45f * (lvl - 1) * (lvl - 2);
+        // 高客流枢纽与跨区口岸自带更大的站场规模底盘，避免满级仍必然爆满。
+        float hubScale = Mathf.Clamp(Mathf.Sqrt(Mathf.Max(80f, StationBaselineDemand(i)) / 100f), 1f, 1.85f);
+        return levelCap * hubScale * PassengerScale * ResearchFactor(ResearchEffect.Station) * CoTechStationCapMult() * StationTalentCapMult(i);
+    }
     // 单方向单区段的日化运力；不同区段可由不同乘客复用。
     float FleetCapacity(Line line) { return 4000f * RunningTrains(line) * FleetTrait(line, 1, true) * ResearchFactor(ResearchEffect.Capacity) * (SkinCategory(GetLineSkin(line)) == 4 ? 1.08f : 1f) * LineTalentCapMult(line); }
     float LineCapacity(Line line) { return FleetCapacity(line); }
@@ -597,7 +605,7 @@ public partial class DemoBootstrap
             destCommAttr[i] = baseD * destDir * commMult;
             float sceneryMult = StationHasScenery(i) ? 2.85f : (dKind == 4 ? 1.15f : 0.30f);
             destTourAttr[i] = baseD * sceneryMult;
-            float leisureMult = dKind == 2 ? 1.35f : dKind == 3 ? 1.15f : dKind == 4 ? 1.25f : 0.90f;
+            float leisureMult = (dKind == 2 ? 1.35f : dKind == 3 ? 1.15f : dKind == 4 ? 1.25f : 0.90f) * FacilityLeisureAttrFactor(stations[i]);
             destLeisAttr[i] = baseD * destDir * leisureMult;
         }
 
@@ -908,18 +916,57 @@ public partial class DemoBootstrap
         return lost / budget;
     }
 
+    HashSet<int> ComputeNetReachable(int origin)
+    {
+        var netReachable = new HashSet<int>();
+        if (origin < 0 || origin >= stations.Count || stations[origin].closed) return netReachable;
+        var queue = new Queue<int>();
+        netReachable.Add(origin);
+        queue.Enqueue(origin);
+        while (queue.Count > 0)
+        {
+            int cur = queue.Dequeue();
+            for (int l = 0; l < lines.Count; l++)
+            {
+                var line = lines[l];
+                if (RunningTrains(line) <= 0 || line.st == null || !line.st.Contains(cur)) continue;
+                for (int k = 0; k < line.st.Count; k++)
+                {
+                    int nxt = line.st[k];
+                    if (nxt >= 0 && nxt < stations.Count && !stations[nxt].closed && netReachable.Add(nxt))
+                        queue.Enqueue(nxt);
+                }
+            }
+        }
+        return netReachable;
+    }
+
     List<TrafficDestFlow> GetStationOdTopDests(int origin, int maxCount = 3)
     {
         var list = new List<TrafficDestFlow>();
         if (origin < 0 || origin >= stations.Count || stations[origin].closed) return list;
+        var netReachable = ComputeNetReachable(origin);
+        bool originCrowded = StationWaitRatio(origin) >= 1f;
         var seen = new HashSet<int>();
         if (traffic != null && traffic.stationTopDests != null &&
             traffic.stationTopDests.TryGetValue(origin, out var existing) && existing != null && existing.Count > 0)
         {
             for (int i = 0; i < existing.Count && list.Count < maxCount; i++)
             {
-                if (StationInRegion(existing[i].dest, currentRegion) && seen.Add(existing[i].dest))
-                    list.Add(existing[i]);
+                var item = existing[i];
+                if (StationInRegion(item.dest, currentRegion) && seen.Add(item.dest))
+                {
+                    bool realReach = netReachable.Contains(item.dest);
+                    bool realCrowd = realReach && (item.crowded || originCrowded || StationWaitRatio(item.dest) >= 1f);
+                    list.Add(new TrafficDestFlow
+                    {
+                        dest = item.dest,
+                        desired = item.desired,
+                        served = item.served,
+                        reachable = realReach,
+                        crowded = realCrowd
+                    });
+                }
             }
             if (list.Count >= maxCount) return list;
         }
@@ -955,7 +1002,9 @@ public partial class DemoBootstrap
                     + (tot1 > 0f ? originBudget * pTour * (w1[dest] / tot1) : 0f)
                     + (tot2 > 0f ? originBudget * pLeis * (w2[dest] / tot2) : 0f);
             if (d <= 0.01f) continue;
-            extra.Add(new TrafficDestFlow { dest = dest, desired = d, served = 0f, reachable = false, crowded = false });
+            bool isReachable = netReachable.Contains(dest);
+            bool isCrowded = isReachable && (originCrowded || StationWaitRatio(dest) >= 1f);
+            extra.Add(new TrafficDestFlow { dest = dest, desired = d, served = 0f, reachable = isReachable, crowded = isCrowded });
         }
         extra.Sort((a, b) => b.desired.CompareTo(a.desired));
         for (int i = 0; i < extra.Count && list.Count < maxCount; i++) list.Add(extra[i]);
@@ -1016,17 +1065,25 @@ public partial class DemoBootstrap
                 .Append(Mathf.RoundToInt(tu / sum * 100f)).Append("% · 商业 ")
                 .Append(Mathf.RoundToInt(le / sum * 100f)).Append("%");
         }
+        if (stations[index].facLevel > 0)
+        {
+            int fl = Mathf.Clamp(stations[index].facLevel, 0, StationFacilityNames.Length - 1);
+            int pct = Mathf.RoundToInt((FacilityDemandFactor(stations[index]) - 1f) * 100f);
+            float leisX = FacilityLeisureAttrFactor(stations[index]);
+            linesOut.Append("\n站前商业：").Append(StationFacilityNames[fl])
+                .Append("（客流 +").Append(pct).Append("% · 商业虹吸 ").Append(leisX.ToString("0.0")).Append("x）");
+        }
 
-        if (traffic != null && traffic.stationTopDests != null &&
-            traffic.stationTopDests.TryGetValue(index, out var dests) && dests.Count > 0)
+        var dests = StationLineCount(index) > 0 ? GetStationOdTopDests(index, 3) : null;
+        if (dests != null && dests.Count > 0)
         {
             linesOut.Append("\n热门去向：");
             for (int i = 0; i < dests.Count; i++)
             {
                 if (i > 0) linesOut.Append("、");
                 var df = dests[i];
-                string tag = !df.reachable ? "未直达" : df.crowded ? "排队拥挤" : "运力通畅";
-                linesOut.Append(StationDisplayName(df.dest, region)).Append("（").Append(tag).Append("）");
+                string tag = !df.reachable ? "未联网" : df.crowded ? "运力不足" : "运力通畅";
+                linesOut.Append(StationDisplayName(df.dest, currentRegion)).Append("（").Append(tag).Append("）");
             }
         }
         else
@@ -1313,13 +1370,19 @@ public partial class DemoBootstrap
     float VehicleMaintenance(Line line) {
         float skinMult = SkinCategory(GetLineSkin(line)) == 3 ? (DispatchSlot() == 3 ? 0.81f : 0.90f) : 1f;
         float policyMult = (companyPolicy == 2 ? 0.88f : 1f) * PartnerVehicleMaintFactor() * LineTalentMaintMult(line);
-        return (line.trains * 4f + RunningTrains(line) * 24f) * FleetTrait(line, 0, false) * ResearchCostFactor(ResearchEffect.Vehicle) * skinMult * policyMult;
+        float lenFactor = 1f + EconomicPathLength(line.st) / 1200f;
+        return (line.trains * 10f + RunningTrains(line) * 45f) * lenFactor * FleetTrait(line, 0, false) * ResearchCostFactor(ResearchEffect.Vehicle) * skinMult * policyMult;
     }
     float TrackMaintenance(Line line) {
         int cat = SkinCategory(GetLineSkin(line));
         float skinMult = cat == 2 ? 0.88f : cat == 1 ? 1.04f : 1f;
         float policyMult = (companyPolicy == 2 ? 0.88f : 1f) * PartnerTrackMaintFactor() * CycleTrackMaintFactor() * LineTalentMaintMult(line);
-        return (40f + EconomicPathLength(line.st) * 0.25f + UniqueCount(line.st) * 5f) * ResearchCostFactor(ResearchEffect.Track) * skinMult * policyMult;
+        float len = EconomicPathLength(line.st);
+        int stops = UniqueCount(line.st);
+        float baseTrack = 32f + len * 0.30f + stops * 8f;
+        float longHaul = Mathf.Pow(Mathf.Max(0f, len - 250f), 1.38f) * 0.18f + Mathf.Max(0, stops - 4) * 35f;
+        float networkScale = 1f + Mathf.Clamp(lines.Count - 2, 0, 20) * 0.03f;
+        return (baseTrack + longHaul) * networkScale * ResearchCostFactor(ResearchEffect.Track) * skinMult * policyMult;
     }
     float LineProfitRate(Line line, TrafficResult result)
     {

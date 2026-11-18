@@ -57,20 +57,23 @@ public partial class DemoBootstrap
     void SyncRegionMapTextureMemory()
     {
         bool lowMem = qualityTier <= 0;
-        if (hkMapRaw)
+        SyncSingleRegionTexture(hkMapRaw, !lowMem || currentRegion == "汐港", "MapArt/hongkong_illustrated");
+        SyncSingleRegionTexture(guangdongMapRaw, !lowMem || currentRegion == "榕川", "MapArt/guangdong_illustrated");
+        SyncSingleRegionTexture(macauMapRaw, !lowMem || currentRegion == "镜屿", "MapArt/macau_osm");
+    }
+
+    static void SyncSingleRegionTexture(RawImage raw, bool keepLoaded, string resourcePath)
+    {
+        if (!raw) return;
+        if (!keepLoaded)
         {
-            if (lowMem && currentRegion != "汐港") hkMapRaw.texture = null;
-            else if (!hkMapRaw.texture) hkMapRaw.texture = Resources.Load<Texture2D>("MapArt/hongkong_illustrated");
+            var oldTex = raw.texture;
+            raw.texture = null;
+            if (oldTex) Resources.UnloadAsset(oldTex);
         }
-        if (guangdongMapRaw)
+        else if (!raw.texture)
         {
-            if (lowMem && currentRegion != "榕川") guangdongMapRaw.texture = null;
-            else if (!guangdongMapRaw.texture) guangdongMapRaw.texture = Resources.Load<Texture2D>("MapArt/guangdong_illustrated");
-        }
-        if (macauMapRaw)
-        {
-            if (lowMem && currentRegion != "镜屿") macauMapRaw.texture = null;
-            else if (!macauMapRaw.texture) macauMapRaw.texture = Resources.Load<Texture2D>("MapArt/macau_osm");
+            raw.texture = Resources.Load<Texture2D>(resourcePath);
         }
     }
 }

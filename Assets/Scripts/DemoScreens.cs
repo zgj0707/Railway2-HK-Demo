@@ -969,7 +969,7 @@ public partial class DemoBootstrap
                 art.color = tab == 2 && !unlocked ? new Color(0.65f, 0.65f, 0.65f, 0.75f) : Color.white;
             }
             var name = Txt(card.transform, LocoNames[index], 31, Ink, textX, 138, infoWidth, 44, TextAnchor.MiddleLeft); name.resizeTextForBestFit = true; name.resizeTextMinSize = 20; name.resizeTextMaxSize = ScaledFontSize(31);
-            var stats = Txt(card.transform, LocoYears[index] + " · 运力" + Mathf.RoundToInt(FleetCapacityTraits[index]*100) + "% · 维护" + Mathf.RoundToInt(FleetMaintenanceTraits[index]*100) + "% · 速度" + Mathf.RoundToInt(FleetSpeedTraits[index]*100) + "%", 22, InkSoft, textX, 94, infoWidth, 36, TextAnchor.MiddleLeft);
+            var stats = Txt(card.transform, LocoYears[index] + " · " + FormatLocoRealStats(index), 22, InkSoft, textX, 94, infoWidth, 36, TextAnchor.MiddleLeft);
             stats.resizeTextForBestFit = true; stats.resizeTextMinSize = 16; stats.resizeTextMaxSize = ScaledFontSize(22);
             bool eraClosed = tab == 2 && !unlocked && index >= 9;
             string state = tab == 1 ? (assigned == null ? "未配置" : "已配置至 " + assigned.name)
@@ -1188,9 +1188,12 @@ public partial class DemoBootstrap
     static int LineFleetEra(int node) => node < 9 ? 0 : node < 14 ? 1 : 2;
     static float LineFleetListHeight(int assigned, int models, int eras)
         => 24f + 60f + 150f + assigned * 166f + 72f + (models == 0 ? 130f : eras * 54f + models * 166f) + 24f;
-    string LineFleetVehicleStats(int node)
-        => "运力 " + Mathf.RoundToInt(FleetCapacityTraits[node] * 100) + "% · 速度 " + Mathf.RoundToInt(FleetSpeedTraits[node] * 100)
-            + "% · 维护 " + Mathf.RoundToInt(FleetMaintenanceTraits[node] * 100) + "%";
+    static int LocoRealCapacity(int node) => Mathf.RoundToInt(4000f * FleetCapacityTraits[Mathf.Clamp(node, 0, FleetCapacityTraits.Length - 1)]);
+    static int LocoRealDailyMaint(int node) => Mathf.RoundToInt(55f * FleetMaintenanceTraits[Mathf.Clamp(node, 0, FleetMaintenanceTraits.Length - 1)]);
+    static int LocoRealSpeedKmh(int node) => Mathf.RoundToInt(80f * FleetSpeedTraits[Mathf.Clamp(node, 0, FleetSpeedTraits.Length - 1)]);
+    static string FormatLocoRealStats(int node)
+        => "运力 " + LocoRealCapacity(node) + "/日 · 日耗 ¥" + LocoRealDailyMaint(node) + " · " + LocoRealSpeedKmh(node) + " km/h";
+    string LineFleetVehicleStats(int node) => FormatLocoRealStats(node);
     void OpenLineFleet(Line line, Action returnAction = null, int slot = -1, int amount = 0)
     {
         if (line == null || !lines.Contains(line)) { OpenLinesScreen(); return; }
@@ -1198,8 +1201,8 @@ public partial class DemoBootstrap
         var page = OpenPage("调配机车", "本线车辆与车库闲车统一调配；新车请前往机车商店购买。", "FleetArt/garage_watercolor", "line_fleet");
         pageBack = ReturnFromLineFleet;
         Txt(page.transform, line.name + " · 已配属 " + line.trains + " / 8 列", 32, Ink, 32, PgH - 258, 1000, 46, TextAnchor.MiddleLeft);
-        string summary = "单向区段运力 " + Mathf.RoundToInt(FleetCapacity(line)) + " · 速度 " + Mathf.RoundToInt(FleetTrait(line, 2) * 100)
-            + "% · 维护 " + Mathf.RoundToInt(FleetTrait(line, 0) * 100) + "%";
+        string summary = "单向区段运力 " + Mathf.RoundToInt(FleetCapacity(line)) + " 人/日 · "
+            + Mathf.RoundToInt(80f * FleetTrait(line, 2)) + " km/h · 日均车耗 ¥" + Mathf.RoundToInt(VehicleMaintenance(line));
         if (lineFleetSlot >= 0) summary = "补充至 " + lineFleetAmount + " 列后，自动回写" + (techDone.Contains("dispatch_peak") ? DispatchNames[lineFleetSlot] : "全天统一调度");
         var summaryText = Txt(page.transform, summary, 23, InkSoft, 32, PgH - 312, 1000, 40, TextAnchor.MiddleLeft); FitSingleLine(summaryText, 23);
         var assignedGroups = FleetGroupsByLine(line.id);
@@ -1691,7 +1694,7 @@ public partial class DemoBootstrap
         FitVehicleImage(art, 820, 410);
         Txt(panel.transform, "车型简介", 31, Ink, 36, 290 + bodyHeight, 860, 44, TextAnchor.MiddleLeft);
         ScrollableText(panel.transform, intro, 25, InkSoft, 36, 280, 888, bodyHeight);
-        Txt(panel.transform, "运力 " + Mathf.RoundToInt(FleetCapacityTraits[index] * 100) + "%    维护 " + Mathf.RoundToInt(FleetMaintenanceTraits[index] * 100) + "%    速度 " + Mathf.RoundToInt(FleetSpeedTraits[index] * 100) + "%", 24, InkSoft, 36, 230, 888, 42, TextAnchor.MiddleLeft);
+        Txt(panel.transform, FormatLocoRealStats(index), 24, InkSoft, 36, 230, 888, 42, TextAnchor.MiddleLeft);
         var fullscreen = Btn(panel.transform, "Fullscreen", "横屏查看大图", 30, 36, 46, 888, 90, Indigo, () => OpenVehicleImage(index)); TInk(fullscreen, Color.white);
     }
     void FitVehicleImage(RawImage image, float width, float height)

@@ -1068,6 +1068,7 @@ public partial class DemoBootstrap
             labelText.resizeTextForBestFit = true; labelText.resizeTextMinSize = 15; labelText.resizeTextMaxSize = ScaledFontSize(20, 1.24f);
 
             var touch = card.AddComponent<HistoryNodeTouch>();
+            touch.requireDoubleTap = true;
             touch.onTap = onTap; touch.onHold = onHold; touch.onRelease = HideHistoryInfo;
 
             cards[nodeKey] = new HistoryCardHandle { card=card, marker=marker.GetComponent<Image>(), title=name, label=labelText,
@@ -1287,6 +1288,16 @@ public partial class DemoBootstrap
             Img(dot, color, spriteCircle).raycastTarget = false;
             Txt(legend.transform, legendNames[i], 22, InkSoft, x + 24, y, 174, 32, TextAnchor.MiddleLeft);
         }
+        var hintToast = Rect("ResearchHintToast", legend.transform, 0, 0, 380, 44);
+        var hintRt = hintToast.GetComponent<RectTransform>();
+        hintRt.anchorMin = hintRt.anchorMax = new Vector2(0.5f, 1f);
+        hintRt.pivot = new Vector2(0.5f, 0f);
+        hintRt.anchoredPosition = new Vector2(0, 14f);
+        var hintBg = Img(hintToast, new Color(0.16f, 0.14f, 0.12f, 0.84f), spriteRound);
+        hintBg.type = Image.Type.Sliced;
+        hintBg.raycastTarget = false;
+        var hintTxt = Txt(hintToast.transform, "长按详情 · 双击解锁", 22, Color.white, 0, 0, 380, 44, TextAnchor.MiddleCenter);
+        hintTxt.raycastTarget = false;
         incrementalHistoryPage = page; incrementalCorporate = isCorporate;
         refreshHistoryTree = unlockedKey => {
             justUnlockedKey = unlockedKey;

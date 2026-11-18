@@ -7,9 +7,13 @@ using UnityEngine.UI;
 public class HistoryNodeTouch : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerClickHandler
 {
     public Action onTap, onHold, onRelease;
+    public bool requireDoubleTap;
     bool pressed, held, moved;
     float startTime;
+    float lastTapTime = -10f;
     Vector2 startPosition;
+    const float DoubleTapWindow = 0.36f;
+
     public void OnPointerDown(PointerEventData eventData)
     {
         pressed = true; held = false; moved = false; startTime = Time.unscaledTime; startPosition = eventData.position;
@@ -19,7 +23,7 @@ public class HistoryNodeTouch : MonoBehaviour, IPointerDownHandler, IPointerUpHa
         if (!pressed) return;
         if (Input.touchCount > 1) { moved = true; if (held) onRelease?.Invoke(); held = false; return; }
         if (Vector2.Distance(startPosition, Input.mousePosition) > 20f) { moved = true; if (held) onRelease?.Invoke(); held = false; return; }
-        if (!moved && !held && Time.unscaledTime - startTime >= 0.42f) { held = true; onHold?.Invoke(); }
+        if (!moved && !held && Time.unscaledTime - startTime >= 0.42f) { held = true; lastTapTime = -10f; onHold?.Invoke(); }
     }
     public void OnPointerUp(PointerEventData eventData)
     {
@@ -28,10 +32,29 @@ public class HistoryNodeTouch : MonoBehaviour, IPointerDownHandler, IPointerUpHa
     }
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (!held && !moved) onTap?.Invoke();
+        if (!held && !moved)
+        {
+            if (requireDoubleTap)
+            {
+                float now = Time.unscaledTime;
+                if (now - lastTapTime <= DoubleTapWindow)
+                {
+                    lastTapTime = -10f;
+                    onTap?.Invoke();
+                }
+                else
+                {
+                    lastTapTime = now;
+                }
+            }
+            else
+            {
+                onTap?.Invoke();
+            }
+        }
         held = false; moved = false;
     }
-    void OnDisable() { if (held) onRelease?.Invoke(); pressed = false; held = false; }
+    void OnDisable() { if (held) onRelease?.Invoke(); pressed = false; held = false; lastTapTime = -10f; }
 }
 
 public class HistoryDragFeedback : MonoBehaviour, IBeginDragHandler, IEndDragHandler

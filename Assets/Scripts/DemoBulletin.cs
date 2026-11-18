@@ -24,47 +24,64 @@ public partial class DemoBootstrap
         if (noticeUnreadDot) noticeUnreadDot.SetActive(HasUnreadBulletins());
     }
 
+    void OpenSolarTermQuickPopup()
+    {
+        var term = CurrentSolarTerm();
+        var next = NextSolarTerm();
+        string body = "「" + term.poem + "」\n\n"
+            + "当期物候加成：" + term.effectHint + "\n"
+            + "剩余天数：尚余 " + SolarTermDaysRemaining() + " 日\n"
+            + "下一节候：【" + next.name + "】" + next.effectHint;
+        float textH = Mathf.Clamp(MeasureTextHeight(body, 26, 740) + 20f, 160f, 420f);
+        var p = OpenPopup("时令【" + term.name + "】· " + term.season, textH + 220f, 820f, "solar_term_quick");
+        ScrollableText(p.transform, body, 26, InkSoft, 40f, 126f, 740f, textH);
+        var calBtn = Btn(p.transform, "OpenSolarJournal", "打开节气风物历", 25, 40f, 30f, 360f, 76f, Matcha, () => {
+            ClosePanel(true);
+            OpenCultureJournalModal(2);
+        });
+        TInk(calBtn, Color.white);
+        var closeBtn = Btn(p.transform, "CloseSolar", "关闭", 25, 420f, 30f, 360f, 76f, Paper2, ClosePanel);
+        TInk(closeBtn, Ink);
+    }
+
+    void OpenCongestionAlertQuickPopup()
+    {
+        var hotSegs = CollectTopCongestedSegments(3);
+        if (hotSegs.Count == 0)
+        {
+            var pEmpty = OpenPopup("全网卡点急报", 340f, 760f, "congestion_alert_quick");
+            Txt(pEmpty.transform, "全网路网当前运行通畅，暂无满载率超过 78% 的高负荷区段。", 26, InkSoft, 40f, 130f, 680f, 110f, TextAnchor.MiddleLeft);
+            var okBtn = Btn(pEmpty.transform, "CloseAlertEmpty", "知道了", 25, 220f, 30f, 320f, 74f, Indigo, ClosePanel);
+            TInk(okBtn, Color.white);
+            return;
+        }
+        string segLines = "";
+        for (int hs = 0; hs < hotSegs.Count; hs++)
+        {
+            var cg = hotSegs[hs];
+            int pctLoad = Mathf.RoundToInt(cg.loadRatio * 100f);
+            segLines += (hs > 0 ? "\n" : "") + (hs + 1) + ". " + DisplayPlaceAliases(cg.region) + " · " + cg.line.name
+                + "（" + StationDisplayName(cg.stA, cg.region) + " ↔ " + StationDisplayName(cg.stB, cg.region) + "）满载 " + pctLoad + "%";
+        }
+        segLines += "\n\n建议开启热力图或直接跳转对应区段快速增班/调入备车。";
+        float textH = Mathf.Clamp(MeasureTextHeight(segLines, 26, 740) + 20f, 160f, 440f);
+        var firstSeg = hotSegs[0];
+        var p = OpenPopup("全网卡点急报（" + hotSegs.Count + " 处高负荷）", textH + 220f, 820f, "congestion_alert_quick");
+        ScrollableText(p.transform, segLines, 26, InkSoft, 40f, 126f, 740f, textH);
+        var jumpBtn = Btn(p.transform, "JumpWorstSeg", "直飞最堵区段", 25, 40f, 30f, 360f, 76f, Vermilion, () => {
+            ClosePanel(true);
+            FocusAndBoostSegment(firstSeg);
+        });
+        TInk(jumpBtn, Color.white);
+        var closeBtn = Btn(p.transform, "CloseAlert", "关闭", 25, 420f, 30f, 360f, 76f, Paper2, ClosePanel);
+        TInk(closeBtn, Ink);
+    }
+
     List<BulletinEntry> BuildLiveBulletins()
     {
         var list = new List<BulletinEntry>();
 
-        // 0. 山海节气风物与舆情急报、督办考成
-        var term = CurrentSolarTerm();
-        list.Add(new BulletinEntry
-        {
-            tag = "物候",
-            title = "时令【" + term.name + "】· " + term.season,
-            date = "剩 " + SolarTermDaysRemaining() + " 日",
-            accentColor = new Color(0.24f, 0.50f, 0.42f),
-            body = "「" + term.poem + "」\n当期物候加成：" + term.effectHint + "\n下一节候预告：【" + NextSolarTerm().name + "】" + NextSolarTerm().effectHint,
-            actionLabel = "节气风物历",
-            onAction = () => OpenCultureJournalModal(2)
-        });
-
-        var hotSegs = CollectTopCongestedSegments(3);
-        if (hotSegs.Count > 0)
-        {
-            string segLines = "";
-            for (int hs = 0; hs < hotSegs.Count; hs++)
-            {
-                var cg = hotSegs[hs];
-                int pctLoad = Mathf.RoundToInt(cg.loadRatio * 100f);
-                segLines += (hs > 0 ? "\n" : "") + (hs + 1) + ". " + DisplayPlaceAliases(cg.region) + " · " + cg.line.name
-                    + "（" + StationDisplayName(cg.stA, cg.region) + " ↔ " + StationDisplayName(cg.stB, cg.region) + "）满载 " + pctLoad + "%";
-            }
-            var firstSeg = hotSegs[0];
-            list.Add(new BulletinEntry
-            {
-                tag = "急报",
-                title = "全网卡点急报（" + hotSegs.Count + " 处高负荷）",
-                date = "实时",
-                accentColor = Vermilion,
-                body = segLines + "\n建议开启热力图或直接跳转对应区段快速增班/调入备车。",
-                actionLabel = "直飞最堵区段",
-                onAction = () => FocusAndBoostSegment(firstSeg)
-            });
-        }
-
+        // 0. 督办考成（节气与急报已拆至地图左侧快捷入口）
         int readyPlaques = CountClaimablePlaques();
         if (readyPlaques > 0)
         {
