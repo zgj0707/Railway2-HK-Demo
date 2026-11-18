@@ -816,12 +816,22 @@ public partial class DemoBootstrap
         if (busy || (saveDirty ? saveDebounceTimer > 0f : autosaveTimer < 5f)) return;
         try
         {
-            // Capture on the main thread; serialize only detached plain data on the worker.
+            // Capture on the main thread; WebGL runs without managed worker threads.
             var data = CaptureSaveData();
             autosaveRevision = saveRevision;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            pendingAutosavePayload = new AutosavePayload {
+                json = JsonUtility.ToJson(data), pretty = null
+            };
+#else
+            bool needPretty = false;
+#if UNITY_EDITOR
+            needPretty = DevTestSaveSyncEnabled;
+#endif
             autosaveSerialization = System.Threading.Tasks.Task.Run(() => new AutosavePayload {
-                json = JsonUtility.ToJson(data), pretty = JsonUtility.ToJson(data, true)
+                json = JsonUtility.ToJson(data), pretty = needPretty ? JsonUtility.ToJson(data, true) : null
             });
+#endif
         }
         catch (Exception e) { Debug.LogError("本地存档快照失败：" + e.Message); }
     }
