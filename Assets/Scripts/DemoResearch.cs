@@ -1078,6 +1078,8 @@ public partial class DemoBootstrap
         };
 
         Action refreshMountedNodes = () => {
+        int prevCount = orderedKeys.Count;
+        bool hadAny = prevCount > 0;
         orderedKeys.Clear();
         if (isCorporate)
         {
@@ -1131,7 +1133,7 @@ public partial class DemoBootstrap
             }
         }
         layout.SetOrder(orderedKeys);
-        layout.Wake(true);
+        if (!hadAny) { layout.Wake(true); layout.FinishInitialMount(); }
         edges.Refresh();
         if (qualityTier >= 1 && justUnlockedKey != null) {
             var previousShake = page.GetComponent<HistoryCameraShake>();

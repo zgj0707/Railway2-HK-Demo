@@ -794,7 +794,6 @@ public partial class DemoBootstrap
         coTechSessionUnlocked.Add(node.key);
         coTechJustUnlocked = node.key;
         EnsureCompanyInitialized();
-        hasForecastSignature = false;
         operatingRates.Clear();
         RecalcIncome();
         EndUndo();

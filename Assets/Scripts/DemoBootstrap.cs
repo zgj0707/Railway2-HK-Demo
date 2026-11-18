@@ -1397,6 +1397,7 @@ public partial class DemoBootstrap : MonoBehaviour
 
     void ClearDraftState()
     {
+        unchecked { connectPopupVersion++; }
         draft.Clear(); draftSegNeeds.Clear(); draftCost = 0;
         ClearDraftSegs(); ResetBuildVisuals();
     }
@@ -1438,7 +1439,6 @@ public partial class DemoBootstrap : MonoBehaviour
         PlayStationPathSparkles(snapshot, line.color);
         SyncStoryProgression(true);
         EndUndo();
-        SaveGame();
     }
 
     void CommitExtend(Line line, List<int> newPath, List<int> draftStations, int cost)
@@ -1458,7 +1458,6 @@ public partial class DemoBootstrap : MonoBehaviour
         PlayStationPathSparkles(draftStations, line.color);
         SyncStoryProgression(true);
         EndUndo();
-        SaveGame();
     }
 
     void CheckLineStory(Line line)
@@ -1509,34 +1508,35 @@ public partial class DemoBootstrap : MonoBehaviour
     }
     float EstimateNetworkDelta(Line line, List<int> path, bool isNew)
     {
-        var candidate = isNew ? new Line { id = nextLineId, st = path, trains = 1 } : line;
-        var oldPath = candidate.st;
-        float oldClock = dayClock;
-        var totals = new Dictionary<Line, LineForecastData>();
-        foreach (var existing in lines) totals[existing] = new LineForecastData();
-        if (isNew) totals[candidate] = new LineForecastData();
-        float[] hours = {8f,13f,18f,1f}, weights = {4f/24f,6f/24f,4f/24f,10f/24f};
+        // Bounded route-only estimate; settlement retains the complete network solver.
+        var candidate = new Line { id = isNew ? nextLineId : line.id, st = path,
+            trains = isNew ? 1 : line.trains, fare = isNew ? 1.5f : line.fare,
+            skin = isNew ? -1 : line.skin };
+        if (!isNew) candidate.dispatch = (int[])line.dispatch.Clone();
+        float before = isNew ? 0f : EstimateLocalRouteProfit(line);
+        return EstimateLocalRouteProfit(candidate) - before;
+    }
+    float EstimateLocalRouteProfit(Line line)
+    {
+        float profit = 0f, savedClock = dayClock;
+        var seen = new HashSet<int>();
+        float distance = EconomicPathLength(line.st) / Mathf.Max(1, line.st.Count - 1);
+        float fare = line.fare + 0.0036f * distance;
         try
         {
-            candidate.st = path;
-            for (int slot=0;slot<4;slot++)
+            for (int slot = 0; slot < 4; slot++)
             {
-                dayClock = hours[slot] * GameDaySeconds / 24f;
-                var projected = CalculateTraffic(addition: isNew ? candidate : null);
-                foreach (var pair in totals)
-                {
-                    var item=pair.Key; var f=pair.Value;
-                    f.gross += TrafficRevenue(item,projected)*weights[slot];
-                    f.vehicle += VehicleMaintenance(item)*weights[slot];
-                    f.track += TrackMaintenance(item)*weights[slot];
-                }
+                dayClock = ForecastSlotHours[slot] * GameDaySeconds / 24f;
+                seen.Clear(); float demand = 0f;
+                foreach (int station in line.st)
+                    if (seen.Add(station) && !stations[station].closed) demand += StationBaseDemand(station);
+                float carried = Mathf.Min(demand * 0.325f, FleetCapacity(line));
+                float net = carried * fare / 10f - VehicleMaintenance(line) - TrackMaintenance(line);
+                profit += (net - Mathf.Max(0f, net) * 0.1f) * ForecastSlotFractions[slot];
             }
         }
-        finally { dayClock = oldClock; candidate.st = oldPath; }
-        float next=0f, old=0f;
-        foreach (var f in totals.Values) { float pre=f.gross-f.vehicle-f.track; next += pre - Mathf.Max(0f,pre)*0.1f; }
-        foreach (var existing in lines) old += ForecastFor(existing).Profit;
-        return next-old;
+        finally { dayClock = savedClock; }
+        return profit;
     }
 
     string UniquePathText(List<int> st)
@@ -1623,8 +1623,16 @@ public partial class DemoBootstrap : MonoBehaviour
         return 0; // 已达线路上限时，只提供仍可用的延长选项。
     }
 
+    int connectPopupVersion;
     void ShowConnectPopup(int from, List<int> snapshot, int cost, int selected)
     {
+        StartCoroutine(ShowConnectPopupDeferred(from, snapshot, cost, selected, ++connectPopupVersion));
+    }
+    System.Collections.IEnumerator ShowConnectPopupDeferred(int from, List<int> snapshot, int cost, int selected, int version)
+    {
+        yield return null;
+        if (version != connectPopupVersion || draft.Count < 2 || draft.Count != snapshot.Count) yield break;
+        for (int i = 0; i < snapshot.Count; i++) if (draft[i] != snapshot[i]) yield break;
         try { ShowConnectPopupInternal(from, snapshot, cost, selected); }
         catch (Exception e) { Debug.LogError("EXT FAIL " + e); Toast("延长弹窗出错"); CancelDraft(); }
     }
@@ -1670,7 +1678,7 @@ public partial class DemoBootstrap : MonoBehaviour
                 ? (nextLineId + " 号线 · " + RouteEndpointsSummary(snapshot) + " · " + UniqueCount(snapshot) + " 站")
                 : (RouteEndpointsSummary(opt.path ?? opt.line.st) + " · +" + (snapshot.Count - 1) + " 站");
             int gain = i == selected ? Mathf.RoundToInt(EstimateNetworkDelta(opt.line, opt.isNew ? snapshot : opt.path, opt.isNew)) : 0;
-            string t2 = route + (i == selected ? " · 预计 " + (gain >= 0 ? "+" : "") + gain + "/天" : " · 选择后查看预计收益");
+            string t2 = route + (i == selected ? " · 粗估 " + (gain >= 0 ? "+" : "") + gain + "/天" : " · 选择后查看预计收益");
             Txt(row.transform, t1, 30, Ink, 28, 50, 520, 38, TextAnchor.MiddleLeft);
             var pathView = Rect("PathViewport", row.transform, 28, 11, pathViewW, 34);
             var pathHit = Img(pathView, new Color(1, 1, 1, 0.004f));

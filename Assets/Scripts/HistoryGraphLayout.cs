@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -63,8 +63,46 @@ public class HistoryGraphLayout : MonoBehaviour
     public void Add(string key, RectTransform rect, int era, string[] parents)
     {
         var e = new Entry { key = key, rect = rect, era = era, parents = parents, size = rect ? rect.sizeDelta : new Vector2(200, 120) };
-        entries.Add(e); byKey.Add(key, e); Wake();
+        entries.Add(e); byKey.Add(key, e);
+        if (!initialLayoutComplete) Wake();
+        else { localPending.Add(e); Wake(false); }
     }
+    bool initialLayoutComplete;
+    readonly List<Entry> localPending = new List<Entry>();
+    int localCursor, localPass;
+    bool localMoved;
+    void UpdateLocalLayout()
+    {
+        var budget = System.Diagnostics.Stopwatch.StartNew();
+        while (localPending.Count > 0 && budget.Elapsed.TotalMilliseconds < 1.0)
+        {
+            var e = localPending[0];
+            if (!e.rect || !positions.ContainsKey(e.key)) { localPending.RemoveAt(0); localCursor = localPass = 0; localMoved = false; continue; }
+            Vector2 p = positions[e.key];
+            if (localCursor < entries.Count)
+            {
+                var other = entries[localCursor++];
+                if (other == e || !positions.TryGetValue(other.key, out var q)) continue;
+                Vector2 delta = p - q;
+                float ox = (e.size.x + other.size.x) * 0.5f + 12f - Mathf.Abs(delta.x);
+                float oy = (e.size.y + other.size.y) * 0.5f + 12f - Mathf.Abs(delta.y);
+                if (ox > 0f && oy > 0f && e.era >= 0)
+                {
+                    if (ox < oy) p.x += (delta.x >= 0 ? 1 : -1) * (ox + 0.01f);
+                    else p.y += (delta.y >= 0 ? 1 : -1) * (oy + 0.01f);
+                    positions[e.key] = p; localMoved = true;
+                }
+                continue;
+            }
+            e.rect.anchoredPosition = new Vector2(4000, 4000) + p
+                - Vector2.Scale(new Vector2(0.5f, 0.5f) - e.rect.pivot, e.rect.sizeDelta);
+            localCursor = 0;
+            if (!localMoved || ++localPass >= 16) { localPending.RemoveAt(0); localPass = 0; }
+            localMoved = false;
+        }
+        if (edges) edges.Refresh();
+    }
+    public void FinishInitialMount() { initialLayoutComplete = true; }
     void UpdateAngleTargets()
     {
         angleTargets.Clear();
@@ -92,7 +130,7 @@ public class HistoryGraphLayout : MonoBehaviour
         collisionCellSize = 12f; CollisionChecks = 0;
         if (candidateMarks == null || candidateMarks.Length < entries.Count) candidateMarks = new int[entries.Count];
         foreach (var entry in entries) { entry.workingPosition = positions[entry.key]; collisionCellSize = Mathf.Max(collisionCellSize, Mathf.Max(entry.size.x, entry.size.y) + gap); }
-        for (int pass = 0; pass < 16; pass++)
+        for (int pass = 0; pass < 3; pass++)
         {
             bool moved = false;
             foreach (var bucket in collisionNearby.Values) bucket.Clear();
@@ -140,7 +178,9 @@ public class HistoryGraphLayout : MonoBehaviour
 
     void Update()
     {
-        if (positions == null || entries.Count == 0 || IsSleeping) return;
+        if (positions == null || entries.Count == 0) return;
+        if (localPending.Count > 0) UpdateLocalLayout();
+        if (IsSleeping) return;
         foreach (var entry in entries) { entry.previousPosition = positions[entry.key]; if (stableFrames == 0) entry.restAnchor = entry.previousPosition; }
         float dt;
         if (updatesPerSecond <= 0f || updatesPerSecond >= 60f) {
@@ -151,7 +191,7 @@ public class HistoryGraphLayout : MonoBehaviour
             if (accumulatedTime < 1f / Mathf.Max(1f, updatesPerSecond)) return;
             dt = Mathf.Min(accumulatedTime, 0.1f); accumulatedTime = 0f;
         }
-        if (Time.unscaledTime >= nextAngleUpdate) { UpdateAngleTargets(); nextAngleUpdate = Time.unscaledTime + 0.25f; }
+        if (Time.unscaledTime >= nextAngleUpdate) { UpdateAngleTargets(); nextAngleUpdate = Time.unscaledTime + 0.5f; }
         foreach (var cell in nearby.Values) cell.Clear();
         for (int i = 0; i < entries.Count; i++) {
             Vector2 p = positions[entries[i].key];

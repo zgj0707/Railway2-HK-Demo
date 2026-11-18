@@ -720,10 +720,13 @@ public partial class DemoBootstrap
         data.memorialPlaques.AddRange(earnedPlaques);
         data.memorialTickets.AddRange(earnedMemorialTickets);
         data.boardPartners.AddRange(boardPartners);
-        data.contracts.AddRange(activeContracts);
+        foreach (var c in activeContracts) data.contracts.Add(new MunicipalContract {
+            id=c.id, type=c.type, startValue=c.startValue, targetValue=c.targetValue,
+            rewardCoins=c.rewardCoins, rewardRp=c.rewardRp, rewardDiamonds=c.rewardDiamonds,
+            deadlineDay=c.deadlineDay, claimed=c.claimed });
         data.coTech.AddRange(companyTechDone);
-        data.talents.AddRange(talents);
-        data.talentPool.AddRange(talentPool);
+        foreach (var t in talents) data.talents.Add(CopySaveTalent(t));
+        foreach (var t in talentPool) data.talentPool.Add(CopySaveTalent(t));
         foreach(var s in stations) data.stations.Add(new SavedStation { key=StationSaveKey(s), customName=string.IsNullOrEmpty(s.customName) ? "" : s.customName, level=s.level, trafficEvent=s.trafficEvent, built=s.built, closed=s.closed, riderBonus=s.riderBonus, facLevel=s.facLevel });
         foreach(var s in sceneries) data.scenery.Add(new SavedScenery { key=ScenerySaveKey(s), found=s.found, unlocked=s.unlocked });
         foreach(var l in lines) { var record=new SavedLine { id=l.id, name=l.name, color=l.color, skin=l.skin, trains=l.trains, dispatch=(int[])l.dispatch.Clone(), fare=l.fare, todayGross=l.todayGross, todayMaintenance=l.todayMaintenance, todayTrack=l.todayTrack, todayRevenue=l.todayRevenue, recent=new List<int>(l.recent), stations=new List<string>() }; foreach(int i in l.st) record.stations.Add(StationSaveKey(stations[i])); data.lines.Add(record); }
@@ -734,9 +737,35 @@ public partial class DemoBootstrap
         foreach (var kv in themeTrialUntil) { data.trialThemes.Add(kv.Key); data.trialEnds.Add(kv.Value); }
         return data;
     }
+    static SavedTalent CopySaveTalent(SavedTalent t)
+    {
+        return new SavedTalent { id=t.id, name=t.name, role=t.role, rarity=t.rarity,
+            level=t.level, xp=t.xp, assignKind=t.assignKind, assignLineId=t.assignLineId,
+            assignStationKey=t.assignStationKey, flawIndex=t.flawIndex,
+            flawCleansed=t.flawCleansed, bio=t.bio };
+    }
+    sealed class AutosavePayload { public string json, pretty; }
+    System.Threading.Tasks.Task<AutosavePayload> autosaveSerialization;
+    AutosavePayload pendingAutosavePayload;
+    int saveRevision, autosaveRevision;
+    float saveIdleSeconds;
+    bool saveDirty;
+    float saveDebounceTimer;
+    void RequestSaveGame(float delay = 0.85f)
+    {
+        if (!saveReady || saveBlocked) return;
+        unchecked { saveRevision++; }
+        saveDirty = true;
+        saveDebounceTimer = delay;
+    }
     void SaveGame()
     {
         if(!saveReady || saveBlocked) return;
+        unchecked { saveRevision++; }
+        pendingAutosavePayload = null;
+        saveDirty = false;
+        saveDebounceTimer = 0f;
+        autosaveTimer = 0f;
         try {
             var data = CaptureSaveData();
             PlayerPrefs.SetString(SaveKey,JsonUtility.ToJson(data)); PlayerPrefs.Save();
@@ -745,7 +774,57 @@ public partial class DemoBootstrap
 #endif
         } catch(Exception e) { Debug.LogError("本地存档保存失败：" + e.Message); }
     }
-    void TickAutosave() { autosaveTimer += Time.unscaledDeltaTime; if (autosaveTimer >= 5f) { autosaveTimer=0; SaveGame(); } }
+    void TickAutosave()
+    {
+        if (!saveReady || saveBlocked) return;
+        float dt = Time.unscaledDeltaTime;
+        bool interacting = draft.Count > 0 || lineInsertActive || Input.GetMouseButton(0) || Input.touchCount > 0;
+        saveIdleSeconds = interacting ? 0f : saveIdleSeconds + dt;
+        bool busy = interacting || saveIdleSeconds < 1f || pendingForecastMask != 0;
+        saveDebounceTimer -= dt;
+        autosaveTimer += dt;
+        if (autosaveSerialization != null)
+        {
+            if (!autosaveSerialization.IsCompleted) return;
+            if (autosaveSerialization.IsFaulted)
+                Debug.LogError("本地存档序列化失败：" + autosaveSerialization.Exception.GetBaseException().Message);
+            else if (autosaveRevision == saveRevision) pendingAutosavePayload = autosaveSerialization.Result;
+            autosaveSerialization = null;
+            return; // Do not combine snapshot/serialization/flush in one frame.
+        }
+        if (pendingAutosavePayload != null)
+        {
+            if (autosaveRevision != saveRevision) { pendingAutosavePayload = null; return; }
+            if (busy) return;
+            try
+            {
+                PlayerPrefs.SetString(SaveKey, pendingAutosavePayload.json);
+                PlayerPrefs.Save();
+#if UNITY_EDITOR
+                if (DevTestSaveSyncEnabled)
+                {
+                    WriteSaveJsonAtomically(BundledTestSaveAssetPath, pendingAutosavePayload.pretty);
+                    DevTestSaveDirty = true;
+                }
+#endif
+                saveDirty = false; saveDebounceTimer = 0f; autosaveTimer = 0f;
+            }
+            catch (Exception e) { Debug.LogError("本地存档保存失败：" + e.Message); }
+            pendingAutosavePayload = null;
+            return;
+        }
+        if (busy || (saveDirty ? saveDebounceTimer > 0f : autosaveTimer < 5f)) return;
+        try
+        {
+            // Capture on the main thread; serialize only detached plain data on the worker.
+            var data = CaptureSaveData();
+            autosaveRevision = saveRevision;
+            autosaveSerialization = System.Threading.Tasks.Task.Run(() => new AutosavePayload {
+                json = JsonUtility.ToJson(data), pretty = JsonUtility.ToJson(data, true)
+            });
+        }
+        catch (Exception e) { Debug.LogError("本地存档快照失败：" + e.Message); }
+    }
     string ReadBundledTestSaveRaw()
     {
 #if UNITY_EDITOR
@@ -774,6 +853,16 @@ public partial class DemoBootstrap
     }
     void ResetLoadedSessionState()
     {
+        unchecked { saveRevision++; }
+        pendingAutosavePayload = null;
+        saveDirty = false; saveDebounceTimer = 0f;
+        if (forecastWork != null) { forecastWork.Dispose(); forecastWork = null; }
+        pendingForecastMask = 0; hasStagedTopoSig = false; hasTrafficTopologySig = false;
+        for (int slot = 0; slot < 4; slot++)
+        {
+            if (stagedSlots != null && slot < stagedSlots.Length) stagedSlots[slot] = null;
+            if (trafficSlots != null && slot < trafficSlots.Length) trafficSlots[slot] = null;
+        }
         techCollapseDone = true; techSessionUnlocked.Clear(); historyJustUnlocked = null;
         coTechCollapseDone = true; coTechSessionUnlocked.Clear(); coTechJustUnlocked = null;
         researchProfitEstimates.Clear(); hasResearchProfitSignature = false;

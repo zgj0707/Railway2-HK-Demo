@@ -97,7 +97,7 @@ public partial class DemoBootstrap
         pendingUndo.externalProgress = UndoExternalProgressSignature();
         undoStack.Add(pendingUndo);
         if (undoStack.Count > MaxUndoSteps) undoStack.RemoveAt(0);
-        pendingUndo=null; RefreshUndoButton(); SaveGame();
+        pendingUndo=null; RefreshUndoButton(); RequestSaveGame();
     }
     void UndoLastAction()
     {
