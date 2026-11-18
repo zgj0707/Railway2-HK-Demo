@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -209,7 +209,7 @@ public partial class DemoBootstrap
         AddEraHistory(2, 2019, ResearchEffect.Station, "smart_hub_ato", "智慧站台与 ATO 自动驾驶", 6, "全自动折返、精准停靠与站内智慧导乘协同，显著放大综合枢纽日吞吐容量。", "immersed_tunnel", LocoKey(15));
         AddEraHistory(2, 2021, ResearchEffect.Transfer, "seamless_transfer", "四网融合一码无感换乘", 6, "国铁干线、城际铁路与城市地铁安检互认、票制融通，消弭跨线换乘时间摩擦。", "smart_hub_ato");
         AddEraHistory(2, 2023, ResearchEffect.Speed, "ai_dynamic_dispatch", "AI 潮汐动态重联", 6, "根据实时客流热力自动重联加开潮汐班次，全面拉升跨湾列车全网直达旅行速度。", LocoKey(15), "seamless_transfer");
-        AddEraHistory(2, 2025, ResearchEffect.Demand, "bay_integrated_grid", "山海一小时超级铁路圈", 7, "双屿与粤海九城轨道全域闭环直通，开创同城化山海湾新纪元。", "ai_dynamic_dispatch", "seamless_transfer");
+        AddEraHistory(2, 2025, ResearchEffect.Demand, "bay_integrated_grid", "山海一小时超级铁路圈", 7, "双屿与榕川九城轨道全域闭环直通，开创同城化山海湾新纪元。", "ai_dynamic_dispatch", "seamless_transfer");
 
     }
     bool HistoryVisible(HistoryNode node)
@@ -239,18 +239,28 @@ public partial class DemoBootstrap
         SetResearchEffect(ResearchEffect.Station, "locoworks", "directair");
         SetResearchEffect(ResearchEffect.None, "dispatch_basic", "dispatch_peak", "fare_policy");
     }
+    int HistoryNodeEffectivePercent(HistoryNode node)
+    {
+        if (node == null || node.loco >= 0 || node.incomePercent <= 0) return node != null ? node.incomePercent : 0;
+        int cost = HistoryCost(node);
+        float costTier = Mathf.Max(0f, Mathf.Log10(Mathf.Max(1000f, cost) / 1000f));
+        return Mathf.Max(node.incomePercent, Mathf.RoundToInt(node.incomePercent * (1f + costTier * 0.85f)));
+    }
     void SyncResearchEffects()
     {
         Array.Clear(researchEffects, 0, researchEffects.Length);
         foreach (string key in techDone)
             if (historyByKey.TryGetValue(key, out var node) && node.loco < 0)
-                researchEffects[(int)node.effect] += node.incomePercent * 0.01f;
+                researchEffects[(int)node.effect] += HistoryNodeEffectivePercent(node) * 0.01f;
     }
     float ResearchAmount(ResearchEffect effect)
     {
         float value = researchEffects[(int)effect];
-        // 正向收益逐渐接近 50%，避免后期节点突然失效；负面影响单独限制在 25%。
-        return value >= 0f ? 0.5f * value / (0.5f + value) : Mathf.Max(-0.25f, value);
+        if (value < 0f) return Mathf.Max(-0.25f, value);
+        // 成本/换乘减免类平滑收敛至 72% 上限，防止降至负成本；正向增益类放宽渐进上限至 185%，确保后期高价节点依然回报丰厚。
+        bool isReduction = effect == ResearchEffect.Vehicle || effect == ResearchEffect.Track || effect == ResearchEffect.Transfer;
+        float cap = isReduction ? 0.72f : 1.85f;
+        return cap * value / (cap + value);
     }
     float ResearchFactor(ResearchEffect effect) { return 1f + ResearchAmount(effect); }
     float ResearchCostFactor(ResearchEffect effect) { return 1f - ResearchAmount(effect); }
@@ -322,7 +332,7 @@ public partial class DemoBootstrap
             case ResearchEffect.Transfer: label = "换乘阻力"; break;
             default: label = "票务收入"; break;
         }
-        int value = node.incomePercent;
+        int value = HistoryNodeEffectivePercent(node);
         if (node.effect == ResearchEffect.Vehicle || node.effect == ResearchEffect.Track || node.effect == ResearchEffect.Transfer) value = -value;
         return label + (value >= 0 ? " +" : " ") + value + "%";
     }
@@ -437,9 +447,10 @@ public partial class DemoBootstrap
         string state = HasCoTech(node.key) ? "已掌握 ✓" : missing.Length > 0 ? "前置：" + missing : "";
         string cleanDesc = string.IsNullOrEmpty(node.desc) ? "" : node.desc.Replace(" 年", "年");
         int branch = Mathf.Clamp(node.branch, 0, CoTechBranchNames.Length - 1);
+        string effectText = CoTechScaledSummary(node);
         return new HistoryInfoText {
             eyebrow = node.year + " 年 · " + CoTechBranchNames[branch], title = node.title, body = cleanDesc,
-            status = "效用：" + node.effectSummary + "\n研发 " + costPart + (state.Length > 0 ? " · " + state : ""),
+            status = "效用：" + effectText + "\n研发 " + costPart + (state.Length > 0 ? " · " + state : ""),
             state = HasCoTech(node.key) ? 0 : missing.Length > 0 ? 2 : 1
         };
     }
@@ -448,10 +459,7 @@ public partial class DemoBootstrap
         historySelected = key;
         if (!historyInfoPanel || !historyByKey.TryGetValue(key, out var node)) return;
         if (historyTooltipFollow && historyNodeRects.TryGetValue(key, out var target)) historyTooltipFollow.target = target;
-        string estimate = "";
-        if (!techDone.Contains(key) && node.loco < 0 && node.effect != ResearchEffect.None)
-            estimate = "\n当前线网日利润预计 " + FormatSignedNumber(EstimateResearchProfit(node));
-        var copy = HistoryNodeInfo(node, estimate);
+        var copy = HistoryNodeInfo(node, "");
         ShowHistoryInfo(copy.eyebrow, copy.title, copy.body, copy.status, HistoryEffectColor(node), copy.state);
     }
     void HoldCoTechNode(string key)
@@ -1169,11 +1177,7 @@ public partial class DemoBootstrap
         title.fontStyle = FontStyle.Normal; title.raycastTarget = false;
         title.resizeTextForBestFit = true; title.resizeTextMinSize = 18; title.resizeTextMaxSize = ScaledFontSize(34);
         var titleTextRt = title.rectTransform; titleTextRt.anchorMin = Vector2.zero; titleTextRt.anchorMax = Vector2.one;
-        titleTextRt.offsetMin = new Vector2(20, 4); titleTextRt.offsetMax = new Vector2(-148, -4);
-        var titleSub = Txt(titleCard.transform, isCorporate ? "XIX · CORP" : "XIX · ARCHIVE", 20, new Color(0.58f, 0.45f, 0.28f, 0.85f), 0, 0, 0, 0, TextAnchor.MiddleRight);
-        titleSub.fontStyle = FontStyle.Normal; titleSub.raycastTarget = false;
-        var titleSubRt = titleSub.rectTransform; titleSubRt.anchorMin = Vector2.zero; titleSubRt.anchorMax = Vector2.one;
-        titleSubRt.offsetMin = new Vector2(16, 4); titleSubRt.offsetMax = new Vector2(-18, -4);
+        titleTextRt.offsetMin = new Vector2(20, 4); titleTextRt.offsetMax = new Vector2(-20, -4);
         backRt.anchorMin = backRt.anchorMax = Vector2.zero;
         homeRt.anchorMin = homeRt.anchorMax = Vector2.zero;
         titleRt.anchorMin = titleRt.anchorMax = Vector2.zero;
@@ -1325,11 +1329,9 @@ public partial class DemoBootstrap
         frameInner.GetComponent<Image>().raycastTarget = false;
         JournalTape(sheet.transform, cardW * 0.5f - 95f, cardH - 18f, 190f);
 
-        var enHeader = Txt(sheet.transform, isCorporate ? "CORPORATE ARCHIVE  ·  XIX — XXI CENTURY" : "CHRONICLES OF RAILWAY  ·  XIX — XXI CENTURY", 21, new Color(0.55f, 0.42f, 0.25f), 44, cardH - 88, cardW - 88, 32, TextAnchor.MiddleCenter);
-        enHeader.fontStyle = FontStyle.Normal;
-        var cnHeader = Txt(sheet.transform, isCorporate ? "— ◆ 商道百年 · 治理手帐 ◆ —" : "— ◆ 铁道百年 · 时代手帐 ◆ —", 38, Ink, 44, cardH - 144, cardW - 88, 52, TextAnchor.MiddleCenter);
+        var cnHeader = Txt(sheet.transform, isCorporate ? "— ◆ 商道百年 · 治理手帐 ◆ —" : "— ◆ 铁道百年 · 时代手帐 ◆ —", 38, Ink, 44, cardH - 122, cardW - 88, 52, TextAnchor.MiddleCenter);
         cnHeader.fontStyle = FontStyle.Normal;
-        var subHeader = Txt(sheet.transform, "目前仅十九世纪卷已开卷 · 二十与二十一世纪暂未开放", 22, InkSoft, 44, cardH - 184, cardW - 88, 32, TextAnchor.MiddleCenter);
+        var subHeader = Txt(sheet.transform, "目前仅十九世纪卷已开卷 · 二十与二十一世纪暂未开放", 22, InkSoft, 44, cardH - 166, cardW - 88, 32, TextAnchor.MiddleCenter);
 
         var xClose = Btn(sheet.transform, "CloseJournal", "×", 34, cardW - 96, cardH - 96, 62, 62, new Color(0.92f, 0.87f, 0.78f), () => {
             if (eraJournalModal) Destroy(eraJournalModal); eraJournalModal = null;
@@ -1402,17 +1404,28 @@ public partial class DemoBootstrap
         960000, 1280000
     };
     int LocoPrice(int index) { return LocoPrices[Mathf.Clamp(index, 0, LocoPrices.Length - 1)]; }
-    void PurchaseLoco(int index)
+    void PurchaseLoco(int index, int count = 1)
     {
         if (index < 0 || index >= LocoNames.Length) return;
+        count = Mathf.Clamp(count, 1, 99);
         if (!techDone.Contains(LocoKey(index)))
         {
             Toast(index >= 9 ? "该车型所属 20/21 世纪科技树暂未开放" : "请先在 19 世纪科技树解锁对应机车节点");
             return;
         }
-        int price = LocoPrice(index);
-        if (coins < price) { Toast("金币不足，还差 ¥" + FormatShortfall(price - coins)); return; }
-        BeginUndo("购买机车"); coins -= price; researchVehicles.Add(new ResearchVehicle { node = index }); SyncCulturalCollection(true); EndUndo(); RefreshHUD(); OpenLocoShop(); Toast("已购买 " + LocoNames[index] + " ×1");
+        int unitPrice = LocoPrice(index);
+        long totalLong = (long)unitPrice * count;
+        if (totalLong > int.MaxValue || coins < totalLong)
+        {
+            Toast("金币不足，购买 ×" + count + " 还差 ¥" + FormatShortfall((float)Math.Max(1.0, totalLong - coins)));
+            return;
+        }
+        int price = (int)totalLong;
+        BeginUndo(count > 1 ? ("批量购买机车 ×" + count) : "购买机车");
+        coins -= price;
+        for (int i = 0; i < count; i++) researchVehicles.Add(new ResearchVehicle { node = index });
+        SyncCulturalCollection(true); EndUndo(); RefreshHUD(); OpenLocoShop();
+        Toast("已购买 " + LocoNames[index] + " ×" + count);
     }
 }
 

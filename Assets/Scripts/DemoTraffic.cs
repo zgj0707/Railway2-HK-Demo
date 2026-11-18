@@ -26,19 +26,18 @@ public partial class DemoBootstrap
         public float totalPassengers, totalRevenue;
     }
     sealed class TrafficEdge { public int target, section; public float cost, distance; }
+    struct LineDistPart { public int line; public float dist; }
     sealed class TrafficTrip
     {
         public int origin, dest, purpose;
         public float amount, fare, bonus;
-        public int[] stations, sections;
-        public Dictionary<int, float> lineDistance;
+        public int stOff, stLen, secOff, secLen, partOff, partLen;
     }
     struct TrafficPathSolution
     {
         public int target;
         public float cost, pathDistance;
-        public int[] stations, sections;
-        public Dictionary<int, float> lineDistance;
+        public int stOff, stLen, secOff, secLen, partOff, partLen;
     }
     sealed class TrafficHeap
     {
@@ -69,14 +68,14 @@ public partial class DemoBootstrap
     float CityDemandWeight(Station station)
     {
         if (station.portal) return 1.6f;
-        if (station.region == "香埠") return 1.25f;
-        if (station.region == "莲澳") return 0.75f;
+        if (station.region == "汐港") return 1.25f;
+        if (station.region == "镜屿") return 0.75f;
         switch (station.city)
         {
-            case "五羊府": case "新安府": return station.county ? 1.1f : 1.7f;
-            case "祖庙府": case "莞城府": return station.county ? 0.95f : 1.35f;
-            case "惠州府": case "香山府": case "岐江府": case "五邑府": return station.county ? 0.8f : 1.1f;
-            default: return station.county ? 0.65f : 0.9f;
+            case "南羊府": case "东湾府": return station.county ? 1.45f : 2.35f;
+            case "明珠府": case "百川府": return station.county ? 1.25f : 1.95f;
+            case "鹅山府": case "青藤府": case "锦溪府": case "银江府": return station.county ? 1.05f : 1.65f;
+            default: return station.county ? 0.95f : 1.45f;
         }
     }
     float StationBaselineDemand(int i)
@@ -85,8 +84,8 @@ public partial class DemoBootstrap
         float baseValue = 80f;
         switch (s.name)
         {
-            case "沥源围": case "将军澳": case "米埔围": case "元朗墟": case "上水围": case "粉岭围": case "浅湾": case "青山湾": case "潭仔": case "青洲": case "石排湾": baseValue *= 1.25f; break;
-            case "石板街": case "兵房山": case "码头咀": case "芒角墟": case "鹅颈桥": case "茨林围": case "阿妈阁": case "北安港": case "新安城": case "五羊城": baseValue *= 1.30f; break;
+            case "白沙围": case "翠林澳": case "芦花围": case "丰年墟": case "清泉围": case "松岭围": case "兰溪湾": case "镇海门": case "莲心仔": case "芦苇洲": case "叠石澳": baseValue *= 1.25f; break;
+            case "海晏台": case "鸣钟街": case "翠竹咀": case "旺市角": case "铜环湾": case "古石围": case "望海阁": case "莲东空港": case "东湾（西渡）": case "南羊城": baseValue *= 1.30f; break;
         }
         foreach (var sc in sceneries) if (sc.triggerStation == s.name && s.region == sc.region) { baseValue *= 1.15f; break; }
         return baseValue * CityDemandWeight(s);
@@ -108,8 +107,8 @@ public partial class DemoBootstrap
         string name = stations[i].name;
         switch (name)
         {
-            case "沥源围": case "将军澳": case "米埔围": case "元朗墟": case "上水围": case "粉岭围": case "浅湾": case "青山湾": case "潭仔": case "青洲": case "石排湾": return 1;
-            case "石板街": case "兵房山": case "码头咀": case "芒角墟": case "鹅颈桥": case "五羊城": case "新安（西渡）": return 2;
+            case "白沙围": case "翠林澳": case "芦花围": case "丰年墟": case "清泉围": case "松岭围": case "兰溪湾": case "镇海门": case "莲心仔": case "芦苇洲": case "叠石澳": return 1;
+            case "海晏台": case "鸣钟街": case "翠竹咀": case "旺市角": case "铜环湾": case "南羊城": case "东湾（西渡）": return 2;
         }
         foreach (var sc in sceneries) if (sc.triggerStation == name && sc.region == stations[i].region) return 3;
         return stations[i].portal ? 4 : 0;
@@ -154,10 +153,18 @@ public partial class DemoBootstrap
         tourismShare = wTourism / sum;
         leisureShare = wLeisure / sum;
     }
+    float OdDistanceDenominator(string regA, string regB, float direct, int purpose)
+    {
+        bool bothProvincial = regA == "榕川" && regB == "榕川";
+        if (purpose == 1) return bothProvincial ? (180f + direct * 0.35f) : (95f + direct * 0.55f);
+        if (purpose == 2) return bothProvincial ? (150f + direct * 0.42f) : (48f + direct);
+        return bothProvincial ? (160f + direct * 0.42f) : (55f + direct);
+    }
     float PurposeDestWeight(int origin, int dest, int purpose, float direct, float[] baseDemand, float[] destDir)
     {
         int dKind = StationKind(dest);
         float baseD = baseDemand[dest];
+        float distDenom = OdDistanceDenominator(stations[origin].region, stations[dest].region, direct, purpose);
         if (purpose == 0)
         {
             float hour = dayClock / GameDaySeconds * 24f;
@@ -166,17 +173,17 @@ public partial class DemoBootstrap
             float kindMult = dKind == 2 ? (0.75f + 1.65f * morning + 0.25f * evening)
                 : dKind == 1 ? (0.65f + 0.20f * morning + 1.60f * evening)
                 : dKind == 3 ? 0.35f : 0.85f;
-            return baseD * destDir[dest] * kindMult / (55f + direct);
+            return baseD * destDir[dest] * kindMult / distDenom;
         }
         if (purpose == 1)
         {
             bool hasScenery = StationHasScenery(dest);
             float sceneryMult = hasScenery ? 2.85f : (dKind == 4 ? 1.15f : 0.30f);
             float crossMult = stations[origin].region != stations[dest].region ? 1.35f : 1f;
-            return baseD * sceneryMult * crossMult / (95f + direct * 0.55f);
+            return baseD * sceneryMult * crossMult / distDenom;
         }
         float leisureMult = dKind == 2 ? 1.35f : dKind == 3 ? 1.15f : dKind == 4 ? 1.25f : 0.90f;
-        return baseD * destDir[dest] * leisureMult / (48f + direct);
+        return baseD * destDir[dest] * leisureMult / distDenom;
     }
     int DispatchSlot() { float h = dayClock / GameDaySeconds * 24f; return h >= 6f && h < 10f ? 0 : h >= 10f && h < 16f ? 1 : h >= 16f && h < 20f ? 2 : 3; }
     int RunningTrains(Line line) { return Mathf.Clamp(line.dispatch[DispatchSlot()], 0, line.trains); }
@@ -221,26 +228,26 @@ public partial class DemoBootstrap
     Vector2 EconomicPosition(int index)
     {
         var station=stations[index];
-        if (StationInRegion(index,"粤海")) return PosInRegion(index,"粤海");
-        if (station.region == "香埠") {
-            if (hkEconomicAnchor == -2) hkEconomicAnchor = stations.FindIndex(x=>x.name=="新安（西渡）");
+        if (StationInRegion(index,"榕川")) return PosInRegion(index,"榕川");
+        if (station.region == "汐港") {
+            if (hkEconomicAnchor == -2) hkEconomicAnchor = stations.FindIndex(x=>x.name=="东湾（西渡）");
             int anchor = hkEconomicAnchor;
-            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"粤海") : new Vector2(615,900);
-            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"香埠") : new Vector2(590,865);
-            return origin+(PosInRegion(index,"香埠")-localAnchor)*0.4f;
+            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"榕川") : new Vector2(615,900);
+            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"汐港") : new Vector2(590,865);
+            return origin+(PosInRegion(index,"汐港")-localAnchor)*0.4f;
         }
-        if (station.region == "莲澳") {
-            if (macauEconomicAnchor == -2) macauEconomicAnchor = stations.FindIndex(x=>x.name=="香山（北关）");
+        if (station.region == "镜屿") {
+            if (macauEconomicAnchor == -2) macauEconomicAnchor = stations.FindIndex(x=>x.name=="青藤（北关）");
             int anchor = macauEconomicAnchor;
-            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"粤海") : new Vector2(540,850);
-            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"莲澳") : new Vector2(540,900);
-            return origin+(PosInRegion(index,"莲澳")-localAnchor)*0.4f;
+            Vector2 origin=anchor>=0 ? PosInRegion(anchor,"榕川") : new Vector2(540,850);
+            Vector2 localAnchor=anchor>=0 ? PosInRegion(anchor,"镜屿") : new Vector2(540,900);
+            return origin+(PosInRegion(index,"镜屿")-localAnchor)*0.4f;
         }
         return Pos(index);
     }
     float EconomicSegmentDistance(int a,int b,string region)
     {
-        float scale = region == "粤海" ? 1f : 0.4f;
+        float scale = region == "榕川" ? 1f : 0.4f;
         return Vector2.Distance(PosInRegion(a,region),PosInRegion(b,region))*scale;
     }
     float EconomicPathLength(List<int> path)
@@ -355,68 +362,88 @@ public partial class DemoBootstrap
     bool TryExtractPath(
         int origin, int dest, int lineCount, int[,] node,
         float[] dist, int[] prev, int[] prevSection, float[] prevDistance,
-        int[] nodeLine, int[] nodeStation, out TrafficPathSolution sol)
+        int[] nodeLine, int[] nodeStation,
+        List<int> tmpSections, List<int> tmpStations, List<int> tmpLineIds, List<float> tmpLineDists,
+        List<int> flatStPool, List<int> flatSecPool, List<LineDistPart> flatPartPool,
+        out TrafficPathSolution sol)
     {
         sol = default;
         int target = -1; float best = float.PositiveInfinity;
         for (int l = 0; l < lineCount; l++)
         {
-            if (node[l, dest] >= 0 && dist[node[l, dest]] < best) { target = node[l, dest]; best = dist[target]; }
+            int idx = node[l, dest];
+            if (idx >= 0 && dist[idx] < best) { target = idx; best = dist[idx]; }
         }
         if (target < 0) return false;
-        var sections = new List<int>();
-        var stationSet = new HashSet<int> { origin, dest };
-        var lineDist = new Dictionary<int, float>();
+        tmpSections.Clear();
+        tmpStations.Clear();
+        tmpStations.Add(origin);
+        if (dest != origin) tmpStations.Add(dest);
+        tmpLineIds.Clear();
+        tmpLineDists.Clear();
         float pathDistance = 0f;
         for (int u = target; prev[u] >= 0; u = prev[u])
         {
             int v = prev[u], section = prevSection[u];
             if (section >= 0)
             {
-                sections.Add(section);
+                tmpSections.Add(section);
                 int l = nodeLine[u];
                 float d = prevDistance[u];
-                lineDist[l] = lineDist.TryGetValue(l, out float prevD) ? prevD + d : d;
+                int found = -1;
+                for (int k = 0; k < tmpLineIds.Count; k++) if (tmpLineIds[k] == l) { found = k; break; }
+                if (found >= 0) tmpLineDists[found] += d;
+                else { tmpLineIds.Add(l); tmpLineDists.Add(d); }
                 pathDistance += d;
             }
-            else if (nodeStation[u] == nodeStation[v]) stationSet.Add(nodeStation[u]);
+            else if (nodeStation[u] == nodeStation[v])
+            {
+                int st = nodeStation[u];
+                if (!tmpStations.Contains(st)) tmpStations.Add(st);
+            }
         }
-        if (pathDistance <= 0f || lineDist.Count == 0) return false;
-        var stArr = new int[stationSet.Count];
-        stationSet.CopyTo(stArr);
+        if (pathDistance <= 0f || tmpLineIds.Count == 0) return false;
+        int stOff = flatStPool.Count, stLen = tmpStations.Count;
+        for (int k = 0; k < stLen; k++) flatStPool.Add(tmpStations[k]);
+        int secOff = flatSecPool.Count, secLen = tmpSections.Count;
+        for (int k = 0; k < secLen; k++) flatSecPool.Add(tmpSections[k]);
+        int partOff = flatPartPool.Count, partLen = tmpLineIds.Count;
+        for (int k = 0; k < partLen; k++) flatPartPool.Add(new LineDistPart { line = tmpLineIds[k], dist = tmpLineDists[k] });
         sol = new TrafficPathSolution
         {
             target = target, cost = best, pathDistance = pathDistance,
-            stations = stArr, sections = sections.ToArray(), lineDistance = lineDist
+            stOff = stOff, stLen = stLen, secOff = secOff, secLen = secLen, partOff = partOff, partLen = partLen
         };
         return true;
     }
 
-    static bool SameRouteSections(int[] a, int[] b)
+    static bool SameRouteSections(List<int> secPool, int offA, int lenA, int offB, int lenB)
     {
-        if (a == null || b == null || a.Length != b.Length) return false;
-        for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+        if (lenA != lenB) return false;
+        for (int i = 0; i < lenA; i++) if (secPool[offA + i] != secPool[offB + i]) return false;
         return true;
     }
 
     void RegisterTripToResult(
         TrafficResult result, List<TrafficTrip> trips, List<Line> serviceLines,
+        List<int> flatStPool, List<int> flatSecPool, List<LineDistPart> flatPartPool,
         int origin, int dest, int purpose, float desiredSub, float directDistance,
         TrafficPathSolution sol, Dictionary<int, TrafficDestFlow> destTracker, bool trackElastic)
     {
         float detour = sol.pathDistance / Mathf.Max(30f, directDistance);
         float detourFactor = detour <= 1.25f ? 1f : Mathf.Clamp(1f - 1.2f * (detour - 1.25f), 0.15f, 1f);
         float fareBase = 0f, speed = 0f;
-        foreach (var part in sol.lineDistance)
+        for (int k = 0; k < sol.partLen; k++)
         {
-            float share = part.Value / sol.pathDistance;
-            fareBase += serviceLines[part.Key].fare * share;
-            speed += FleetTrait(serviceLines[part.Key], 2) * share;
+            var part = flatPartPool[sol.partOff + k];
+            float share = part.dist / sol.pathDistance;
+            fareBase += serviceLines[part.line].fare * share;
+            speed += FleetTrait(serviceLines[part.line], 2) * share;
         }
         // 票价基于起终点直达距离，绕远不能凭空增加票款。
-        float fare = fareBase + 0.002f * directDistance;
-        float priceFactor = Mathf.Clamp(0.65f * Mathf.Exp(-0.85f * (fare / (1.5f + 0.002f * directDistance) - 1f)), 0.1f, 1f);
-        float realized = detourFactor * priceFactor / (1f + sol.cost * 0.062f);
+        float fare = fareBase + 0.0036f * directDistance;
+        float priceFactor = Mathf.Clamp(0.65f * Mathf.Exp(-0.85f * (fare / (1.5f + 0.0036f * directDistance) - 1f)), 0.1f, 1f);
+        float realized = detourFactor * priceFactor / (1f + sol.cost * 0.036f);
         float amount = desiredSub * realized;
         if (trackElastic)
         {
@@ -427,14 +454,14 @@ public partial class DemoBootstrap
         }
         if (amount <= 0.001f) return;
         float bonus = 1f + Mathf.Max(0f, speed - 1f) * Mathf.Clamp01(directDistance / 1200f) * 0.5f;
-        foreach (int st in sol.stations) result.demand[st] += amount;
-        foreach (int section in sol.sections) result.sectionDemand[section] += amount;
-        foreach (var part in sol.lineDistance) result.lineDemand[serviceLines[part.Key]] += amount;
+        for (int k = 0; k < sol.stLen; k++) result.demand[flatStPool[sol.stOff + k]] += amount;
+        for (int k = 0; k < sol.secLen; k++) result.sectionDemand[flatSecPool[sol.secOff + k]] += amount;
+        for (int k = 0; k < sol.partLen; k++) result.lineDemand[serviceLines[flatPartPool[sol.partOff + k].line]] += amount;
         trips.Add(new TrafficTrip
         {
             origin = origin, dest = dest, purpose = purpose,
             amount = amount, fare = fare, bonus = bonus,
-            stations = sol.stations, sections = sol.sections, lineDistance = sol.lineDistance
+            stOff = sol.stOff, stLen = sol.stLen, secOff = sol.secOff, secLen = sol.secLen, partOff = sol.partOff, partLen = sol.partLen
         });
     }
 
@@ -551,7 +578,11 @@ public partial class DemoBootstrap
             destLeisAttr[i] = baseD * destDir * leisureMult;
         }
 
-        // 复用单套 Dijkstra 缓冲区，消除按出发站重复分配数组与堆内存。
+        // 复用单套 Dijkstra 缓冲区与路径提取工作区，消除按出发站/OD 对重复分配容器。
+        var stationServed = new bool[count];
+        for (int i = 0; i < count; i++)
+            for (int l = 0; l < lineCount; l++) if (node[l, i] >= 0) { stationServed[i] = true; break; }
+
         var dijkHeap = new TrafficHeap();
         var dijkDone = new bool[n];
         var dijkDist = new float[n];
@@ -561,16 +592,20 @@ public partial class DemoBootstrap
         var w0 = new float[count];
         var w1 = new float[count];
         var w2 = new float[count];
+        var tmpSections = new List<int>(64);
+        var tmpStations = new List<int>(16);
+        var tmpLineIds = new List<int>(8);
+        var tmpLineDists = new List<float>(8);
+        var flatStPool = new List<int>(8192);
+        var flatSecPool = new List<int>(16384);
+        var flatPartPool = new List<LineDistPart>(4096);
 
         // 第 1 轮：三目的分层 OD（通勤 / 观光 / 休闲商业）+ 无拥堵基准最短路
         for (int origin = 0; origin < count; origin++)
         {
             originPendingStart[origin] = pending.Count;
             originPendingEnd[origin] = pending.Count;
-            if (stations[origin].closed) continue;
-            bool servedOrigin = false;
-            for (int l = 0; l < lineCount; l++) if (node[l, origin] >= 0) { servedOrigin = true; break; }
-            if (!servedOrigin) continue;
+            if (stations[origin].closed || !stationServed[origin]) continue;
             originServedFlags[origin] = true;
 
             RunDijkstraPass(n, lineCount, origin, serviceLines, node, edges, null, null, nodeStArr,
@@ -584,10 +619,13 @@ public partial class DemoBootstrap
             {
                 if (dest == origin || stations[dest].closed) continue;
                 float direct = Vector2.Distance(originPos, positions[dest]);
-                w0[dest] = destCommAttr[dest] / (55f + direct); tot0 += w0[dest];
-                float crossMult = originReg != stationRegArr[dest] ? 1.35f : 1f;
-                w1[dest] = destTourAttr[dest] * crossMult / (95f + direct * 0.55f); tot1 += w1[dest];
-                w2[dest] = destLeisAttr[dest] / (48f + direct); tot2 += w2[dest];
+                // 抑制两个交界站之间的直达需求，防止多条线路绕经交界站互相刷客流。
+                float portalPairMult = (stations[origin].portal && stations[dest].portal) ? 0.12f : 1f;
+                string destReg = stationRegArr[dest];
+                w0[dest] = destCommAttr[dest] * portalPairMult / OdDistanceDenominator(originReg, destReg, direct, 0); tot0 += w0[dest];
+                float crossMult = originReg != destReg ? 1.35f : 1f;
+                w1[dest] = destTourAttr[dest] * crossMult * portalPairMult / OdDistanceDenominator(originReg, destReg, direct, 1); tot1 += w1[dest];
+                w2[dest] = destLeisAttr[dest] * portalPairMult / OdDistanceDenominator(originReg, destReg, direct, 2); tot2 += w2[dest];
             }
             if (tot0 + tot1 + tot2 <= 0f) continue;
 
@@ -606,11 +644,19 @@ public partial class DemoBootstrap
                 if (dSum <= 0.001f) continue;
 
                 float direct = Vector2.Distance(originPos, positions[dest]);
-                if (!TryExtractPath(origin, dest, lineCount, node, dijkDist, dijkPrev, dijkPrevSec, dijkPrevDist, nodeLineArr, nodeStArr, out TrafficPathSolution sol0))
+                TrafficPathSolution sol0 = default;
+                bool reachable = stationServed[dest] && TryExtractPath(
+                    origin, dest, lineCount, node, dijkDist, dijkPrev, dijkPrevSec, dijkPrevDist,
+                    nodeLineArr, nodeStArr, tmpSections, tmpStations, tmpLineIds, tmpLineDists,
+                    flatStPool, flatSecPool, flatPartPool, out sol0);
+                if (!reachable)
                 {
-                    if (StationInRegion(dest, currentRegion) || stations[dest].built || stations[dest].portal)
+                    bool relevant = StationInRegion(dest, currentRegion) || stations[dest].built || stations[dest].portal;
+                    if (relevant)
+                    {
                         result.stationUnreached[origin] += dSum * 0.35f;
-                    dMap[dest] = new TrafficDestFlow { dest = dest, desired = dSum, served = 0f, reachable = false };
+                        dMap[dest] = new TrafficDestFlow { dest = dest, desired = dSum, served = 0f, reachable = false };
+                    }
                     continue;
                 }
 
@@ -618,12 +664,16 @@ public partial class DemoBootstrap
                 float detour = sol0.pathDistance / Mathf.Max(30f, direct);
                 float detourF = detour <= 1.25f ? 1f : Mathf.Clamp(1f - 1.2f * (detour - 1.25f), 0.15f, 1f);
                 float fareB = 0f;
-                foreach (var part in sol0.lineDistance) fareB += serviceLines[part.Key].fare * (part.Value / sol0.pathDistance);
-                float estFare = fareB + 0.002f * direct;
-                float priceF = Mathf.Clamp(0.65f * Mathf.Exp(-0.85f * (estFare / (1.5f + 0.002f * direct) - 1f)), 0.1f, 1f);
-                float estFlow = dSum * detourF * priceF / (1f + sol0.cost * 0.062f);
-                foreach (int st in sol0.stations) pass1StDemand[st] += estFlow;
-                foreach (int sec in sol0.sections) pass1SecDemand[sec] += estFlow;
+                for (int k = 0; k < sol0.partLen; k++)
+                {
+                    var part = flatPartPool[sol0.partOff + k];
+                    fareB += serviceLines[part.line].fare * (part.dist / sol0.pathDistance);
+                }
+                float estFare = fareB + 0.0036f * direct;
+                float priceF = Mathf.Clamp(0.65f * Mathf.Exp(-0.85f * (estFare / (1.5f + 0.0036f * direct) - 1f)), 0.1f, 1f);
+                float estFlow = dSum * detourF * priceF / (1f + sol0.cost * 0.036f);
+                for (int k = 0; k < sol0.stLen; k++) pass1StDemand[flatStPool[sol0.stOff + k]] += estFlow;
+                for (int k = 0; k < sol0.secLen; k++) pass1SecDemand[flatSecPool[sol0.secOff + k]] += estFlow;
 
                 pending.Add(new PendingOdPair { origin = origin, dest = dest, directDistance = direct, d0 = d0, d1 = d1, d2 = d2, sol0 = sol0 });
             }
@@ -665,8 +715,10 @@ public partial class DemoBootstrap
                 for (int idx = start; idx < end; idx++)
                 {
                     var od = pending[idx];
-                    bool splitValid = TryExtractPath(od.origin, od.dest, lineCount, node, dijkDist, dijkPrev, dijkPrevSec, dijkPrevDist, nodeLineArr, nodeStArr, out TrafficPathSolution solAlt) &&
-                        !SameRouteSections(od.sol0.sections, solAlt.sections);
+                    bool splitValid = TryExtractPath(od.origin, od.dest, lineCount, node, dijkDist, dijkPrev, dijkPrevSec, dijkPrevDist,
+                        nodeLineArr, nodeStArr, tmpSections, tmpStations, tmpLineIds, tmpLineDists,
+                        flatStPool, flatSecPool, flatPartPool, out TrafficPathSolution solAlt) &&
+                        !SameRouteSections(flatSecPool, od.sol0.secOff, od.sol0.secLen, solAlt.secOff, solAlt.secLen);
                     float p0Share = splitValid ? 1f - splitAlpha : 1f;
                     for (int p = 0; p < 3; p++)
                     {
@@ -674,12 +726,12 @@ public partial class DemoBootstrap
                         if (dp <= 0.0005f) continue;
                         if (splitValid)
                         {
-                            RegisterTripToResult(result, trips, serviceLines, od.origin, od.dest, p, dp * p0Share, od.directDistance, od.sol0, dMap, true);
-                            RegisterTripToResult(result, trips, serviceLines, od.origin, od.dest, p, dp * splitAlpha, od.directDistance, solAlt, dMap, true);
+                            RegisterTripToResult(result, trips, serviceLines, flatStPool, flatSecPool, flatPartPool, od.origin, od.dest, p, dp * p0Share, od.directDistance, od.sol0, dMap, true);
+                            RegisterTripToResult(result, trips, serviceLines, flatStPool, flatSecPool, flatPartPool, od.origin, od.dest, p, dp * splitAlpha, od.directDistance, solAlt, dMap, true);
                         }
                         else
                         {
-                            RegisterTripToResult(result, trips, serviceLines, od.origin, od.dest, p, dp, od.directDistance, od.sol0, dMap, true);
+                            RegisterTripToResult(result, trips, serviceLines, flatStPool, flatSecPool, flatPartPool, od.origin, od.dest, p, dp, od.directDistance, od.sol0, dMap, true);
                         }
                     }
                 }
@@ -695,7 +747,7 @@ public partial class DemoBootstrap
                 {
                     float dp = p == 0 ? od.d0 : (p == 1 ? od.d1 : od.d2);
                     if (dp <= 0.0005f) continue;
-                    RegisterTripToResult(result, trips, serviceLines, od.origin, od.dest, p, dp, od.directDistance, od.sol0, dMap, true);
+                    RegisterTripToResult(result, trips, serviceLines, flatStPool, flatSecPool, flatPartPool, od.origin, od.dest, p, dp, od.directDistance, od.sol0, dMap, true);
                 }
             }
         }
@@ -710,11 +762,20 @@ public partial class DemoBootstrap
                 result.lineSegLoad[sk] = loadRatio;
         }
         float revenueMultiplier = TechMult() * PartnerRevenueFactor();
-        foreach (var trip in trips)
+        for (int idx = 0; idx < trips.Count; idx++)
         {
+            var trip = trips[idx];
             float factor = 1f;
-            foreach (int st in trip.stations) if (result.demand[st] > 0) factor = Mathf.Min(factor, stationCap[st] / result.demand[st]);
-            foreach (int section in trip.sections) if (result.sectionDemand[section] > 0) factor = Mathf.Min(factor, result.sectionCapacity[section] / result.sectionDemand[section]);
+            for (int k = 0; k < trip.stLen; k++)
+            {
+                int st = flatStPool[trip.stOff + k];
+                if (result.demand[st] > 0) factor = Mathf.Min(factor, stationCap[st] / result.demand[st]);
+            }
+            for (int k = 0; k < trip.secLen; k++)
+            {
+                int sec = flatSecPool[trip.secOff + k];
+                if (result.sectionDemand[sec] > 0) factor = Mathf.Min(factor, result.sectionCapacity[sec] / result.sectionDemand[sec]);
+            }
             factor = Mathf.Clamp01(factor);
             float served = trip.amount * factor;
             float crowdCut = trip.amount - served;
@@ -726,21 +787,23 @@ public partial class DemoBootstrap
             }
             if (served <= 0f) continue;
 
-            foreach (int st in trip.stations) result.served[st] += served;
-            foreach (int section in trip.sections) result.sectionServed[section] += served;
+            for (int k = 0; k < trip.stLen; k++) result.served[flatStPool[trip.stOff + k]] += served;
+            for (int k = 0; k < trip.secLen; k++) result.sectionServed[flatSecPool[trip.secOff + k]] += served;
             result.stationPurposeServed[trip.origin, trip.purpose] += served;
             if (destTrackers.TryGetValue(trip.origin, out var dTracker) && dTracker.TryGetValue(trip.dest, out var destFlow))
                 destFlow.served += served;
 
-            float distance = 0f; foreach (float d in trip.lineDistance.Values) distance += d;
+            float distance = 0f;
+            for (int k = 0; k < trip.partLen; k++) distance += flatPartPool[trip.partOff + k].dist;
             float revenue = served * trip.fare / 10f * trip.bonus * revenueMultiplier;
             float tripTotalRev = 0f;
-            foreach (var part in trip.lineDistance)
+            for (int k = 0; k < trip.partLen; k++)
             {
-                var line = serviceLines[part.Key];
+                var part = flatPartPool[trip.partOff + k];
+                var line = serviceLines[part.line];
                 bool lineHasScenery = LineHasSceneryStation(line);
                 float policyRevMult = (companyPolicy == 1 ? 0.95f : (companyPolicy == 3 && lineHasScenery ? 1.10f : 1f)) * CycleRevenueFactor(lineHasScenery) * (lineHasScenery ? CoTechTourismLineMult() : 1f) * LineTalentRevenueMult(line);
-                float partRev = revenue * part.Value / distance * (SkinCategory(GetLineSkin(line)) == 0 ? 1.06f : 1f) * policyRevMult;
+                float partRev = revenue * part.dist / distance * (SkinCategory(GetLineSkin(line)) == 0 ? 1.06f : 1f) * policyRevMult;
                 result.lineServed[line] += served; result.lineRevenue[line] += partRev; tripTotalRev += partRev;
             }
             result.totalPassengers += served; result.totalRevenue += tripTotalRev;
@@ -977,26 +1040,145 @@ public partial class DemoBootstrap
             return hash;
         }
     }
-    void RebuildForecasts()
+    int pendingForecastMask;
+    float pendingForecastCooldown;
+    int lastTrafficTopologySig;
+    bool hasTrafficTopologySig;
+    static readonly float[] ForecastSlotHours = { 8f, 13f, 18f, 1f };
+    static readonly float[] ForecastSlotFractions = { 4f / 24f, 6f / 24f, 4f / 24f, 10f / 24f };
+    int TrafficTopologySignature()
     {
-        InitHistoryTree(); SyncResearchEffects();
-        int signature=ForecastSignature();
-        if (hasForecastSignature && signature==forecastSignature) return;
-        lineForecasts.Clear(); foreach (var line in lines) lineForecasts[line] = new LineForecastData();
+        unchecked
+        {
+            int hash = 17;
+            hash = hash * 31 + (currentRegion != null ? currentRegion.GetHashCode() : 0);
+            hash = hash * 31 + companyPolicy;
+            hash = hash * 31 + economyCycle;
+            hash = hash * 31 + (consultantDaysLeft > 0 ? consultantId + 100 : 0);
+            foreach (int pid in boardPartners) hash = hash * 31 + (pid + 7);
+            foreach (var line in lines)
+            {
+                hash = hash * 31 + line.GetHashCode(); hash = hash * 31 + line.trains; hash = hash * 31 + line.fare.GetHashCode();
+                foreach (int v in line.st) hash = hash * 31 + v;
+                foreach (int v in line.dispatch) hash = hash * 31 + v;
+            }
+            foreach (var station in stations)
+            {
+                hash = hash * 31 + station.level; hash = hash * 31 + (station.closed ? 1 : 0);
+                hash = hash * 31 + station.trafficEvent; hash = hash * 31 + station.facLevel;
+            }
+            foreach (var v in researchVehicles) if (v.lineId != 0) { hash = hash * 31 + v.node; hash = hash * 31 + v.lineId; }
+            foreach (string key in techDone)
+                if (historyByKey.TryGetValue(key, out var hn) && hn.loco < 0 && hn.effect != ResearchEffect.Vehicle && hn.effect != ResearchEffect.Track && hn.effect != ResearchEffect.None)
+                    hash = hash * 31 + key.GetHashCode();
+            foreach (string ck in companyTechDone)
+                if (coTechByKey.TryGetValue(ck, out var cn) && (cn.effKind == "Speed" || cn.effKind == "Transfer" || cn.effKind == "Demand" || cn.effKind == "SceneryDemand" || cn.effKind == "StationCap" || cn.effKind == "Revenue" || cn.effKind == "Tourism" || string.IsNullOrEmpty(cn.effKind)))
+                    hash = hash * 31 + ck.GetHashCode();
+            foreach (var tl in talents)
+                if (tl.assignKind != 0) { hash = hash * 31 + tl.id; hash = hash * 31 + tl.level; hash = hash * 31 + tl.assignKind; hash = hash * 31 + tl.assignLineId; }
+            hash = hash * 31 + FoundCount();
+            hash = hash * 31 + CrossBaySynergyLinkCount();
+            return hash;
+        }
+    }
+    void RecomputeForecastSlot(int slot)
+    {
         float savedClock = dayClock;
-        float[] hours = { 8f, 13f, 18f, 1f }, fractions = { 4f/24f, 6f/24f, 4f/24f, 10f/24f };
-        try {
-            for (int slot=0; slot<4; slot++) {
-                dayClock = hours[slot] * GameDaySeconds / 24f;
-                var projected = CalculateTraffic(); trafficSlots[slot] = projected; SaveActiveTraffic(projected, slot);
-                foreach (var line in lines) {
-                    var f = lineForecasts[line]; f.gross += TrafficRevenue(line,projected)*fractions[slot];
-                    f.vehicle += VehicleMaintenance(line)*fractions[slot]; f.track += TrackMaintenance(line)*fractions[slot];
+        try
+        {
+            dayClock = ForecastSlotHours[slot] * GameDaySeconds / 24f;
+            var projected = CalculateTraffic();
+            trafficSlots[slot] = projected;
+            SaveActiveTraffic(projected, slot);
+        }
+        finally { dayClock = savedClock; }
+    }
+    void SummarizeLineForecastsFromSlots()
+    {
+        lineForecasts.Clear();
+        foreach (var line in lines) lineForecasts[line] = new LineForecastData();
+        float savedClock = dayClock;
+        try
+        {
+            for (int slot = 0; slot < 4; slot++)
+            {
+                var projected = trafficSlots[slot];
+                if (projected == null) continue;
+                dayClock = ForecastSlotHours[slot] * GameDaySeconds / 24f;
+                float frac = ForecastSlotFractions[slot];
+                foreach (var line in lines)
+                {
+                    var f = lineForecasts[line];
+                    f.gross += TrafficRevenue(line, projected) * frac;
+                    f.vehicle += VehicleMaintenance(line) * frac;
+                    f.track += TrackMaintenance(line) * frac;
                 }
             }
-        } finally { dayClock = savedClock; }
-        foreach (var f in lineForecasts.Values) f.tax = Mathf.Max(0f,f.gross-f.vehicle-f.track)*0.1f;
-        forecastSignature=signature; hasForecastSignature=true;
+        }
+        finally { dayClock = savedClock; }
+        foreach (var f in lineForecasts.Values) f.tax = Mathf.Max(0f, f.gross - f.vehicle - f.track) * 0.1f;
+    }
+    void TickProgressiveForecasts()
+    {
+        if (pendingForecastMask == 0 || !hasForecastSignature) return;
+        if (pageRoot != null || sceneryViewer != null) return; // 打开全屏手帐/科技树时不抢占主线程帧时间
+        if (pendingForecastCooldown > 0f) { pendingForecastCooldown -= Time.unscaledDeltaTime; return; }
+        for (int slot = 0; slot < 4; slot++)
+        {
+            int bit = 1 << slot;
+            if ((pendingForecastMask & bit) == 0) continue;
+            pendingForecastMask &= ~bit;
+            pendingForecastCooldown = 0.14f;
+            RecomputeForecastSlot(slot);
+            if (pendingForecastMask == 0)
+            {
+                SummarizeLineForecastsFromSlots();
+                traffic = trafficSlots[DispatchSlot()];
+                RebuildOperatingRates();
+                float total = 0f;
+                foreach (var line in lines) total += ForecastFor(line).Profit;
+                total += StationCommercialTotalDaily() + TourismDividendDaily() + CycleDailySubsidy() + CrossBaySynergyDailyBonus();
+                income = total;
+                RefreshHUD();
+                UpdateLineTrafficColors();
+                MarkRingsDirty();
+            }
+            break;
+        }
+    }
+    void RebuildForecasts(bool allowProgressive = false)
+    {
+        InitHistoryTree(); SyncResearchEffects(); EnsureCoTechIndexBuilt();
+        int signature = ForecastSignature();
+        if (hasForecastSignature && signature == forecastSignature) return;
+        int topoSig = TrafficTopologySignature();
+        bool topoSame = hasTrafficTopologySig && topoSig == lastTrafficTopologySig && trafficSlots[DispatchSlot()] != null;
+        if (topoSame)
+        {
+            // 仅经济/维护/造价类参数变化（如点选维护类科技或购置未上线机车），完全跳过 Dijkstra！
+            pendingForecastMask = 0;
+            SummarizeLineForecastsFromSlots();
+            forecastSignature = signature; hasForecastSignature = true;
+            if (!estimatingResearchProfit) unchecked { researchForecastEpoch++; }
+            return;
+        }
+        bool progressive = allowProgressive && Application.isPlaying && !estimatingResearchProfit && hasForecastSignature;
+        if (progressive)
+        {
+            int curSlot = DispatchSlot();
+            RecomputeForecastSlot(curSlot);
+            pendingForecastMask = 0;
+            pendingForecastCooldown = 0.14f;
+            for (int s = 0; s < 4; s++) if (s != curSlot) pendingForecastMask |= 1 << s;
+        }
+        else
+        {
+            pendingForecastMask = 0;
+            for (int slot = 0; slot < 4; slot++) RecomputeForecastSlot(slot);
+        }
+        SummarizeLineForecastsFromSlots();
+        forecastSignature = signature; hasForecastSignature = true;
+        lastTrafficTopologySig = topoSig; hasTrafficTopologySig = true;
         // Explicit rebuilds can follow invalidations beyond the signature fields.
         // Speculative research/restore passes must not evict other node estimates.
         if (!estimatingResearchProfit) unchecked { researchForecastEpoch++; }
@@ -1174,6 +1356,7 @@ public partial class DemoBootstrap
             }
 
             float score = gravity * 1.45f + unmetOd + gapBonus + hubBonus + crowdBonus;
+            if (stations[anchorIdx].portal && stations[j].portal) score *= 0.12f;
             if (hasDirect)
             {
                 float relief = maxSharedLoad >= 0.78f ? Mathf.Lerp(0.75f, 1.35f, Mathf.Clamp01((maxSharedLoad - 0.78f) / 0.35f)) : 0.24f;
@@ -1225,6 +1408,7 @@ public partial class DemoBootstrap
             float dist = Mathf.Max(26f, Vector2.Distance(PosInRegion(src, currentRegion), PosInRegion(candToIdx, currentRegion)));
             float srcWeight = Mathf.Max(20f, StationBaseDemand(src));
             float basePair = Mathf.Sqrt(srcWeight * toWeight) * (240f / (64f + dist * 0.55f));
+            if (stations[src].portal && stations[candToIdx].portal) basePair *= 0.12f;
 
             bool directExists = false;
             float sharedLoad = 0f;

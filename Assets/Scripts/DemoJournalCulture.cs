@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -113,7 +113,7 @@ public partial class DemoBootstrap
             demandMult = 1.00f, sceneryDemandMult = 1.10f, revenueMult = 1.00f, maintMult = 1.00f, commercialMult = 1.00f
         },
         new SolarTermSpec {
-            name = "谷雨", season = "春 · 新茗", poem = "雨前茶香出粤海，一笛清风入香埠。",
+            name = "谷雨", season = "春 · 新茗", poem = "雨前茶香出榕川，一笛清风入汐港。",
             effectHint = "全网票款收益 +6%",
             demandMult = 1.00f, sceneryDemandMult = 1.02f, revenueMult = 1.06f, maintMult = 1.00f, commercialMult = 1.00f
         },
@@ -214,31 +214,31 @@ public partial class DemoBootstrap
         {
             new MemorialTicketSpec {
                 key = "tkt_first_line", serial = "NO.1804", title = "初发南疆 · 首班通车票",
-                routeText = "起始站 ━━▶ 终点站", stampText = "首班\n初笛", regionTag = "香埠",
+                routeText = "起始站 ━━▶ 终点站", stampText = "首班\n初笛", regionTag = "汐港",
                 motto = "第一道墨色轨线落笔成路，旅人怀票登车。",
                 checkEarned = () => lines.Count >= 1
             },
             new MemorialTicketSpec {
                 key = "tkt_hk_6", serial = "NO.1835", title = "青湾汽笛 · 半岛联线票",
-                routeText = "石板街 ━━▶ 九曲码头", stampText = "香埠\n青湾", regionTag = "香埠",
+                routeText = "海晏台 ━━▶ 九曲码头", stampText = "汐港\n青湾", regionTag = "汐港",
                 motto = "山海环抱六站连珠，叮叮车铃与蒸汽声相和。",
-                checkEarned = () => RegionConnectedCount("香埠") >= 6
+                checkEarned = () => RegionConnectedCount("汐港") >= 6
             },
             new MemorialTicketSpec {
-                key = "tkt_macau", serial = "NO.1848", title = "青莲长桥 · 莲澳渡海票",
-                routeText = "茨林围 ━━▶ 龙环村", stampText = "莲澳\n青瓷", regionTag = "莲澳",
+                key = "tkt_macau", serial = "NO.1848", title = "青莲长桥 · 镜屿渡海票",
+                routeText = "古石围 ━━▶ 翠环村", stampText = "镜屿\n青瓷", regionTag = "镜屿",
                 motto = "越过湛蓝海面踏入石板老街，海风里满是咸甜香气。",
-                checkEarned = () => macauUnlocked && RegionConnectedCount("莲澳") >= 2
+                checkEarned = () => macauUnlocked && RegionConnectedCount("镜屿") >= 2
             },
             new MemorialTicketSpec {
-                key = "tkt_gd", serial = "NO.1862", title = "百花晨露 · 粤海干线票",
-                routeText = "新安城 ━━▶ 五羊城 · 骑楼老街", stampText = "粤海\n百花", regionTag = "粤海",
-                motto = "北上粤海万顷良田与骑楼长市，快线雏形已现。",
-                checkEarned = () => guangdongUnlocked && RegionConnectedCount("粤海") >= 3
+                key = "tkt_gd", serial = "NO.1862", title = "百花晨露 · 榕川干线票",
+                routeText = "东湾城 ━━▶ 南羊城 · 骑楼老街", stampText = "榕川\n百花", regionTag = "榕川",
+                motto = "北上榕川万顷良田与骑楼长市，快线雏形已现。",
+                checkEarned = () => guangdongUnlocked && RegionConnectedCount("榕川") >= 3
             },
             new MemorialTicketSpec {
                 key = "tkt_bay", serial = "NO.1885", title = "三地金钥 · 口岸联运票",
-                routeText = "香埠 ━━▶ 莲澳 / 新安城", stampText = "三域\n联运", regionTag = "山海湾",
+                routeText = "汐港 ━━▶ 镜屿 / 东湾城", stampText = "三域\n联运", regionTag = "山海湾",
                 motto = "一票可跨三关，海湾晨昏皆为通途。",
                 checkEarned = () => CrossBaySynergyLinkCount() >= 1
             },

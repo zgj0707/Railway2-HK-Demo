@@ -185,7 +185,7 @@ public partial class DemoBootstrap
         int n = line.st.Count;
         if (!IsLoop(line.st) && n > 3 && seg > 0 && seg < n - 2) {
             var head = line.st.GetRange(0, seg + 1); var tailPath = line.st.GetRange(seg + 1, n - seg - 1);
-            foreach (string region in new[] { "香埠", "莲澳", "粤海" }) {
+            foreach (string region in new[] { "汐港", "镜屿", "榕川" }) {
                 int after = RegionLineCount(region) - (PathTouchesRegion(line.st, region) ? 1 : 0)
                     + (PathTouchesRegion(head, region) ? 1 : 0) + (PathTouchesRegion(tailPath, region) ? 1 : 0);
                 if (after > RegionLineLimit(region)) { Toast(region + "线路已达上限，无法拆分该段"); return; }
@@ -306,7 +306,7 @@ public partial class DemoBootstrap
         }
 
         Txt(p.transform, "运 营", 26, Ink, 36, 470 + extra, 300, 36, TextAnchor.MiddleLeft);
-        Txt(p.transform, "车站 " + unique + " · 列车 " + line.trains + "/8 · 线路长度 " + Mathf.RoundToInt(EconomicPathLength(line.st)) + " 地图单位", 23, Ink, 36, 420 + extra, 860, 36, TextAnchor.MiddleLeft);
+        Txt(p.transform, "车站 " + unique + " · 列车 " + line.trains + "/8 · 线路长度 " + FormatLineKm(line.st), 23, Ink, 36, 420 + extra, 860, 36, TextAnchor.MiddleLeft);
         Txt(p.transform, "最高区段需求 " + Mathf.RoundToInt(LinePeakSectionDemand(line)) + " 人次/日 · 平均速度 " + Mathf.RoundToInt(FleetTrait(line, 2)*100) + "%", 23, InkSoft, 36, 382 + extra, 860, 34, TextAnchor.MiddleLeft);
         if (seg >= 0 && seg < line.st.Count - 1)
             Txt(p.transform, "选中段：" + stations[line.st[seg]].name + " ⇄ " + stations[line.st[seg + 1]].name, 22, line.color, 36, 344 + extra, 860, 34, TextAnchor.MiddleLeft);
@@ -410,8 +410,9 @@ public partial class DemoBootstrap
     bool CanInsertStation(Line line, int segment, int target)
     {
         if (line == null || !lines.Contains(line) || segment < 0 || segment >= line.st.Count - 1 ||
-            target < 0 || target >= stations.Count || line.st.Contains(target) || stations[target].portal) return false;
+            target < 0 || target >= stations.Count || line.st.Contains(target)) return false;
         int a = line.st[segment], b = line.st[segment + 1];
+        if (stations[target].portal && (stations[a].portal || stations[b].portal)) return false;
         return StationInRegion(target, currentRegion) && SegmentRegion(a, b) == currentRegion &&
             SegmentRegion(a, target) == currentRegion && SegmentRegion(target, b) == currentRegion;
     }

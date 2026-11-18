@@ -186,19 +186,15 @@ public partial class DemoBootstrap
             bgRaw.color = neon ? new Color(0.38f, 0.46f, 0.86f, 0.90f) : Color.white;
         }
 
-        var centerHaze = Rect("CenterHaze", artClip.transform, artW * 0.5f - 310f, artH * 0.5f - 115f, 620f, 276f);
-        var hazeImg = Img(centerHaze, neon ? new Color(0.05f, 0.08f, 0.19f, 0.58f) : new Color(0.988f, 0.972f, 0.932f, 0.58f), spriteCircle);
-        hazeImg.raycastTarget = false;
-
         // 顶部抵达邮戳标签
-        var arrivalPill = Rect("ArrivalBadge", artClip.transform, (artW - 316f) * 0.5f, artH - 58f, 316f, 36f);
+        var arrivalPill = Rect("ArrivalBadge", artClip.transform, (artW - 220f) * 0.5f, artH - 58f, 220f, 36f);
         Rounded(arrivalPill, neon ? Gold : spec.frameAccent);
         arrivalPill.GetComponent<Image>().raycastTarget = false;
-        Txt(arrivalPill.transform, "抵 达 版 图  ·  ARRIVAL", 18, neon ? new Color(0.08f, 0.08f, 0.14f) : Color.white, 16f, 0f, 284f, 36f, TextAnchor.MiddleCenter);
+        Txt(arrivalPill.transform, "抵 达 版 图", 19, neon ? new Color(0.08f, 0.08f, 0.14f) : Color.white, 0f, 0f, 220f, 36f, TextAnchor.MiddleCenter);
 
-        // 居中书法集字（支持动态缩放与淡入揭幕）
-        const float titleW = 540f, titleH = 204f;
-        float titleX = (artW - titleW) * 0.5f, titleY = (artH - titleH) * 0.5f + 22f;
+        // 居中书法集字（无椭圆遮罩与副标题，放大字形并强化柔光外轮廓）
+        const float titleW = 640f, titleH = 241f;
+        float titleX = (artW - titleW) * 0.5f, titleY = (artH - titleH) * 0.5f + 12f;
         var titleHolder = Rect("TitleReveal", artClip.transform, titleX, titleY, titleW, titleH);
         var titleRt = titleHolder.GetComponent<RectTransform>();
         titleRt.pivot = new Vector2(0.5f, 0.5f);
@@ -209,9 +205,15 @@ public partial class DemoBootstrap
         var titleTex = (hasSpec && !string.IsNullOrEmpty(spec.titleMaskPath)) ? Resources.Load<Texture2D>(spec.titleMaskPath) : null;
         if (titleTex)
         {
-            var halo = Rect("Halo", titleHolder.transform, 0f, -3f, titleW, titleH).AddComponent<RawImage>();
-            halo.texture = titleTex; halo.raycastTarget = false;
-            halo.color = neon ? new Color(0.02f, 0.03f, 0.09f, 0.90f) : new Color(0.996f, 0.984f, 0.948f, 0.90f);
+            Color haloCol = neon ? new Color(0.02f, 0.03f, 0.09f, 0.94f) : new Color(0.996f, 0.986f, 0.955f, 0.92f);
+            float[] ox = { -2.5f, 2.5f, 0f, 0f };
+            float[] oy = { 0f, 0f, -2.5f, 2.5f };
+            for (int k = 0; k < 4; k++)
+            {
+                var halo = Rect("Halo_" + k, titleHolder.transform, ox[k], oy[k], titleW, titleH).AddComponent<RawImage>();
+                halo.texture = titleTex; halo.raycastTarget = false;
+                halo.color = haloCol;
+            }
 
             var glyph = Rect("Calligraphy", titleHolder.transform, 0f, 0f, titleW, titleH).AddComponent<RawImage>();
             glyph.texture = titleTex; glyph.raycastTarget = false;
@@ -221,10 +223,10 @@ public partial class DemoBootstrap
         {
             string spaced = (hasSpec ? spec.key : DisplayPlaceAliases(title)).Replace(" ", "");
             if (spaced.Length == 2) spaced = spaced[0] + "   " + spaced[1];
-            Color haloCol = neon ? new Color(0.02f, 0.03f, 0.09f, 0.90f) : new Color(0.996f, 0.984f, 0.948f, 0.92f);
+            Color haloCol = neon ? new Color(0.02f, 0.03f, 0.09f, 0.92f) : new Color(0.996f, 0.984f, 0.948f, 0.94f);
             Color inkCol = hasSpec ? (neon ? spec.neonInk : spec.dayInk) : (neon ? Gold : Ink);
-            Txt(titleHolder.transform, spaced, 108, haloCol, 2f, -3f, titleW, titleH, TextAnchor.MiddleCenter).raycastTarget = false;
-            Txt(titleHolder.transform, spaced, 108, inkCol, 0f, 0f, titleW, titleH, TextAnchor.MiddleCenter).raycastTarget = false;
+            Txt(titleHolder.transform, spaced, 120, haloCol, 2f, -3f, titleW, titleH, TextAnchor.MiddleCenter).raycastTarget = false;
+            Txt(titleHolder.transform, spaced, 120, inkCol, 0f, 0f, titleW, titleH, TextAnchor.MiddleCenter).raycastTarget = false;
         }
 
         // 中线金/青花装饰线（从中心向外舒展）
@@ -235,17 +237,6 @@ public partial class DemoBootstrap
         var ruleImg = Img(rule, neon ? spec.neonInk : spec.frameAccent, spriteRound);
         ruleImg.raycastTarget = false;
         ruleRt.localScale = new Vector3(0f, 1f, 1f);
-
-        // 书法出处与城市风貌副标胶囊
-        float subW = 472f;
-        var subPill = Rect("SubPill", artClip.transform, (artW - subW) * 0.5f, 36f, subW, 40f);
-        Rounded(subPill, neon ? new Color(0.07f, 0.10f, 0.22f, 0.84f) : new Color(0.992f, 0.978f, 0.946f, 0.88f));
-        subPill.GetComponent<Image>().raycastTarget = false;
-        var subCg = subPill.AddComponent<CanvasGroup>();
-        subCg.alpha = 0f;
-        var subTxt = Txt(subPill.transform, hasSpec ? spec.subtitle : DisplayPlaceAliases(title), 22,
-            neon ? new Color(0.90f, 0.94f, 1f) : Ink, 16f, 0f, subW - 32f, 40f, TextAnchor.MiddleCenter);
-        FitSingleLine(subTxt, 22);
 
         // 高画质附加轻盈浮金与花瓣星芒点缀
         List<RectTransform> sparkles = null;
@@ -271,11 +262,11 @@ public partial class DemoBootstrap
         var cg = regionCurtainGo.AddComponent<CanvasGroup>();
         cg.blocksRaycasts = false;
         cg.alpha = 0f;
-        regionCurtainCo = StartCoroutine(CoRegionCurtain(regionCurtainGo, cg, cardRt, bgRaw, bgTex, titleRt, titleCg, ruleRt, subCg, sparkles));
+        regionCurtainCo = StartCoroutine(CoRegionCurtain(regionCurtainGo, cg, cardRt, bgRaw, bgTex, titleRt, titleCg, ruleRt, sparkles));
     }
 
     IEnumerator CoRegionCurtain(GameObject go, CanvasGroup cg, RectTransform cardRt, RawImage bgRaw, Texture2D bgTex,
-        RectTransform titleRt, CanvasGroup titleCg, RectTransform ruleRt, CanvasGroup subCg, List<RectTransform> sparkles)
+        RectTransform titleRt, CanvasGroup titleCg, RectTransform ruleRt, List<RectTransform> sparkles)
     {
         float inDur = 0.16f, holdDur = 0.48f, outDur = 0.36f;
         float totalDur = inDur + holdDur + outDur;
@@ -353,9 +344,6 @@ public partial class DemoBootstrap
 
             float ruleP = Mathf.Clamp01((elapsed - 0.06f) / 0.18f);
             if (ruleRt) ruleRt.localScale = new Vector3(1f - Mathf.Pow(1f - ruleP, 3f), 1f, 1f);
-
-            float subP = Mathf.Clamp01((elapsed - 0.09f) / 0.17f);
-            if (subCg) subCg.alpha = 1f - Mathf.Pow(1f - subP, 2f);
 
             yield return null;
         }

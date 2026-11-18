@@ -73,7 +73,7 @@ def audit():
     assert 'shopCategory = 0;' in page and 'fleetBack = lineFleetShopReturn;' in page and 'OpenFleetTab(2)' in page
     assert 'lineFleetShopReturn = () => OpenLineFleet(line)' in page
     assert 'LocoPrice' not in page and 'PurchaseLoco' not in page and 'coins -=' not in page
-    assert 'OpenLineFleet(line, () => OpenLineScreen(line.id))' in screens
+    assert 'FleetDropdownHeader' in screens and 'OpsDropdownHeader' in screens
     assert 'OpenLineFleet(line, () => OpenFleetTab(0))' in screens
     assert 'OpenLineFleet(line, () => OpenLineOperations(line), slot, amount)' in screens
     interactions = (ROOT / 'DemoLineInteractions.cs').read_text(encoding='utf-8-sig')

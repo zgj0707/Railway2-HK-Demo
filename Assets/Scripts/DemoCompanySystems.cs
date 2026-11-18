@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -237,8 +237,8 @@ public partial class DemoBootstrap
         },
         new CompanyTechNode {
             key = "co_re_3", eraGroup = 0, year = 1888, branch = 1,
-            title = "扯旗山缆车特许", periodLabel = "1888 年 · 香埠山顶缆车通车",
-            desc = "1888 年香埠山顶缆车通车，缔造观光交通与半山地产共荣典范，名胜车站由此成为全网客流高地。",
+            title = "望海峰缆车特许", periodLabel = "1888 年 · 汐港山顶缆车通车",
+            desc = "1888 年汐港山顶缆车通车，缔造观光交通与半山地产共荣典范，名胜车站由此成为全网客流高地。",
             effectSummary = "名胜地标站点基础吸引客流再 +4%", parents = new[] { "co_rateact_1887", "co_inst_0_56" }
         },
 
@@ -258,7 +258,7 @@ public partial class DemoBootstrap
         new CompanyTechNode {
             key = "co_re_4", eraGroup = 0, year = 1898, branch = 1,
             title = "跨湾枢纽综合体", periodLabel = "1898 年 · 跨湾干线草约与总站规划",
-            desc = "1898 年粤海至香埠干线勘线草约签订，规划海港大枢纽与周边货栈商业街，打造跨城站城一体化枢纽。",
+            desc = "1898 年榕川至汐港干线勘线草约签订，规划海港大枢纽与周边货栈商业街，打造跨城站城一体化枢纽。",
             effectSummary = "站前物业总租金再 +4%，全网车站吞吐上限 +4%", parents = new[] { "co_inst_0_70", "co_inst_3_64", "co_inst_4_73" }
         },
         new CompanyTechNode {
@@ -432,38 +432,71 @@ public partial class DemoBootstrap
         float t = Mathf.Clamp01((node.year - 1800f) / 99f);
         return Mathf.Clamp(Mathf.RoundToInt(1f + t * 14f), 1, 15);
     }
+    float CoTechCostScale(CompanyTechNode node)
+    {
+        if (node == null) return 1f;
+        int cost = CoTechCoinCost(node);
+        float costTier = Mathf.Max(0f, Mathf.Log10(Mathf.Max(1000f, cost) / 1000f));
+        return 1f + costTier * 0.75f;
+    }
+    float CoTechScaledEffVal(CompanyTechNode node)
+    {
+        if (node == null) return 0f;
+        if (!string.IsNullOrEmpty(node.resolvedBy)) return node.effVal; // 历史教训负面数值不放大
+        return node.effVal * CoTechCostScale(node);
+    }
+    float CoTechLegacyMult(string key, float baseSignedDelta)
+    {
+        if (!HasCoTech(key)) return 1f;
+        EnsureCoTechIndexBuilt();
+        float scale = coTechByKey.TryGetValue(key, out var node) ? CoTechCostScale(node) : 1f;
+        return 1f + baseSignedDelta * scale;
+    }
+    string CoTechScaledSummary(CompanyTechNode node)
+    {
+        if (node == null || string.IsNullOrEmpty(node.effectSummary)) return "";
+        if (!string.IsNullOrEmpty(node.resolvedBy) || node.branch == 4) return node.effectSummary;
+        float scale = CoTechCostScale(node);
+        if (scale <= 1.05f) return node.effectSummary;
+        return System.Text.RegularExpressions.Regex.Replace(node.effectSummary, @"([+-]?)(\d+)%", m =>
+        {
+            if (int.TryParse(m.Groups[2].Value, out int pct))
+                return m.Groups[1].Value + Mathf.Max(pct, Mathf.RoundToInt(pct * scale)) + "%";
+            return m.Value;
+        });
+    }
     float CoTechEffectMult(string kind)
     {
         EnsureCoTechIndexBuilt();
         float result = 1f;
         foreach (string key in companyTechDone)
             if (coTechByKey.TryGetValue(key, out var node) && node.effKind == kind &&
-                (string.IsNullOrEmpty(node.resolvedBy) || !HasCoTech(node.resolvedBy))) result *= 1f + node.effVal;
+                (string.IsNullOrEmpty(node.resolvedBy) || !HasCoTech(node.resolvedBy))) result *= 1f + CoTechScaledEffVal(node);
         return result;
     }
 
     // ---------- 公司科技全局乘区（纯读取、与已有模型无缝相乘） ----------
     int CoTechExtraSeats() => (HasCoTech("co_hr_2") ? 1 : 0) + (HasCoTech("co_hr_4") ? 1 : 0);
-    float CoTechPartnerConMitigation() => HasCoTech("co_hr_4") ? 0.96f : 1f;
-    float CoTechTrainXpMult() => ((HasCoTech("co_hr_1") ? 1.04f : 1f) * (HasCoTech("co_hr_3") ? 1.04f : 1f) * (HasCoTech("co_pension_1868") ? 1.04f : 1f)) * CoTechEffectMult("TrainXp");
-    float CoTechTrainCostMult() => Mathf.Max(0.45f, ((HasCoTech("co_hr_3") ? 0.96f : 1f) * (HasCoTech("co_pension_1868") ? 0.96f : 1f)) * CoTechEffectMult("TrainCost"));
-    float CoTechOpenCostMult() => Mathf.Max(0.50f, ((HasCoTech("co_charter_1801") ? 0.97f : 1f) * (HasCoTech("co_booth_1826") ? 0.96f : 1f) * (HasCoTech("co_re_1") ? 0.96f : 1f) * (HasCoTech("co_woosung_1876") && !HasCoTech("co_audit_1885") ? 1.03f : 1f)) * CoTechEffectMult("OpenCost"));
-    float CoTechCommercialMult() => ((HasCoTech("co_re_1") ? 1.04f : 1f) * (HasCoTech("co_hotel_1854") ? 1.04f : 1f) * (HasCoTech("co_re_2") ? 1.04f : 1f) * (HasCoTech("co_re_4") ? 1.04f : 1f)) * CoTechEffectMult("Commercial");
-    float CoTechSceneryDemandMult() => ((HasCoTech("co_hotel_1854") ? 1.04f : 1f) * (HasCoTech("co_re_3") ? 1.04f : 1f)) * CoTechEffectMult("SceneryDemand");
-    float CoTechStationCapMult() => (HasCoTech("co_re_4") ? 1.04f : 1f) * CoTechEffectMult("StationCap");
-    float CoTechTrackBuildMult() => Mathf.Max(0.50f, ((HasCoTech("co_stock_1821") ? 0.96f : 1f) * (HasCoTech("co_fin_1") ? 0.96f : 1f) * (HasCoTech("co_audit_1885") ? 0.96f : 1f)) * CoTechEffectMult("TrackBuild"));
-    float CoTechMaintMult() => Mathf.Max(0.45f, ((HasCoTech("co_fin_1") ? 0.96f : 1f) * (HasCoTech("co_mania_1845") && !HasCoTech("co_fin_2") ? 1.03f : 1f) * (HasCoTech("co_waybill_1871") ? 0.96f : 1f) * (HasCoTech("co_fin_4") ? 0.96f : 1f)) * CoTechEffectMult("Maint"));
-    float CoTechBondCapMult() => (HasCoTech("co_fin_2") ? 1.04f : 1f) * CoTechEffectMult("BondCap");
-    float CoTechBondDueMult() => Mathf.Max(0.45f, ((HasCoTech("co_fin_2") ? 0.96f : 1f) * (HasCoTech("co_audit_1885") ? 0.96f : 1f)) * CoTechEffectMult("BondDue"));
+    float CoTechPartnerConMitigation() => HasCoTech("co_hr_4") ? 0.90f : 1f;
+    float CoTechTrainXpMult() => (CoTechLegacyMult("co_hr_1", 0.04f) * CoTechLegacyMult("co_hr_3", 0.04f) * CoTechLegacyMult("co_pension_1868", 0.04f)) * CoTechEffectMult("TrainXp");
+    float CoTechTrainCostMult() => Mathf.Max(0.32f, (CoTechLegacyMult("co_hr_3", -0.04f) * CoTechLegacyMult("co_pension_1868", -0.04f)) * CoTechEffectMult("TrainCost"));
+    float CoTechOpenCostMult() => Mathf.Max(0.35f, (CoTechLegacyMult("co_charter_1801", -0.03f) * CoTechLegacyMult("co_booth_1826", -0.04f) * CoTechLegacyMult("co_re_1", -0.04f) * (HasCoTech("co_woosung_1876") && !HasCoTech("co_audit_1885") ? 1.03f : 1f)) * CoTechEffectMult("OpenCost"));
+    float CoTechCommercialMult() => (CoTechLegacyMult("co_re_1", 0.04f) * CoTechLegacyMult("co_hotel_1854", 0.04f) * CoTechLegacyMult("co_re_2", 0.04f) * CoTechLegacyMult("co_re_4", 0.04f)) * CoTechEffectMult("Commercial");
+    float CoTechSceneryDemandMult() => (CoTechLegacyMult("co_hotel_1854", 0.04f) * CoTechLegacyMult("co_re_3", 0.04f)) * CoTechEffectMult("SceneryDemand");
+    float CoTechStationCapMult() => CoTechLegacyMult("co_re_4", 0.04f) * CoTechEffectMult("StationCap");
+    float CoTechTrackBuildMult() => Mathf.Max(0.35f, (CoTechLegacyMult("co_stock_1821", -0.04f) * CoTechLegacyMult("co_fin_1", -0.04f) * CoTechLegacyMult("co_audit_1885", -0.04f)) * CoTechEffectMult("TrackBuild"));
+    float CoTechMaintMult() => Mathf.Max(0.32f, (CoTechLegacyMult("co_fin_1", -0.04f) * (HasCoTech("co_mania_1845") && !HasCoTech("co_fin_2") ? 1.03f : 1f) * CoTechLegacyMult("co_waybill_1871", -0.04f) * CoTechLegacyMult("co_fin_4", -0.04f)) * CoTechEffectMult("Maint"));
+    float CoTechBondCapMult() => CoTechLegacyMult("co_fin_2", 0.04f) * CoTechEffectMult("BondCap");
+    float CoTechBondDueMult() => Mathf.Max(0.35f, (CoTechLegacyMult("co_fin_2", -0.04f) * CoTechLegacyMult("co_audit_1885", -0.04f)) * CoTechEffectMult("BondDue"));
     int CoTechContractCap() => HasCoTech("co_fin_3") ? 3 : 2;
-    float CoTechContractBonusMult() => HasCoTech("co_fin_3") ? 1.04f : 1f;
-    float CoTechSpeedMult() => (HasCoTech("co_ops_1") ? 1.04f : 1f) * CoTechEffectMult("Speed");
-    float CoTechRpMult() => ((HasCoTech("co_ops_1") ? 1.04f : 1f) * (HasCoTech("co_kaiping_1881") ? 1.04f : 1f)) * CoTechEffectMult("Rp");
-    float CoTechTransferMult() => Mathf.Max(0.55f, ((HasCoTech("co_rch_1842") ? 0.96f : 1f) * (HasCoTech("co_ops_2") ? 0.96f : 1f)) * CoTechEffectMult("Transfer"));
-    float CoTechRevenueMult() => ((HasCoTech("co_fare_act_1844") ? 1.03f : 1f) * (HasCoTech("co_ops_2") ? 1.04f : 1f) * (HasCoTech("co_rateact_1887") ? 1.04f : 1f) * (HasCoTech("co_fin_4") ? 1.04f : 1f)) * CoTechEffectMult("Revenue");
-    float CoTechTourismLineMult() => (HasCoTech("co_ops_3") ? 1.04f : 1f) * CoTechEffectMult("Tourism");
-    float CoTechBaseDemandMult() => ((HasCoTech("co_fare_act_1844") ? 1.04f : 1f) * (HasCoTech("co_kaiping_1881") ? 1.04f : 1f) * (HasCoTech("co_ops_4") ? 1.04f : 1f)) * CoTechEffectMult("Demand");
-    float CoTechAwardMult() => (HasCoTech("co_ops_4") ? 1.04f : 1f) * CoTechEffectMult("Award");
+    float CoTechContractBonusMult() => CoTechLegacyMult("co_fin_3", 0.04f);
+    float CoTechSpeedMult() => CoTechLegacyMult("co_ops_1", 0.04f) * CoTechEffectMult("Speed");
+    float CoTechRpMult() => (CoTechLegacyMult("co_ops_1", 0.04f) * CoTechLegacyMult("co_kaiping_1881", 0.04f)) * CoTechEffectMult("Rp");
+    float CoTechTransferMult() => Mathf.Max(0.38f, (CoTechLegacyMult("co_rch_1842", -0.04f) * CoTechLegacyMult("co_ops_2", -0.04f)) * CoTechEffectMult("Transfer"));
+    float CoTechRevenueMult() => (CoTechLegacyMult("co_fare_act_1844", 0.03f) * CoTechLegacyMult("co_ops_2", 0.04f) * CoTechLegacyMult("co_rateact_1887", 0.04f) * CoTechLegacyMult("co_fin_4", 0.04f)) * CoTechEffectMult("Revenue");
+    float CoTechTourismLineMult() => CoTechLegacyMult("co_ops_3", 0.04f) * CoTechEffectMult("Tourism");
+    float CoTechBaseDemandMult() => (CoTechLegacyMult("co_fare_act_1844", 0.04f) * CoTechLegacyMult("co_kaiping_1881", 0.04f) * CoTechLegacyMult("co_ops_4", 0.04f)) * CoTechEffectMult("Demand");
+    float CoTechAwardMult() => CoTechLegacyMult("co_ops_4", 0.04f) * CoTechEffectMult("Award");
 
     float MitigateCon(float rawDelta)
     {
@@ -509,7 +542,7 @@ public partial class DemoBootstrap
         if (t.assignKind == 1 && !string.IsNullOrEmpty(t.assignStationKey))
         {
             int stIdx = FindStationIndexByKey(t.assignStationKey);
-            return stIdx >= 0 ? "驻站 · " + stations[stIdx].name : "驻站 · " + t.assignStationKey;
+            return stIdx >= 0 ? "驻站 · " + StationDisplayName(stIdx, stations[stIdx].region) : "驻站 · " + t.assignStationKey;
         }
         if (t.assignKind == 2 && t.assignLineId > 0)
         {
@@ -930,7 +963,7 @@ public partial class DemoBootstrap
             items.Add(($"随线执勤 · {l.name}（{l.st.Count} 站）", 2, l.id, ""));
         for (int i = 0; i < stations.Count && items.Count < 42; i++)
             if (stations[i].built && !stations[i].closed)
-                items.Add(($"驻守车站 · {stations[i].name}（{stations[i].region}）", 1, 0, StationSaveKey(stations[i])));
+                items.Add(($"驻守车站 · {StationDisplayName(i, stations[i].region)}（{stations[i].region}）", 1, 0, StationSaveKey(stations[i])));
 
         float rowH = 84f;
         const float popW = 860f, scrollX = 28f, scrollW = 804f, scrollBottom = 114f;

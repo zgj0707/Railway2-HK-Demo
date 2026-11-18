@@ -10,43 +10,43 @@ public partial class DemoBootstrap
     {
         var go = Rect("BaseMap", parent, 0, 0, W, H);
         var raw = go.AddComponent<RawImage>();
-        if (qualityTier > 0 || currentRegion == "香埠")
+        if (qualityTier > 0 || currentRegion == "汐港")
             raw.texture = Resources.Load<Texture2D>("MapArt/hongkong_illustrated");
         raw.color = Themes[Mathf.Clamp(currentTheme, 0, Themes.Length - 1)].mapTint;
         raw.raycastTarget = false;
         hkMapRaw = raw;
     }
 
-    // 粤海地图为手绘风格示意，不绘制行政边界。
+    // 榕川地图为手绘风格示意，不绘制行政边界。
     GameObject BuildGuangdongMap(Transform parent)
     {
         var go = Rect("GuangdongArt", parent, 0, 0, W, H);
         var raw = go.AddComponent<RawImage>(); raw.raycastTarget = false;
-        if (qualityTier > 0 || currentRegion == "粤海")
+        if (qualityTier > 0 || currentRegion == "榕川")
             raw.texture = Resources.Load<Texture2D>("MapArt/guangdong_illustrated");
         raw.color = Themes[Mathf.Clamp(currentTheme, 0, Themes.Length - 1)].mapTint;
         guangdongMapRaw = raw;
         var rt = go.GetComponent<RectTransform>();
-        Label(rt, "粤 海", 34, 0.48f, 0.84f, new Color(0.40f,0.38f,0.32f,0.70f), 200);
+        Label(rt, "榕 川", 34, 0.48f, 0.84f, new Color(0.40f,0.38f,0.32f,0.70f), 200);
         var hint = Txt(go.transform, "放大地图查看县级站点", 22, new Color(0.28f,0.34f,0.31f,0.78f), 580, 230, 450, 36, TextAnchor.MiddleRight);
         hint.raycastTarget = false;
         return go;
     }
 
-    // 莲澳示意轮廓为手绘海湾图。
+    // 镜屿示意轮廓为手绘海湾图。
     GameObject BuildMacauMap(Transform parent)
     {
         var go = Rect("MacauArt", parent, 0, 0, W, H);
         var raw = go.AddComponent<RawImage>(); raw.raycastTarget = false;
-        if (qualityTier > 0 || currentRegion == "莲澳")
+        if (qualityTier > 0 || currentRegion == "镜屿")
             raw.texture = Resources.Load<Texture2D>("MapArt/macau_osm");
         raw.color = Themes[Mathf.Clamp(currentTheme, 0, Themes.Length - 1)].mapTint;
         macauMapRaw = raw;
         var rt = go.GetComponent<RectTransform>();
         var labelColor = new Color(0.40f,0.38f,0.32f,0.70f);
-        Label(rt, "莲澳北岸", 25, MacauX(113.542f), MacauY(22.224f), labelColor, 180);
-        Label(rt, "潭仔", 24, MacauX(113.550f), MacauY(22.171f), labelColor, 150);
-        Label(rt, "龙环村", 24, MacauX(113.566f), MacauY(22.136f), labelColor, 150);
+        Label(rt, "镜屿北岸", 25, MacauX(113.542f), MacauY(22.224f), labelColor, 180);
+        Label(rt, "莲心仔", 24, MacauX(113.550f), MacauY(22.171f), labelColor, 150);
+        Label(rt, "翠环村", 24, MacauX(113.566f), MacauY(22.136f), labelColor, 150);
         Label(rt, "松风屿", 24, MacauX(113.564f), MacauY(22.105f), labelColor, 150);
         var credit = Txt(go.transform, "© OpenStreetMap contributors", 20, new Color(0.22f,0.30f,0.31f,0.72f), 540, 188, 520, 32, TextAnchor.MiddleRight);
         credit.raycastTarget = false;
@@ -59,17 +59,17 @@ public partial class DemoBootstrap
         bool lowMem = qualityTier <= 0;
         if (hkMapRaw)
         {
-            if (lowMem && currentRegion != "香埠") hkMapRaw.texture = null;
+            if (lowMem && currentRegion != "汐港") hkMapRaw.texture = null;
             else if (!hkMapRaw.texture) hkMapRaw.texture = Resources.Load<Texture2D>("MapArt/hongkong_illustrated");
         }
         if (guangdongMapRaw)
         {
-            if (lowMem && currentRegion != "粤海") guangdongMapRaw.texture = null;
+            if (lowMem && currentRegion != "榕川") guangdongMapRaw.texture = null;
             else if (!guangdongMapRaw.texture) guangdongMapRaw.texture = Resources.Load<Texture2D>("MapArt/guangdong_illustrated");
         }
         if (macauMapRaw)
         {
-            if (lowMem && currentRegion != "莲澳") macauMapRaw.texture = null;
+            if (lowMem && currentRegion != "镜屿") macauMapRaw.texture = null;
             else if (!macauMapRaw.texture) macauMapRaw.texture = Resources.Load<Texture2D>("MapArt/macau_osm");
         }
     }

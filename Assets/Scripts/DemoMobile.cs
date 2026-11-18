@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
@@ -219,7 +219,7 @@ public partial class DemoBootstrap
         string modeDesc = bgmPlayMode == 1
             ? "始终播放经典长曲《Between the Bow and Breath》"
             : bgmPlayMode == 2
-                ? "始终随「香埠 / 莲澳 / 粤海」切换区域配乐"
+                ? "始终随「汐港 / 镜屿 / 榕川」切换区域配乐"
                 : "地图播区域曲，进入内页自动淡入经典长曲（记忆进度）";
         var modeHint = Txt(bgmCard.transform, modeDesc, 23, InkSoft, cardPad, 92f, cardInnerW, 38f, TextAnchor.MiddleLeft);
         FitSingleLine(modeHint, 23);
@@ -547,41 +547,41 @@ public partial class DemoBootstrap
         var station = stations[index];
         switch (station.name)
         {
-            case "五羊城": return "沧海之畔的商贸名城，街巷烟火与繁华市集交融。";
-            case "新安（西渡）": return "连接香埠与粤海的跨区域交通节点。";
-            case "香山（北关）": return "海岛与海湾相映的滨海城镇，邻接莲澳。";
-            case "石龙镇": return "水乡与手工作坊交织，城镇生活充满活力。";
-            case "西湖墟": return "山海相依，湖光与海岸风景相伴。";
-            case "祖庙镇": return "南溟水乡与传统手艺相映的城市。";
-            case "石岐墟": return "水网密布的滨海侨乡，延续着古朴文脉。";
-            case "曲江口": return "山水环绕的北岭门户，奇峰丹崖风光闻名。";
-            case "樟林港": return "滨海商埠，海派食肆与古港记忆交织。";
-            case "蓬江墟": return "五津水乡，骑楼与老街故事相伴。";
-            case "赤坎埠": return "沧海半岛上的滨海港城，面海而兴。";
-            case "高凉城": return "西海之滨城市，海岸与百果林乡相伴。";
-            case "端州墟": return "西川之畔，山水与古砚文脉相映。";
-            case "松口镇": return "山间古驿之乡，围屋与乡村风物相连。";
-            case "汕尾港": return "依山面海的城市，渔港与海岸风光相伴。";
-            case "东江埠": return "山水相依的东溪上游城市。";
-            case "海陵港": return "滨海山城，以海景与传统铁艺工坊闻名。";
-            case "清远墟": return "北溪穿城而过，山水与温泉相伴。";
-            case "牌坊街": return "青溪之畔的古城，保留着传统古街风韵。";
-            case "榕城墟": return "海滨平原上的城镇，绿榕水穿城而过。";
-            case "罗定墟": return "群山之间的采石之乡，依西川而展。";
-            case "桥头关": return "连接两地的口岸站，旅客往来频繁。";
-            case "伶仃桥": return "跨越海湾的交通节点，连接三地。";
-            case "石板街": return "海港边的商业街区，都市与山景相邻。";
-            case "码头咀": return "临海的繁华街区，可远眺鲤鱼门海角。";
-            case "东涌口": return "苍岚岛北岸的社区，邻近山海风景。";
-            case "芒角墟": return "街市与商铺密集，生活气息浓厚。";
-            case "茨林围": return "老城街巷环绕，留存着历史建筑风貌。";
-            case "潭仔": return "海岛社区与街巷美食交融的区域。";
-            case "荔枝碗": return "海岸与山林相伴，保留宁静的岛屿风貌。";
+            case "南羊城": return "沧海之畔的商贸名城，街巷烟火与繁华市集交融。";
+            case "东湾（西渡）": return "连接汐港与榕川的跨区域交通节点。";
+            case "青藤（北关）": return "海岛与海湾相映的滨海城镇，邻接镜屿。";
+            case "百川镇": return "水乡与手工作坊交织，城镇生活充满活力。";
+            case "鹅山墟": return "山海相依，湖光与海岸风景相伴。";
+            case "明珠镇": return "南溟水乡与传统手艺相映的城市。";
+            case "锦溪墟": return "水网密布的滨海侨乡，延续着古朴文脉。";
+            case "五岭口": return "山水环绕的北岭门户，奇峰丹崖风光闻名。";
+            case "潮风港": return "滨海商埠，海派食肆与古港记忆交织。";
+            case "银江墟": return "五津水乡，骑楼与老街故事相伴。";
+            case "雷海埠": return "沧海半岛上的滨海港城，面海而兴。";
+            case "荔枝城": return "西海之滨城市，海岸与百果林乡相伴。";
+            case "砚山墟": return "西川之畔，山水与古砚文脉相映。";
+            case "寒香镇": return "山间古驿之乡，围屋与乡村风物相连。";
+            case "白浪港": return "依山面海的城市，渔港与海岸风光相伴。";
+            case "东溪埠": return "山水相依的东溪上游城市。";
+            case "银滩港": return "滨海山城，以海景与传统铁艺工坊闻名。";
+            case "北山墟": return "北溪穿城而过，山水与温泉相伴。";
+            case "金凤城": return "青溪之畔的古城，保留着传统古街风韵。";
+            case "榕荫墟": return "海滨平原上的城镇，绿榕水穿城而过。";
+            case "石鼓墟": return "群山之间的采石之乡，依西川而展。";
+            case "北桥关": return "连接两地的口岸站，旅客往来频繁。";
+            case "跨海虹桥": return "跨越海湾的交通节点，连接三地。";
+            case "海晏台": return "海港边的商业街区，都市与山景相邻。";
+            case "翠竹咀": return "临海的繁华街区，可远眺帆影港。";
+            case "东山涌": return "苍岚岛北岸的社区，邻近山海风景。";
+            case "旺市角": return "街市与商铺密集，生活气息浓厚。";
+            case "古石围": return "老城街巷环绕，留存着历史建筑风貌。";
+            case "莲心仔": return "海岛社区与街巷美食交融的区域。";
+            case "木船厂": return "海岸与山林相伴，保留宁静的岛屿风貌。";
         }
         if (!string.IsNullOrEmpty(station.city))
             return "位于" + station.city + "，连接周边城镇与社区。";
-        if (station.region == "莲澳") return "莲澳的沿线区域，山海古韵交融。";
-        if (station.region == "香埠") return "香埠的沿线区域，山海与城市相伴。";
+        if (station.region == "镜屿") return "镜屿的沿线区域，山海古韵交融。";
+        if (station.region == "汐港") return "汐港的沿线区域，山海与城市相伴。";
         return "沿线城镇与社区相连的地区。";
     }
 
@@ -799,8 +799,59 @@ public partial class DemoBootstrap
             Toast("站前商业升至" + StationFacilityNames[station.facLevel]);
         });
         TInk(facBtn, curFac < 3 ? Color.white : InkSoft);
-        var close = Btn(p.transform, "StationClose", "关闭", 26, 38, 36, 882, 80, new Color(0.92f,0.89f,0.83f), () => { ClosePanel(true); ShowStationActions(index); });
+        var rename = Btn(p.transform, "StationRename", "修改站名", 26, 38, 36, 420, 80, Indigo, () => OpenStationRenamePopup(index));
+        TInk(rename, Color.white);
+        var close = Btn(p.transform, "StationClose", "关闭", 26, 500, 36, 420, 80, new Color(0.92f,0.89f,0.83f), () => { ClosePanel(true); ShowStationActions(index); });
         TInk(close, Ink);
+    }
+    void OpenStationRenamePopup(int index)
+    {
+        if (index < 0 || index >= stations.Count) return;
+        var station = stations[index];
+        var p = OpenPopup("修改站点名称", 430, 840, "station_rename_" + index);
+        Txt(p.transform, "默认站名：" + station.name + "（最多 12 字，不影响线路与存档绑定）", 23, InkSoft, 36, 286, 768, 38, TextAnchor.MiddleLeft);
+        var inputBox = Rect("StationNameInput", p.transform, 36, 174, 768, 86);
+        Rounded(inputBox, new Color(1f, 0.99f, 0.97f)); SoftShadow(inputBox);
+        var placeholder = Txt(inputBox.transform, "请输入新的站点名称", 28, new Color(InkSoft.r, InkSoft.g, InkSoft.b, 0.45f), 22, 8, 724, 70, TextAnchor.MiddleLeft);
+        var inputText = Txt(inputBox.transform, "", 30, Ink, 22, 8, 724, 70, TextAnchor.MiddleLeft);
+        inputText.supportRichText = false;
+        var input = inputBox.AddComponent<InputField>();
+        input.textComponent = inputText;
+        input.placeholder = placeholder;
+        input.characterLimit = 12;
+        input.lineType = InputField.LineType.SingleLine;
+        input.text = StationDisplayName(index, currentRegion);
+        input.ActivateInputField();
+        Action<string> applyName = raw => {
+            string cleaned = string.IsNullOrWhiteSpace(raw) ? "" : raw.Replace("\r", "").Replace("\n", "").Replace(":", "").Trim();
+            if (cleaned.Length > 12) cleaned = cleaned.Substring(0, 12);
+            if (string.IsNullOrEmpty(cleaned)) { PlayErrorSfx(); Toast("站名不能为空"); return; }
+            string nextCustom = cleaned == station.name ? "" : cleaned;
+            if ((station.customName ?? "") == nextCustom) { OpenStationInfo(index); return; }
+            BeginUndo("修改站名");
+            station.customName = nextCustom;
+            if (stationLabels.TryGetValue(index, out var lbl) && lbl) lbl.text = StationDisplayName(index, currentRegion);
+            LayoutStationLabels();
+            EndUndo();
+            PlayClickSfx();
+            OpenStationInfo(index);
+            Toast("站名已更新为「" + StationDisplayName(index, currentRegion) + "」");
+        };
+        var ok = Btn(p.transform, "ConfirmRename", "确认改名", 26, 36, 42, 248, 84, Matcha, () => applyName(input.text));
+        TInk(ok, Color.white);
+        var reset = Btn(p.transform, "ResetRename", "恢复默认", 25, 296, 42, 248, 84, Gold, () => {
+            if (string.IsNullOrEmpty(station.customName)) { OpenStationInfo(index); return; }
+            BeginUndo("恢复默认站名");
+            station.customName = "";
+            if (stationLabels.TryGetValue(index, out var lbl) && lbl) lbl.text = StationDisplayName(index, currentRegion);
+            LayoutStationLabels();
+            EndUndo();
+            OpenStationInfo(index);
+            Toast("已恢复默认站名「" + station.name + "」");
+        });
+        TInk(reset, Color.white);
+        var cancel = Btn(p.transform, "CancelRename", "取消", 25, 556, 42, 248, 84, Paper2, () => OpenStationInfo(index));
+        TInk(cancel, Ink);
     }
     void QueueStory(string key, string title, string content)
     {
@@ -959,13 +1010,17 @@ public partial class DemoBootstrap
     // ---------- income floaters ----------
     void SpawnFloater(int amount, Vector2 at)
     {
-        if (amount <= 0 || !floaterLayer) return;
-        var go = Rect("Float", floaterLayer, at.x - 60, at.y + 20, 160, 34);
+        if (amount <= 0 || !floaterLayer || qualityTier <= 0) return;
+        if (floaters.Count >= 8) return;
+        double chance = qualityTier >= 2 ? 0.32 : 0.20;
+        if (floaterColorRandom.NextDouble() > chance) return;
+        var go = Rect("Float", floaterLayer, at.x - 100, at.y + 18, 200, 48);
         var rt = go.GetComponent<RectTransform>();
         rt.pivot = new Vector2(0.5f, 0.5f);
         if (qualityTier >= 2) rt.localScale = Vector3.one * 1.24f;
         var t = go.AddComponent<Text>();
         t.font = font; t.fontSize = ScaledFontSize(27); t.alignment = TextAnchor.MiddleCenter;
+        t.horizontalOverflow = HorizontalWrapMode.Overflow; t.verticalOverflow = VerticalWrapMode.Overflow;
         t.color = FloaterColors[floaterColorRandom.Next(FloaterColors.Length)]; t.text = "+¥" + amount; t.raycastTarget = false;
         var sh = qualityTier >= 1 ? go.AddComponent<Shadow>() : null;
         if (sh) sh.effectColor = new Color(1, 0.99f, 0.95f, 0.85f);

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,7 +21,7 @@ public partial class DemoBootstrap
         public List<MunicipalContract> contracts = new List<MunicipalContract>();
         public int nextContractId;
         public List<string> plaques, tickets;
-        public int[] levels, facLevels; public float[] riderBonuses; public bool[] built, closed, sceneryUnlocked, sceneryFound;
+        public int[] levels, facLevels; public float[] riderBonuses; public bool[] built, closed, sceneryUnlocked, sceneryFound; public string[] customNames;
         public List<int> ownedSkins, ownedThemes; public int theme; public List<string> technologies, companyTech = new List<string>(), storySeen = new List<string>();
         public List<UndoVehicle> vehicles = new List<UndoVehicle>();
         public Dictionary<Line, FrozenLineTraffic> frozen = new Dictionary<Line, FrozenLineTraffic>();
@@ -54,7 +54,7 @@ public partial class DemoBootstrap
         var state = new UndoState { label=label, region=currentRegion, coinsBefore=coins, diamondsBefore=diamonds, rpBefore=rp, nextId=nextLineId,
             macau=macauUnlocked, guangdong=guangdongUnlocked, loanOutstanding=loanOutstanding, ownedSkins=new List<int>(ownedLineSkins), speed=timeSpeed,
             storyStage=storyStage, tutorialSkipped=tutorialSkipped,
-            levels=new int[stations.Count], built=new bool[stations.Count], closed=new bool[stations.Count],
+            levels=new int[stations.Count], built=new bool[stations.Count], closed=new bool[stations.Count], customNames=new string[stations.Count],
             companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, lastPolicyDay=lastPolicyDay, bondPrincipal=bondPrincipal, bondDailyDue=bondDailyDue, bondsRepaid=bondsRepaid, bondSubsidized=bondSubsidized, boardPartners=new List<int>(boardPartners),
             facLevels=new int[stations.Count], riderBonuses=new float[stations.Count],
             sceneryUnlocked=new bool[sceneries.Count], sceneryFound=new bool[sceneries.Count],
@@ -64,7 +64,7 @@ public partial class DemoBootstrap
         state.plaques = new List<string>(earnedPlaques); state.tickets = new List<string>(earnedMemorialTickets);
         foreach (var c in activeContracts) state.contracts.Add(CopyUndoContract(c));
         foreach (var line in lines) state.lines.Add(new UndoLine { line=line, name=line.name, color=line.color, skin=line.skin, path=new List<int>(line.st), dispatch=(int[])line.dispatch.Clone(), trains=line.trains, fare=line.fare });
-        for (int i=0;i<stations.Count;i++) { state.levels[i]=stations[i].level; state.built[i]=stations[i].built; state.closed[i]=stations[i].closed; }
+        for (int i=0;i<stations.Count;i++) { state.levels[i]=stations[i].level; state.built[i]=stations[i].built; state.closed[i]=stations[i].closed; state.customNames[i]=stations[i].customName ?? ""; }
         for (int i=0;i<sceneries.Count;i++) { state.sceneryUnlocked[i]=sceneries[i].unlocked; state.sceneryFound[i]=sceneries[i].found; }
         for (int i=0;i<stations.Count;i++) { state.facLevels[i]=stations[i].facLevel; state.riderBonuses[i]=stations[i].riderBonus; }
         foreach (var item in researchVehicles) state.vehicles.Add(new UndoVehicle { vehicle=item, lineId=item.lineId });
@@ -112,7 +112,12 @@ public partial class DemoBootstrap
         coins-=state.coinsDelta; diamonds-=state.diamondsDelta; rp-=state.rpDelta; nextLineId=state.nextId; timeSpeed=state.speed; UpdateTimeText();
         lines.Clear(); foreach (var record in state.lines)
         { record.line.name=record.name; record.line.color=record.color; record.line.skin=record.skin; record.line.st=new List<int>(record.path); record.line.dispatch=(int[])record.dispatch.Clone(); record.line.trains=record.trains; record.line.fare=record.fare; lines.Add(record.line); }
-        for (int i=0;i<stations.Count;i++) { stations[i].level=state.levels[i]; stations[i].built=state.built[i]; stations[i].closed=state.closed[i]; }
+        for (int i=0;i<stations.Count;i++) {
+            stations[i].level=state.levels[i]; stations[i].built=state.built[i]; stations[i].closed=state.closed[i];
+            if (state.customNames != null && i < state.customNames.Length) stations[i].customName = state.customNames[i];
+            if (stationLabels.TryGetValue(i, out var stLbl) && stLbl) stLbl.text = StationDisplayName(i, currentRegion);
+        }
+        LayoutStationLabels();
         for (int i=0;i<sceneries.Count;i++) { sceneries[i].unlocked=state.sceneryUnlocked[i]; sceneries[i].found=state.sceneryFound[i]; }
         if (state.facLevels != null && state.riderBonuses != null)
             for (int i=0;i<stations.Count && i<state.facLevels.Length && i<state.riderBonuses.Length;i++) { stations[i].facLevel=state.facLevels[i]; stations[i].riderBonus=state.riderBonuses[i]; }
@@ -138,7 +143,7 @@ public partial class DemoBootstrap
         hasForecastSignature = false;
         RefreshSceneryViews(); RefreshPendingBadge(); RefreshFeatureGateVisuals(); UpdateStoryObjectiveBanner();
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome();
-        if (!RegionUnlocked(currentRegion)) SwitchRegion("香埠");
+        if (!RegionUnlocked(currentRegion)) SwitchRegion("汐港");
         RefreshHUD(); RefreshUndoButton(); SaveGame(); Toast("已撤销：" + state.label);
     }
 }
