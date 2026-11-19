@@ -1254,11 +1254,15 @@ public partial class DemoBootstrap
         new Color(0.53f,0.63f,0.32f), new Color(0.42f,0.65f,0.51f), new Color(0.85f,0.40f,0.36f),
         new Color(0.48f,0.54f,0.56f), new Color(0.48f,0.37f,0.30f), new Color(0.64f,0.50f,0.70f)
     };
-    static readonly int[] LineSkinPrices = { 180,220,260,200,200,240,200,220,220,200,240,220,180,180,240 };
+    static readonly int[] LineSkinPrices = {
+        28000, 36000, 48000, 58000, 68000,
+        88000, 118000, 148000, 188000, 228000,
+        268000, 288000, 168000, 328000, 480000
+    };
 
     bool IsSkinFreeByScenery(int skin)
     {
-        return (skin == 10 || skin == 11) && FoundCount() >= 1;
+        return (skin == 10 || skin == 11) && FoundCount() >= 6;
     }
 
     void ApplySkinToLine(Line line, int skin, bool payIfNeeded)
@@ -1268,7 +1272,7 @@ public partial class DemoBootstrap
         bool freeByScenery = IsSkinFreeByScenery(skin);
         if (!alreadyOwned && payIfNeeded && !freeByScenery && coins < LineSkinPrices[skin])
         {
-            Toast("金币不足，还差 ¥" + FormatShortfall(LineSkinPrices[skin] - coins));
+            Toast("金币不足，还差 ¥" + FormatShortfall(LineSkinPrices[skin] - coins) + "（可点击看片免费领）");
             return;
         }
         BeginUndo("线路涂装");
@@ -1297,12 +1301,14 @@ public partial class DemoBootstrap
         Txt(bubble.transform, desc, 25, InkSoft, 34, 146, 672, 160, TextAnchor.MiddleLeft);
         var watch = Btn(bubble.transform, "WatchAd", "观看赞助短片（领权益）", 26, 34, 34, 420, 84, Matcha, () => {
             ClosePanel(true);
-            int next = (adWatchCounts.TryGetValue(adKey, out int cur) ? cur : 0) + 1;
-            adWatchCounts[adKey] = next;
-            PlayTone(true);
-            SaveGame();
-            if (next >= requiredCount) onPermanentUnlock?.Invoke();
-            else onTrialUnlock?.Invoke();
+            RequestTapTapRewardedAd(adKey, itemName, () => {
+                int next = (adWatchCounts.TryGetValue(adKey, out int cur) ? cur : 0) + 1;
+                adWatchCounts[adKey] = next;
+                PlayTone(true);
+                SaveGame();
+                if (next >= requiredCount) onPermanentUnlock?.Invoke();
+                else onTrialUnlock?.Invoke();
+            });
         });
         TInk(watch, Color.white);
         var cancel = Btn(bubble.transform, "CancelAd", "暂不观看", 25, 474, 34, 232, 84, Paper2, ClosePanel);
@@ -1350,7 +1356,7 @@ public partial class DemoBootstrap
             }
             else
             {
-                var buyBtn = Btn(row.transform, "SkinBuy" + i, freeScenery ? "名胜免费领" : "¥" + LineSkinPrices[i], 23, 444, 18, 148, 74, freeScenery ? Matcha : Paper2, () => {
+                var buyBtn = Btn(row.transform, "SkinBuy" + i, freeScenery ? "名胜免费领" : "¥" + FormatCoins(LineSkinPrices[i]), 22, 444, 18, 148, 74, freeScenery ? Matcha : Paper2, () => {
                     ApplySkinToLine(line, skin, true);
                     if (ownedLineSkins.Contains(skin)) { ClosePanel(true); OpenLineScreen(line.id); OpenLineSkins(line); }
                 });
@@ -1418,8 +1424,8 @@ public partial class DemoBootstrap
             }
             else
             {
-                var buy = Btn(card.transform, "Buy" + i, freeScenery ? "免费领" : "¥" + LineSkinPrices[i], 22, cardWidth - 336, 33, 150, 76, freeScenery ? Matcha : Paper2, () => {
-                    if (!freeScenery && coins < LineSkinPrices[skin]) { Toast("金币不足，还差 ¥" + FormatShortfall(LineSkinPrices[skin] - coins)); return; }
+                var buy = Btn(card.transform, "Buy" + i, freeScenery ? "免费领" : "¥" + FormatCoins(LineSkinPrices[i]), 21, cardWidth - 336, 33, 150, 76, freeScenery ? Matcha : Paper2, () => {
+                    if (!freeScenery && coins < LineSkinPrices[skin]) { Toast("金币不足，还差 ¥" + FormatShortfall(LineSkinPrices[skin] - coins) + "（可看片解锁）"); return; }
                     BeginUndo("解锁线路涂装");
                     if (!freeScenery) coins -= LineSkinPrices[skin];
                     ownedLineSkins.Add(skin);
@@ -1519,28 +1525,44 @@ public partial class DemoBootstrap
 
                     float altX = adX + adW + 14f;
                     float altW = cardWidth - altX - 28f;
-                    bool techFree = t == 2 && techDone.Count >= 5;
+                    bool techFree = t == 2 && techDone.Count >= 12;
                     int diamondCost = t == 4 ? 50 : 30;
-                    string altLabel = t == 1 ? "¥800 解锁" : t == 2 ? (techFree ? "免费领(科技≥5)" : "¥800 或 5科技") : (diamondCost + " 钻解锁");
-                    var altBtn = Btn(card.transform, "AltTheme" + i, altLabel, 22, altX, 16, altW, 68, techFree ? Matcha : Paper2, () => {
+                    int coinCost = t == 1 ? 68000 : t == 2 ? 158000 : t == 3 ? 280000 : 580000;
+                    string altLabel = t == 1
+                        ? "¥6.8万 解锁"
+                        : t == 2
+                            ? (techFree ? "免费领(科技≥12)" : "¥15.8万/12科技")
+                            : (diamondCost + "钻 / ¥" + FormatCoins(coinCost));
+                    var altBtn = Btn(card.transform, "AltTheme" + i, altLabel, 21, altX, 16, altW, 68, techFree ? Matcha : Paper2, () => {
                         if (t == 1)
                         {
-                            if (coins < 800) { Toast("金币不足，还差 ¥" + FormatShortfall(800 - coins)); return; }
-                            BeginUndo("解锁界面风格"); coins -= 800; ownedThemes.Add(t); EndUndo();
+                            if (coins < coinCost) { Toast("金币不足 ¥" + FormatCoins(coinCost) + "（可先看片试用或集赞解锁）"); return; }
+                            BeginUndo("解锁界面风格"); coins -= coinCost; ownedThemes.Add(t); EndUndo();
                         }
                         else if (t == 2)
                         {
-                            if (techDone.Count < 5)
+                            if (techDone.Count < 12)
                             {
-                                if (coins < 800) { Toast("研究满 5 项科技可免费领，或花 ¥800 解锁"); return; }
-                                BeginUndo("解锁界面风格"); coins -= 800; ownedThemes.Add(t); EndUndo();
+                                if (coins < coinCost) { Toast("研究满 12 项科技可免费领，或花 ¥" + FormatCoins(coinCost) + " 解锁"); return; }
+                                BeginUndo("解锁界面风格"); coins -= coinCost; ownedThemes.Add(t); EndUndo();
                             }
                             else { ownedThemes.Add(t); }
                         }
                         else
                         {
-                            if (diamonds < diamondCost) { Toast("钻石不足，还差 " + Mathf.CeilToInt(diamondCost - diamonds) + " 颗"); return; }
-                            BeginUndo("解锁界面风格"); diamonds -= diamondCost; ownedThemes.Add(t); EndUndo();
+                            if (diamonds >= diamondCost)
+                            {
+                                BeginUndo("解锁界面风格"); diamonds -= diamondCost; ownedThemes.Add(t); EndUndo();
+                            }
+                            else if (coins >= coinCost)
+                            {
+                                BeginUndo("解锁界面风格"); coins -= coinCost; ownedThemes.Add(t); EndUndo();
+                            }
+                            else
+                            {
+                                Toast("需 " + diamondCost + " 钻或 ¥" + FormatCoins(coinCost) + "（推荐看片免费试用）");
+                                return;
+                            }
                         }
                         ApplyTheme(t); RefreshHUD(); SaveGame(); OpenFleetTab(2);
                         Toast("已永久解锁「" + spec.name + "」");

@@ -772,6 +772,7 @@ public partial class DemoBootstrap
 #if UNITY_EDITOR
             if (DevTestSaveSyncEnabled) WriteDevTestSaveToDisk(data);
 #endif
+            TryAutoSyncTapTapCloudSave(false);
         } catch(Exception e) { Debug.LogError("本地存档保存失败：" + e.Message); }
     }
     void TickAutosave()
@@ -808,6 +809,7 @@ public partial class DemoBootstrap
                 }
 #endif
                 saveDirty = false; saveDebounceTimer = 0f; autosaveTimer = 0f;
+                TryAutoSyncTapTapCloudSave(false);
             }
             catch (Exception e) { Debug.LogError("本地存档保存失败：" + e.Message); }
             pendingAutosavePayload = null;
@@ -841,8 +843,12 @@ public partial class DemoBootstrap
         string diskJson = ReadDevTestSaveFromDisk();
         if (!string.IsNullOrEmpty(diskJson)) return diskJson;
 #endif
+#if UNITY_EDITOR || TRAILER_PREVIEW
         var asset = Resources.Load<TextAsset>(BundledTestSaveResource);
         return asset ? asset.text : null;
+#else
+        return null;
+#endif
     }
     bool HasBundledTestSave() { return !string.IsNullOrEmpty(ReadBundledTestSaveRaw()); }
     string DescribeBundledTestSave()
@@ -888,19 +894,18 @@ public partial class DemoBootstrap
         nextContractId = 1; hasYesterdayReport = false; yesterdayReport = null;
         autosaveTimer = 0f;
     }
-    bool LoadBundledTestSave()
+    bool ApplyLoadedSaveJson(string raw, string sourceLabel, bool fromBundledTestSave)
     {
-        string raw = ReadBundledTestSaveRaw();
-        if (string.IsNullOrEmpty(raw)) { Toast("未找到内置测试存档"); return false; }
+        if (string.IsNullOrEmpty(raw)) { Toast("未找到" + sourceLabel); return false; }
         try {
             var check = JsonUtility.FromJson<SaveData>(raw);
             if (check == null || check.version != 1 || check.lines == null || check.stations == null)
             {
-                Toast("内置测试存档格式校验失败");
+                Toast(sourceLabel + "格式校验失败");
                 return false;
             }
         } catch (Exception e) {
-            Toast("内置测试存档解析失败：" + e.Message);
+            Toast(sourceLabel + "解析失败：" + e.Message);
             return false;
         }
 
@@ -912,8 +917,11 @@ public partial class DemoBootstrap
         if (storyCard) { Destroy(storyCard); storyCard = null; }
         storyCheckTimer = 0f;
 #if UNITY_EDITOR
-        // Loading the shared test run explicitly resumes shared test-save synchronization.
-        DevTestSaveSyncEnabled = true;
+        if (fromBundledTestSave)
+        {
+            // Loading the shared test run explicitly resumes shared test-save synchronization.
+            DevTestSaveSyncEnabled = true;
+        }
 #endif
         lines.Clear();
         BuildData();
@@ -921,7 +929,7 @@ public partial class DemoBootstrap
         PlayerPrefs.Save();
         saveBlocked = false;
         saveReady = false;
-        if (!RestoreGame()) { Toast("测试存档载入失败"); return false; }
+        if (!RestoreGame()) { Toast(sourceLabel + "载入失败"); return false; }
 
         EnsureCompanyInitialized();
         if (!IsThemeAvailable(currentTheme)) currentTheme = 0;
@@ -970,8 +978,13 @@ public partial class DemoBootstrap
         SyncRegionalMusic(true);
         saveReady = true;
         SaveGame();
-        Toast("已载入测试存档：第 " + day + " 日 · " + DisplayPlaceAliases(currentRegion));
+        Toast("已载入" + sourceLabel + "：第 " + day + " 日 · " + DisplayPlaceAliases(currentRegion));
         return true;
+    }
+
+    bool LoadBundledTestSave()
+    {
+        return ApplyLoadedSaveJson(ReadBundledTestSaveRaw(), "测试存档", true);
     }
     void OnApplicationPause(bool paused) { if(paused) SaveGame(); }
     void OnApplicationFocus(bool focused)

@@ -323,7 +323,7 @@ public partial class DemoBootstrap
     {
         public string name, tag, motto;
         public int stations, linesCount, dailyProfit, score;
-        public bool isPlayer;
+        public bool isPlayer, isCloudPlayer;
     }
 
     int CalculatePlayerRailScore()
@@ -352,7 +352,31 @@ public partial class DemoBootstrap
                 dailyProfit = Mathf.RoundToInt(income),
                 score = playerScore,
                 isPlayer = true
-            },
+            }
+        };
+
+        // 合并 TapTap 真实云端排行榜玩家记录（若已从 clientCloud:GetRankList 拉取成功）
+        for (int i = 0; i < cloudRankEntries.Count; i++)
+        {
+            var cr = cloudRankEntries[i];
+            if (cr == null || cr.isMe) continue;
+            string displayName = !string.IsNullOrEmpty(cr.companyName) && !string.IsNullOrEmpty(cr.nickname)
+                ? $"{cr.nickname} · {cr.companyName}"
+                : (!string.IsNullOrEmpty(cr.nickname) ? cr.nickname : (!string.IsNullOrEmpty(cr.companyName) ? cr.companyName : "山海同行 #" + cr.rank));
+            entries.Add(new LeaderboardOperator {
+                name = displayName,
+                tag = "TapTap 真实路局 · 第 " + cr.day + " 日",
+                motto = string.IsNullOrEmpty(cr.region) ? "云端实名排行玩家" : ("主营版图：" + cr.region + (cr.dailyRidership > 0 ? $" · 日客流 {cr.dailyRidership:N0}" : "")),
+                stations = Mathf.Max(1, cr.stationsBuilt),
+                linesCount = Mathf.Max(1, cr.linesCount),
+                dailyProfit = cr.score / 5,
+                score = cr.score,
+                isCloudPlayer = true
+            });
+        }
+
+        // 经典湾区同行作为参照标尺
+        entries.AddRange(new[] {
             new LeaderboardOperator {
                 name = "汐港电铁局",
                 tag = "老牌港岛干线",
@@ -398,42 +422,68 @@ public partial class DemoBootstrap
                 dailyProfit = 460 + d * 68,
                 score = 1850 + d * 280
             }
-        };
+        });
         entries.Sort((a, b) => b.score.CompareTo(a.score));
         return entries;
     }
 
+    void RefreshLeaderboardFromSdk(bool triggerReload = true)
+    {
+        SubmitTapTapLeaderboardScore(true);
+        FetchTapTapLeaderboard(() => {
+            if (triggerReload && pageRoot && activePageKey == "排行榜")
+            {
+                RenderLeaderboardPageContent();
+            }
+        });
+    }
+
     void OpenLeaderboard()
     {
-        var page = OpenPage("排行榜", "查看山海铁路同行名录与本社建设编年史。", "PageArt/album_watercolor");
-        Txt(page.transform, "山海群雄榜", 38, Ink, 36, PgH - 255, 800, 54, TextAnchor.MiddleLeft);
+        RenderLeaderboardPageContent();
+        RefreshLeaderboardFromSdk(true);
+    }
+
+    void RenderLeaderboardPageContent()
+    {
+        var page = OpenPage("排行榜", "查看 TapTap 云端实时路局排行与本社建设编年史。", "PageArt/album_watercolor");
+        Txt(page.transform, "山海群雄榜", 38, Ink, 36, PgH - 255, 500, 54, TextAnchor.MiddleLeft);
+        var refreshBtn = Btn(page.transform, "RefreshCloudRank", cloudRankLoading ? "云榜同步中..." : "↻ 刷新 TapTap 云榜", 22, W - 310f, PgH - 256f, 274f, 54f, Indigo, () => {
+            RefreshLeaderboardFromSdk(true);
+            RenderLeaderboardPageContent();
+        });
+        TInk(refreshBtn, Color.white);
 
         var list = BuildBayLeaderboard();
         int playerRank = 1;
         for (int i = 0; i < list.Count; i++) if (list[i].isPlayer) { playerRank = i + 1; break; }
 
-        float contentH = 420f + list.Count * 158f + 360f;
+        float contentH = 445f + list.Count * 158f + 360f;
         var content = FleetScroll(page.transform, 36f, PgH - 306f, contentH, scrollKey: "leaderboard");
         float topY = content.sizeDelta.y;
         float cardW = content.sizeDelta.x;
         float innerW = cardW - 8f;
 
         // 1. 顶部霓虹海报与本社排名总览卡
-        float heroH = 380f;
+        float heroH = 405f;
         float y = topY - 12f - heroH;
         var hero = Rect("RankingHeroCard", content, 4f, y, innerW, heroH);
         Rounded(hero, CardBg); SoftShadow(hero); JournalTape(hero.transform, innerW * 0.5f - 72f, heroH - 17f, 144f);
         int palette = currentRegion == "镜屿" ? 2 : currentRegion == "榕川" ? 1 : 0;
         var posterTex = EraPosterGenerator.GetCustomPoster("rank_" + currentRegion, "RAILWAY", palette, 4, 768, 220, 1);
-        var posterFrame = CreateNeonPosterFrame(hero.transform, "RankingNeonPoster", 24f, 134f, innerW - 48f, 214f, posterTex, 9f);
+        var posterFrame = CreateNeonPosterFrame(hero.transform, "RankingNeonPoster", 24f, 159f, innerW - 48f, 214f, posterTex, 9f);
         var badge = Rect("RegionTag", posterFrame.transform, 18f, 16f, 240f, 38f);
         Rounded(badge, new Color(0.04f, 0.04f, 0.08f, 0.78f)); badge.GetComponent<Image>().raycastTarget = false;
         Txt(badge.transform, "版图 · " + DisplayPlaceAliases(currentRegion), 21, new Color(0.96f, 0.97f, 1f, 0.95f), 0f, 0f, 240f, 38f, TextAnchor.MiddleCenter).raycastTarget = false;
 
-        Txt(hero.transform, companyName + " · 当前第 " + playerRank + " 名", 34, Ink, 28f, 72f, innerW - 290f, 48f, TextAnchor.MiddleLeft);
-        Txt(hero.transform, "综合评分 " + CalculatePlayerRailScore().ToString("N0"), 28, Matcha, innerW - 270f, 74f, 242f, 44f, TextAnchor.MiddleRight);
+        string rankHeadline = cloudMyRank > 0
+            ? $"{companyName} · 云端 #{cloudMyRank}（综合 #{playerRank}）"
+            : $"{companyName} · 当前第 {playerRank} 名";
+        Txt(hero.transform, rankHeadline, 32, Ink, 28f, 98f, innerW - 290f, 46f, TextAnchor.MiddleLeft);
+        Txt(hero.transform, "综合评分 " + CalculatePlayerRailScore().ToString("N0"), 28, Matcha, innerW - 270f, 99f, 242f, 44f, TextAnchor.MiddleRight);
         Txt(hero.transform, "已连 " + DailyConnectedCount() + " 站  ·  运营 " + lines.Count + " 线  ·  预期日利 " + FormatSignedCoins(income) + "  ·  口岸走廊 " + CrossBaySynergyLinkCount() + "/3",
-            22, InkSoft, 28f, 22f, innerW - 56f, 38f, TextAnchor.MiddleLeft);
+            22, InkSoft, 28f, 54f, innerW - 56f, 36f, TextAnchor.MiddleLeft);
+        Txt(hero.transform, cloudRankStatusText, 21, cloudRankFromSdk ? Matcha : Indigo, 28f, 18f, innerW - 56f, 32f, TextAnchor.MiddleLeft);
 
         // 2. 山海同行阶梯榜
         for (int i = 0; i < list.Count; i++)
@@ -441,18 +491,24 @@ public partial class DemoBootstrap
             var op = list[i];
             y -= 16f + 142f;
             var row = Rect("RankRow_" + i, content, 4f, y, innerW, 142f);
-            Rounded(row, op.isPlayer ? Color.Lerp(CardBg, Matcha, 0.14f) : CardBg);
+            Color rowBg = op.isPlayer
+                ? Color.Lerp(CardBg, Matcha, 0.14f)
+                : (op.isCloudPlayer ? Color.Lerp(CardBg, Indigo, 0.09f) : CardBg);
+            Rounded(row, rowBg);
             SoftShadow(row);
 
             Color rankCol = i == 0 ? Gold : i == 1 ? Indigo : i == 2 ? new Color(0.72f, 0.45f, 0.24f) : InkSoft;
             var rankBadge = Rect("RankNum", row.transform, 22f, 37f, 68f, 68f);
-            Rounded(rankBadge, op.isPlayer ? Matcha : new Color(rankCol.r, rankCol.g, rankCol.b, 0.16f));
-            Txt(rankBadge.transform, "#" + (i + 1), 28, op.isPlayer ? Color.white : rankCol, 0f, 0f, 68f, 68f, TextAnchor.MiddleCenter);
+            Rounded(rankBadge, op.isPlayer ? Matcha : op.isCloudPlayer ? Indigo : new Color(rankCol.r, rankCol.g, rankCol.b, 0.16f));
+            Txt(rankBadge.transform, "#" + (i + 1), 28, (op.isPlayer || op.isCloudPlayer) ? Color.white : rankCol, 0f, 0f, 68f, 68f, TextAnchor.MiddleCenter);
 
-            Txt(row.transform, op.name + (op.isPlayer ? " ★" : ""), 30, Ink, 108f, 82f, 520f, 42f, TextAnchor.MiddleLeft);
+            string titleBadge = op.isPlayer ? " ★" : op.isCloudPlayer ? " [TapTap]" : "";
+            Txt(row.transform, op.name + titleBadge, 29, Ink, 108f, 82f, 540f, 42f, TextAnchor.MiddleLeft);
             Txt(row.transform, op.tag + " · " + op.motto, 21, InkSoft, 108f, 44f, 560f, 32f, TextAnchor.MiddleLeft);
-            Txt(row.transform, "连通 " + op.stations + " 站  ·  " + op.linesCount + " 线  ·  日利 " + FormatSignedCoins(op.dailyProfit),
-                21, op.isPlayer ? Matcha : Indigo, 108f, 12f, 560f, 30f, TextAnchor.MiddleLeft);
+            string thirdLine = op.isCloudPlayer
+                ? ("连通 " + op.stations + " 站  ·  " + op.linesCount + " 线  ·  TapTap 实时云榜")
+                : ("连通 " + op.stations + " 站  ·  " + op.linesCount + " 线  ·  日利 " + FormatSignedCoins(op.dailyProfit));
+            Txt(row.transform, thirdLine, 21, op.isPlayer ? Matcha : Indigo, 108f, 12f, 560f, 30f, TextAnchor.MiddleLeft);
             Txt(row.transform, op.score.ToString("N0") + " 分", 28, op.isPlayer ? Matcha : Ink, innerW - 220f, 48f, 194f, 44f, TextAnchor.MiddleRight);
         }
 

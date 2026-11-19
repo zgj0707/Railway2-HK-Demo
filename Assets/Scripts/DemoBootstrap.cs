@@ -250,6 +250,8 @@ public partial class DemoBootstrap : MonoBehaviour
         SyncStoryProgression(true);
         if (!string.IsNullOrEmpty(savedRegion) && savedRegion != currentRegion && RegionUnlocked(savedRegion)) SwitchRegion(savedRegion);
         saveReady = true;
+        EnsureTapTapSdkBridge();
+        CheckTapTapCloudSaveOnStartup(restored);
         if (saveBlocked) Toast("存档读取失败，原存档已保留");
         Debug.Log("COASTAL RAIL READY");
     }
@@ -2263,6 +2265,7 @@ public partial class DemoBootstrap : MonoBehaviour
         EnsureResponsiveLayout();
         float dt = Time.deltaTime;
         TickAudioCrossfade(Time.unscaledDeltaTime);
+        TickTapTapSdkBridge();
         TickStoryProgressionTimer(dt);
         TickAutosave();
         UpdateRegionalMarkers(false);
