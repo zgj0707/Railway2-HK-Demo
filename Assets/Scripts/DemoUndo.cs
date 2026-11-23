@@ -7,7 +7,7 @@ public partial class DemoBootstrap
 {
     sealed class UndoLine
     {
-        public Line line; public string name; public Color color; public int skin; public List<int> path; public int[] dispatch; public int trains; public float fare;
+        public Line line; public string name; public Color color; public int skin; public List<int> path; public int[] dispatch; public int trains; public float fare; public bool hasBaseTrain;
     }
     sealed class UndoVehicle { public ResearchVehicle vehicle; public int lineId; }
     sealed class UndoState
@@ -63,7 +63,7 @@ public partial class DemoBootstrap
         state.nextContractId = nextContractId;
         state.plaques = new List<string>(earnedPlaques); state.tickets = new List<string>(earnedMemorialTickets);
         foreach (var c in activeContracts) state.contracts.Add(CopyUndoContract(c));
-        foreach (var line in lines) state.lines.Add(new UndoLine { line=line, name=line.name, color=line.color, skin=line.skin, path=new List<int>(line.st), dispatch=(int[])line.dispatch.Clone(), trains=line.trains, fare=line.fare });
+        foreach (var line in lines) state.lines.Add(new UndoLine { line=line, name=line.name, color=line.color, skin=line.skin, path=new List<int>(line.st), dispatch=(int[])line.dispatch.Clone(), trains=line.trains, fare=line.fare, hasBaseTrain=line.hasBaseTrain });
         for (int i=0;i<stations.Count;i++) { state.levels[i]=stations[i].level; state.built[i]=stations[i].built; state.closed[i]=stations[i].closed; state.customNames[i]=stations[i].customName ?? ""; }
         for (int i=0;i<sceneries.Count;i++) { state.sceneryUnlocked[i]=sceneries[i].unlocked; state.sceneryFound[i]=sceneries[i].found; }
         for (int i=0;i<stations.Count;i++) { state.facLevels[i]=stations[i].facLevel; state.riderBonuses[i]=stations[i].riderBonus; }
@@ -111,7 +111,7 @@ public partial class DemoBootstrap
         pendingUndo=null; CloseLineBubble(); CancelDraft();
         coins-=state.coinsDelta; diamonds-=state.diamondsDelta; rp-=state.rpDelta; nextLineId=state.nextId; timeSpeed=state.speed; UpdateTimeText();
         lines.Clear(); foreach (var record in state.lines)
-        { record.line.name=record.name; record.line.color=record.color; record.line.skin=record.skin; record.line.st=new List<int>(record.path); record.line.dispatch=(int[])record.dispatch.Clone(); record.line.trains=record.trains; record.line.fare=record.fare; lines.Add(record.line); }
+        { record.line.name=record.name; record.line.color=record.color; record.line.skin=record.skin; record.line.st=new List<int>(record.path); record.line.dispatch=(int[])record.dispatch.Clone(); record.line.trains=record.trains; record.line.fare=record.fare; record.line.hasBaseTrain=record.hasBaseTrain; lines.Add(record.line); }
         for (int i=0;i<stations.Count;i++) {
             stations[i].level=state.levels[i]; stations[i].built=state.built[i]; stations[i].closed=state.closed[i];
             if (state.customNames != null && i < state.customNames.Length) stations[i].customName = state.customNames[i];
@@ -140,7 +140,6 @@ public partial class DemoBootstrap
         ApplyTheme(state.theme, false);
         pendingCheckin.Clear(); foreach (var sc in sceneries) if (sc.unlocked && !sc.found && TryGetSceneryContent(sc,out _,out _)) pendingCheckin.Add(sc);
         researchProfitEstimates.Clear(); hasResearchProfitSignature = false;
-        hasForecastSignature = false;
         RefreshSceneryViews(); RefreshPendingBadge(); RefreshFeatureGateVisuals(); UpdateStoryObjectiveBanner();
         CreateLineVisuals(); RefreshStationDots(); RecalcIncome();
         if (!RegionUnlocked(currentRegion)) SwitchRegion("汐港");

@@ -195,10 +195,25 @@ public partial class DemoBootstrap
     }
     int DispatchSlot() { float h = dayClock / GameDaySeconds * 24f; return h >= 6f && h < 10f ? 0 : h >= 10f && h < 16f ? 1 : h >= 16f && h < 20f ? 2 : 3; }
     int RunningTrains(Line line) { return Mathf.Clamp(line.dispatch[DispatchSlot()], 0, line.trains); }
-    // 默认车为经济型；研究实物按特性影响维护、运力与长线收益（含 19/20/21 世纪机车 0..15）。
-    static readonly float[] FleetMaintenanceTraits = { 0.75f, 0.85f, 0.9f, 1f, 1.12f, 1.05f, 1.1f, 1.3f, 4.5f, 2.2f, 2.6f, 3.1f, 1.95f, 2.8f, 3.2f, 3.6f };
-    static readonly float[] FleetCapacityTraits =    { 0.9f,  1.15f, 1.25f, 1.55f, 1.8f, 1.8f, 2f, 2.8f, 2.2f, 3.2f, 3.4f, 4.4f, 3.8f,  4.2f, 4.8f, 5.6f };
-    static readonly float[] FleetSpeedTraits =       { 0.65f, 0.72f, 0.76f, 0.85f, 1.05f, 0.95f, 1f, 1.1f, 1.65f, 1.75f, 1.95f, 1.55f, 1.72f, 2.35f, 2.65f, 3.05f };
+    // 默认车为经济型；研究实物按特性影响维护、运力与长线收益（0..15 为初代基础车型，16..33 为 20 世纪扩展车型）。
+    static readonly float[] FleetMaintenanceTraits = {
+        0.75f, 0.85f, 0.9f, 1f, 1.12f, 1.05f, 1.1f, 1.3f, 4.5f,
+        2.2f, 2.6f, 3.1f, 1.95f, 2.8f,
+        3.2f, 3.6f,
+        1.85f, 2.15f, 2.45f, 2.95f, 2.35f, 2.30f, 1.95f, 2.10f, 2.65f, 2.25f, 2.20f, 1.90f, 2.05f, 2.45f, 1.88f, 2.85f, 2.25f, 2.35f
+    };
+    static readonly float[] FleetCapacityTraits = {
+        0.9f,  1.15f, 1.25f, 1.55f, 1.8f, 1.8f, 2f, 2.8f, 2.2f,
+        3.2f, 3.4f, 4.4f, 3.8f, 4.2f,
+        4.8f, 5.6f,
+        3.05f, 3.25f, 3.35f, 4.25f, 3.90f, 3.60f, 3.70f, 3.85f, 4.35f, 3.80f, 3.95f, 3.85f, 3.75f, 4.15f, 4.10f, 4.45f, 4.25f, 4.40f
+    };
+    static readonly float[] FleetSpeedTraits = {
+        0.65f, 0.72f, 0.76f, 0.85f, 1.05f, 0.95f, 1f, 1.1f, 1.65f,
+        1.75f, 1.95f, 1.55f, 1.72f, 2.35f,
+        2.65f, 3.05f,
+        1.45f, 1.78f, 1.92f, 1.58f, 1.88f, 1.82f, 1.68f, 1.84f, 1.52f, 2.15f, 1.98f, 1.70f, 1.80f, 2.25f, 1.66f, 2.42f, 2.12f, 2.22f
+    };
     float FleetTrait(Line line, int trait, bool runningOnly = false)
     {
         int needed = runningOnly ? RunningTrains(line) : line.trains;
@@ -224,7 +239,9 @@ public partial class DemoBootstrap
     }
     void SyncLineFleet(Line line)
     {
-        int count = 1; foreach (var v in researchVehicles) if (v.lineId == line.id) count++;
+        int assigned = 0; foreach (var v in researchVehicles) if (v.lineId == line.id) assigned++;
+        if (assigned == 0) line.hasBaseTrain = true;
+        int count = (line.hasBaseTrain ? 1 : 0) + assigned;
         line.trains = count;
         for (int i=0;i<line.dispatch.Length;i++) line.dispatch[i]=Mathf.Min(line.dispatch[i],count);
     }
@@ -1134,7 +1151,7 @@ public partial class DemoBootstrap
             hash = hash * 31 + (autoDispatchDaysLeft > 0 ? 1 : 0);
             foreach (int pid in boardPartners) hash = hash * 31 + (pid + 7);
             foreach (var line in lines) {
-                hash=hash*31+line.GetHashCode(); hash=hash*31+line.trains; hash=hash*31+line.fare.GetHashCode(); hash=hash*31+GetLineSkin(line);
+                hash=hash*31+line.GetHashCode(); hash=hash*31+line.trains; hash=hash*31+(line.hasBaseTrain?1:0); hash=hash*31+line.fare.GetHashCode(); hash=hash*31+GetLineSkin(line);
                 foreach (int v in line.st) hash=hash*31+v;
                 foreach (int v in line.dispatch) hash=hash*31+v;
             }
@@ -1176,7 +1193,7 @@ public partial class DemoBootstrap
             foreach (int pid in boardPartners) hash = hash * 31 + (pid + 7);
             foreach (var line in lines)
             {
-                hash = hash * 31 + line.GetHashCode(); hash = hash * 31 + line.trains; hash = hash * 31 + line.fare.GetHashCode();
+                hash = hash * 31 + line.GetHashCode(); hash = hash * 31 + line.trains; hash = hash * 31 + (line.hasBaseTrain ? 1 : 0); hash = hash * 31 + line.fare.GetHashCode();
                 hash = hash * 31 + GetLineSkin(line);
                 foreach (int v in line.st) hash = hash * 31 + v;
                 foreach (int v in line.dispatch) hash = hash * 31 + v;
@@ -1271,7 +1288,7 @@ public partial class DemoBootstrap
             {
                 dayClock = ForecastSlotHours[slot] * GameDaySeconds / 24f;
                 do { more = forecastWork.MoveNext(); }
-                while (more && budget.Elapsed.TotalMilliseconds < 2.0);
+                while (more && budget.Elapsed.TotalMilliseconds < 5.5);
             }
             finally { dayClock = savedClock; }
             if (more) return;
@@ -1291,6 +1308,7 @@ public partial class DemoBootstrap
                 }
                 lastTrafficTopologySig = stagedTopoSig;
                 hasTrafficTopologySig = true;
+                lastForecastDuration = Mathf.Clamp(Time.unscaledTime - forecastStartUnscaledTime, 0.25f, 8f);
                 forecastSignature = ForecastSignature();
                 hasForecastSignature = true;
                 SummarizeLineForecastsFromSlots();
@@ -1301,6 +1319,8 @@ public partial class DemoBootstrap
                 total += StationCommercialTotalDaily() + TourismDividendDaily() + CycleDailySubsidy() + CrossBaySynergyDailyBonus();
                 income = total;
                 RefreshHUD();
+                pageForecastRefresh?.Invoke();
+                panelForecastRefresh?.Invoke();
                 if (pageRoot == null && sceneryViewer == null)
                 {
                     UpdateLineTrafficColors();
@@ -1325,7 +1345,7 @@ public partial class DemoBootstrap
             if (!estimatingResearchProfit) unchecked { researchForecastEpoch++; }
             return;
         }
-        bool progressive = allowProgressive && Application.isPlaying && !estimatingResearchProfit && hasForecastSignature;
+        bool progressive = allowProgressive && Application.isPlaying && !estimatingResearchProfit && hasTrafficTopologySig;
         if (progressive)
         {
             if (hasStagedTopoSig && stagedTopoSig == topoSig && stagedInputSignature == signature && pendingForecastMask != 0)
@@ -1340,6 +1360,7 @@ public partial class DemoBootstrap
             stagedTopoSig = topoSig;
             hasStagedTopoSig = true;
             pendingForecastMask = 15;
+            forecastStartUnscaledTime = Time.unscaledTime;
             for (int s = 0; s < 4; s++) stagedSlots[s] = null;
             SummarizeLineForecastsFromSlots();
             // 注意：此时不把主 forecastSignature / lastTrafficTopologySig 标成新版本，等 4 时段全齐后再原子提交！

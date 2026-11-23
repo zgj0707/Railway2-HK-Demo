@@ -22,20 +22,38 @@ public partial class DemoBootstrap
     static readonly string[] LocoNames = {
         "潘尼达伦", "萨拉曼卡", "喷气比利", "旅行者一号", "火箭号", "约翰牛", "鹰号", "仙女皇后", "纽约中央 999",
         "飞翔的苏格兰人", "野鸭号", "大男孩型", "南风 4B 型", "TGV 东南型",
-        "CH-2A 和韵号", "CH-400 天工号"
+        "CH-2A 和韵号", "CH-400 天工号",
+        "鳄鱼电力机车", "德铁 01 型", "DRG 05 型", "挑战者型", "GG1 电力机车", "日本 C62 型",
+        "EMD F7 型", "德铁 V200 型", "前进型蒸汽机车", "BB 9004 型", "三角洲型", "东风 1 型",
+        "日本 EF58 型", "城际 125 HST", "东风 5 型", "新干线 100 系", "东风 11 型", "韶山 9 型"
     };
     static readonly string[] LocoYears = {
         "1804", "1812", "1813", "1825", "1829", "1831", "1835", "1855", "1893",
         "1923", "1938", "1941", "1984", "1981",
-        "2007", "2017"
+        "2007", "2017",
+        "1919", "1925", "1935", "1943", "1943", "1948",
+        "1949", "1953", "1956", "1955", "1961", "1964",
+        "1952", "1976", "1984", "1985", "1992", "1998"
     };
     static readonly string[] LocoArt = {
         "art_train_penydarren_1804", "art_train_salamanca_1812", "art_train_puffing_billy_1813", "art_train_locomotion_no1_1825",
         "art_train_rocket_1829", "art_train_john_bull_1831", "art_train_adler_1835", "art_train_fairy_queen_1855", "art_train_nyc_999_1893",
         "art_train_flying_scotsman_1923", "art_train_mallard_1938", "art_train_big_boy_1941", "art_train_new_exp_df4b", "art_train_tgv_sud_est_1981",
-        "art_train_crh2a_2007", "art_train_cr400af"
+        "art_train_crh2a_2007", "art_train_cr400af",
+        "art_train_crocodile_1919", "art_train_new_eu_db_01", "art_train_new_eu_drg_05", "art_train_challenger_1943", "art_train_pr_gg1_1943", "art_train_c62_1948",
+        "art_train_new_emd_f7", "art_train_new_eu_db_v200", "art_train_china_qj_1956", "art_train_new_eu_bb9004", "art_train_new_eu_deltic", "art_train_new_df1",
+        "art_train_new_j_ef58", "art_train_new_eu_hst", "art_train_new_df5", "art_train_new_j_100", "art_train_new_df11", "art_train_new_exp_ss9"
     };
-    int currentTechEra = 0;
+    static readonly int[] LocoEras = {
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        1, 1, 1, 1, 1,
+        2, 2,
+        1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1
+    };
+    static int LocoEra(int index) => LocoEras[Mathf.Clamp(index, 0, LocoEras.Length - 1)];
+    int currentTechEra = 1;
     string historySelected;
     float historyScrollX = 0.5f, historyScrollY = 0.5f;
     RectTransform historyInfoRect, rpBadgeRect;
@@ -79,7 +97,7 @@ public partial class DemoBootstrap
         t.SetPixels(px); t.Apply(false, true);
         return Sprite.Create(t, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), 100f);
     }
-    string LocoKey(int n) { return n <= 8 ? "loco19:" + n : n <= 13 ? "loco20:" + n : "loco21:" + n; }
+    string LocoKey(int n) { int e = LocoEra(n); return e == 0 ? "loco19:" + n : e == 1 ? "loco20:" + n : "loco21:" + n; }
     void AddHistory(string key, string name, int column, int depth, int effect, string description, params string[] parents)
     {
         var node = new HistoryNode { key = key, name = name, column = column, depth = depth, incomePercent = effect, description = description, parents = parents };
@@ -112,13 +130,18 @@ public partial class DemoBootstrap
         int n = 0; foreach (var node in historyNodes) if (node.era == era && techDone.Contains(node.key)) n++;
         return n;
     }
+    int LatestUnlockedTechEra()
+    {
+        for (int e = 2; e >= 0; e--) if (IsTechEraUnlocked(e)) return e;
+        return 0;
+    }
     bool IsTechEraUnlocked(int era)
     {
-        return era == 0;
+        return era <= 1;
     }
     string EraUnlockHint(int era)
     {
-        return "暂未开放 · 后续纪元敬请期待";
+        return era >= 2 ? "暂未开放 · 二十一世纪敬请期待" : "已开放";
     }
     void InitHistoryTree()
     {
@@ -198,6 +221,7 @@ public partial class DemoBootstrap
         AddEraHistoryLoco(1, 13, "1981 年开启商业高速铁路纪元，以 270 km/h 级电力动车组重塑城际通勤。", "ac_electrification");
         AddEraHistoryLoco(1, 12, "大功率电传动内燃主力机车代表，兼顾繁忙客运特快与重型干线编组。", "diesel_traction");
         AddEraHistory(1, 1992, ResearchEffect.Demand, "bay_intercity_comm", "区域跨城直通联运", 5, "推动沧溟跨湾干线票务互认与跨城直通时刻协调，激发山海城际出行动能。", LocoKey(13), LocoKey(12));
+        InitEra20HistoryExpansion();
 
         // 二十一世纪 · 高速智行卷册（2000—2025+）
         AddEraHistory(2, 2002, ResearchEffect.Capacity, "cbtc_signaling", "CBTC 移动闭塞列控", 6, "无线车地双向通信实现精细追踪间隔控制，让高峰高密发车从容高效。");
@@ -271,10 +295,10 @@ public partial class DemoBootstrap
         if (node.era == 1)
         {
             int y1 = HistoryYear(node.key);
-            float t1 = Mathf.Clamp01((y1 - 1900f) / 95f);
-            float raw1 = 18000f * Mathf.Pow(36f, t1) * (node.loco >= 0 ? 1.25f : 1f);
-            int step1 = raw1 >= 100000f ? 5000 : 1000;
-            return Mathf.Clamp(Mathf.RoundToInt(raw1 / step1) * step1, 12000, 1000000);
+            float t1 = Mathf.Clamp01((y1 - 1900f) / 99f);
+            float raw1 = 140000f * Mathf.Pow(22f, t1) * (node.loco >= 0 ? 1.25f : 1f);
+            int step1 = raw1 >= 500000f ? 10000 : 5000;
+            return Mathf.Clamp(Mathf.RoundToInt(raw1 / step1) * step1, 140000, 3800000);
         }
         if (node.era == 2)
         {
@@ -300,14 +324,16 @@ public partial class DemoBootstrap
         if (node == null || node.key == "pressure") return 0;
         if (node.era == 1)
         {
-            if (node.key == "superheated_steam") return 6;
-            float t1 = Mathf.Clamp01((HistoryYear(node.key) - 1900f) / 95f);
-            return Mathf.Clamp(Mathf.RoundToInt(8f + t1 * 12f), 6, 20);
+            if (node.key == "superheated_steam") return 40;
+            float t1 = Mathf.Clamp01((HistoryYear(node.key) - 1900f) / 99f);
+            float raw1 = (45f + 255f * Mathf.Pow(t1, 1.35f)) * (node.loco >= 0 ? 1.2f : 1f);
+            return Mathf.Clamp(Mathf.RoundToInt(raw1 / 5f) * 5, 40, 320);
         }
         if (node.era == 2)
         {
             float t2 = Mathf.Clamp01((HistoryYear(node.key) - 2000f) / 25f);
-            return Mathf.Clamp(Mathf.RoundToInt(14f + t2 * 11f), 14, 25);
+            float raw2 = 240f + 280f * t2;
+            return Mathf.Clamp(Mathf.RoundToInt(raw2 / 10f) * 10, 240, 520);
         }
         int year = HistoryYear(node.key);
         float t = Mathf.Clamp01((year - 1800f) / 99f);
@@ -728,7 +754,7 @@ public partial class DemoBootstrap
         EnsureCoTechIndexBuilt();
         return ResolveTreePosition(key, coTechPositions,
             k => coTechByKey.TryGetValue(k, out var node) ? node.parents : null,
-            k => Array.FindIndex(CompanyTechNodes, node => node.key == k));
+            k => Array.FindIndex(AllCompanyTechNodes, node => node.key == k));
     }
 
     Vector2 ResolveTreePosition(string key, Dictionary<string, Vector2> posMap, Func<string, string[]> getParents, Func<string, int> getIndex)
@@ -830,16 +856,17 @@ public partial class DemoBootstrap
         techTreeTab = isCorporate ? 1 : 0;
         if (mode == 0)
         {
+            currentTechEra = LatestUnlockedTechEra();
             if (isCorporate) { coTechCollapseDone = true; coTechSessionUnlocked.Clear(); }
             else { techCollapseDone = true; techSessionUnlocked.Clear(); }
         }
         InitHistoryTree();
         EnsureCompanyTechMigrated();
-        if (!IsTechEraUnlocked(currentTechEra)) currentTechEra = 0;
+        if (!IsTechEraUnlocked(currentTechEra)) currentTechEra = LatestUnlockedTechEra();
         currentTechEra = Mathf.Clamp(currentTechEra, 0, 2);
-        int activeEra = isCorporate ? 0 : currentTechEra;
-        int eraTotalCount = isCorporate ? CoTechEraNodeCount(0) : EraTechNodeCount(activeEra);
-        int eraDoneCount = isCorporate ? CoTechEraDoneCount(0) : EraTechDoneCount(activeEra);
+        int activeEra = currentTechEra;
+        int eraTotalCount = isCorporate ? CoTechEraNodeCount(activeEra) : EraTechNodeCount(activeEra);
+        int eraDoneCount = isCorporate ? CoTechEraDoneCount(activeEra) : EraTechDoneCount(activeEra);
 
         ClosePage(false); pageBack = null; CloseLineBubble(); eraJournalModal = null;
         var page = Rect("HistoryFullScreen", canvas.transform, 0, 0, 0, 0);
@@ -889,9 +916,13 @@ public partial class DemoBootstrap
         var drag = view.AddComponent<HistoryDragFeedback>(); drag.callback = SetHistoryDragging;
         var parallax = view.AddComponent<HistoryParallaxLayer>(); parallax.content = rt; parallax.target = farRt;
 
-        string[] eras = isCorporate
-            ? new[] { "1800s · 契约立社", "1810s · 商办初试", "1820s · 合股募资", "1830—1849 · 清算与票制", "1850—1869 · 干线经营", "1870—1899 · 治理与风控" }
-            : new[] { "1800s · 蒸汽萌芽", "1810s · 矿道初试", "1820s · 公共铁路", "1830—1849 · 制式确立", "1850—1869 · 干线时代", "1870—1899 · 电气前夜" };
+        string[] eras = activeEra == 1
+            ? (isCorporate
+                ? new[] { "1900s · 科层与章程", "1920s · 托拉斯融资", "1940s · 统一集团化", "1960s · 站城商业街", "1980s · 跨区联运网", "1990s · 现代治理" }
+                : new[] { "1900s · 过热蒸汽", "1920s · 流线与电化", "1940s · 重载与内燃", "1960s · 交流电气化", "1980s · 高速与城际", "1990s · 干线提速" })
+            : (isCorporate
+                ? new[] { "1800s · 契约立社", "1810s · 商办初试", "1820s · 合股募资", "1830—1849 · 清算与票制", "1850—1869 · 干线经营", "1870—1899 · 治理与风控" }
+                : new[] { "1800s · 蒸汽萌芽", "1810s · 矿道初试", "1820s · 公共铁路", "1830—1849 · 制式确立", "1850—1869 · 干线时代", "1870—1899 · 电气前夜" });
         var ringLayer = Rect("HistoryRings", content.transform, 0, 0, cw, ch); ResearchSubCanvas(ringLayer);
         for (int i = 5; i >= 0; i--)
         {
@@ -927,8 +958,9 @@ public partial class DemoBootstrap
         {
             if (isCorporate)
             {
-                for (int i = 0; i < CompanyTechNodes.Length; i++)
-                    if (CompanyTechNodes[i].eraGroup == 0 && isInHub(CompanyTechNodes[i].key)) hubCollapsedCount++;
+                var allCo = AllCompanyTechNodes;
+                for (int i = 0; i < allCo.Length; i++)
+                    if (allCo[i].eraGroup == activeEra && isInHub(allCo[i].key)) hubCollapsedCount++;
             }
             else
             {
@@ -958,7 +990,8 @@ public partial class DemoBootstrap
             var innerDisc = Rect("HubInner", hubGo.transform, 18, 18, hubSize - 36, hubSize - 36);
             Img(innerDisc, new Color(0.985f, 0.968f, 0.928f), historyHubDiscSprite).raycastTarget = true;
 
-            string subLabel = sessionSet.Count > 0 ? "本次新解 " + sessionSet.Count + " 项外留" : "— XIX CENTURY —";
+            string eraRoman = activeEra == 0 ? "— XIX CENTURY —" : activeEra == 1 ? "— XX CENTURY —" : "— XXI CENTURY —";
+            string subLabel = sessionSet.Count > 0 ? "本次新解 " + sessionSet.Count + " 项外留" : eraRoman;
             var hubSub = Txt(hubGo.transform, subLabel, 21, new Color(0.56f, 0.42f, 0.22f), 24, 256, hubSize - 48, 34, TextAnchor.MiddleCenter);
             hubSessionText = hubSub;
             hubSub.fontStyle = FontStyle.Normal; hubSub.raycastTarget = false;
@@ -1084,10 +1117,11 @@ public partial class DemoBootstrap
         orderedKeys.Clear();
         if (isCorporate)
         {
-            for (int i = 0; i < CompanyTechNodes.Length; i++)
+            var allCo = AllCompanyTechNodes;
+            for (int i = 0; i < allCo.Length; i++)
             {
-                var cnode = CompanyTechNodes[i];
-                if (cnode.eraGroup != 0 || !IsCoTechVisible(cnode) || isInHub(cnode.key)) continue;
+                var cnode = allCo[i];
+                if (cnode.eraGroup != activeEra || !IsCoTechVisible(cnode) || isInHub(cnode.key)) continue;
                 bool done = HasCoTech(cnode.key);
                 bool ready = CanUnlockCoTech(cnode);
                 Color bCol = CoTechBranchColors[Mathf.Clamp(cnode.branch, 0, CoTechBranchColors.Length - 1)];
@@ -1233,7 +1267,9 @@ public partial class DemoBootstrap
         rpTouch.onRelease = HideHistoryInfo;
         rpTouch.onTap = () => Toast("长按科研点徽章查看获取规则（当前日产 " + EstimatedDailyRpRate().ToString("0.0") + " RP）");
 
-        string eraBtnLabel = isCorporate ? "19世纪 · 合股与商办  ▾" : "19世纪 · 蒸汽与轨交  ▾";
+        string eraBtnLabel = isCorporate
+            ? (activeEra == 0 ? "19世纪 · 合股与商办  ▾" : activeEra == 1 ? "20世纪 · 电气集团网  ▾" : "21世纪 · 智慧湾枢纽  ▾")
+            : (activeEra == 0 ? "19世纪 · 蒸汽与轨交  ▾" : activeEra == 1 ? "20世纪 · 内燃与电气  ▾" : "21世纪 · 高速智行  ▾");
         var eraBadge = Btn(historyControls.transform, "EraRoadmapBadge", eraBtnLabel, 23, 24, 0, 328, 54, new Color(1f, 0.99f, 0.96f, 0.99f), () => OpenEraJournalModal(page.transform, isCorporate));
         eraBadge.GetComponentInChildren<Text>().fontStyle = FontStyle.Normal;
         TInk(eraBadge, new Color(0.45f, 0.31f, 0.16f));
@@ -1310,7 +1346,8 @@ public partial class DemoBootstrap
             collapseButton.gameObject.SetActive(showCollapse);
             ensureSwitchTree();
             if (switchTreeRect) headerLayout.AddSafeTopLeftTarget(switchTreeRect, new Vector2(showCollapse ? 612f : 366f, -206));
-            if (collapsed && hubGoForRefresh) hubSessionText.text = sessionSet.Count > 0 ? "本次新解 " + sessionSet.Count + " 项外留" : "— XIX CENTURY —";
+            string eraRomanRefresh = activeEra == 0 ? "— XIX CENTURY —" : activeEra == 1 ? "— XX CENTURY —" : "— XXI CENTURY —";
+            if (collapsed && hubGoForRefresh) hubSessionText.text = sessionSet.Count > 0 ? "本次新解 " + sessionSet.Count + " 项外留" : eraRomanRefresh;
             justUnlockedKey = null;
         };
         BuildHistoryInfoPanel(page.transform, pageRt);
@@ -1344,7 +1381,7 @@ public partial class DemoBootstrap
 
         var cnHeader = Txt(sheet.transform, isCorporate ? "— ◆ 商道百年 · 治理手帐 ◆ —" : "— ◆ 铁道百年 · 时代手帐 ◆ —", 38, Ink, 44, cardH - 122, cardW - 88, 52, TextAnchor.MiddleCenter);
         cnHeader.fontStyle = FontStyle.Normal;
-        var subHeader = Txt(sheet.transform, "目前仅十九世纪卷已开卷 · 二十与二十一世纪暂未开放", 22, InkSoft, 44, cardH - 166, cardW - 88, 32, TextAnchor.MiddleCenter);
+        var subHeader = Txt(sheet.transform, "十九与二十世纪卷已开卷 · 二十一世纪暂未开放", 22, InkSoft, 44, cardH - 166, cardW - 88, 32, TextAnchor.MiddleCenter);
 
         var xClose = Btn(sheet.transform, "CloseJournal", "×", 34, cardW - 96, cardH - 96, 62, 62, new Color(0.92f, 0.87f, 0.78f), () => {
             if (eraJournalModal) Destroy(eraJournalModal); eraJournalModal = null;
@@ -1357,11 +1394,11 @@ public partial class DemoBootstrap
         string[] subStatus = new string[3];
         for (int e = 0; e < 3; e++)
         {
-            if (e == 0)
+            if (IsTechEraUnlocked(e))
             {
-                int doneE = isCorporate ? CoTechEraDoneCount(0) : EraTechDoneCount(0);
-                int totalE = isCorporate ? CoTechEraNodeCount(0) : EraTechNodeCount(0);
-                subStatus[e] = "现行研习 · 已收编 " + doneE + " / " + totalE + " 项  ›";
+                int doneE = isCorporate ? CoTechEraDoneCount(e) : EraTechDoneCount(e);
+                int totalE = isCorporate ? CoTechEraNodeCount(e) : EraTechNodeCount(e);
+                subStatus[e] = (e == currentTechEra ? "当前研习 · " : "点击切换 · ") + doneE + " / " + totalE + " 项  ›";
             }
             else
             {
@@ -1401,9 +1438,18 @@ public partial class DemoBootstrap
             var cardTap = vol.AddComponent<Button>();
             cardTap.targetGraphic = vol.GetComponent<Image>();
             cardTap.onClick.AddListener(() => {
-                if (idx == 0) {
+                if (IsTechEraUnlocked(idx)) {
                     if (eraJournalModal) Destroy(eraJournalModal);
                     eraJournalModal = null;
+                    if (currentTechEra != idx)
+                    {
+                        currentTechEra = idx;
+                        historySelected = null;
+                        historyScrollX = 0.5f;
+                        historyScrollY = 0.5f;
+                        PlayClickSfx();
+                        OpenConcentricTechScreen(isCorporate, 1);
+                    }
                 } else {
                     PlayErrorSfx();
                     Toast("「" + titles[idx] + "」" + EraUnlockHint(idx));
@@ -1414,7 +1460,10 @@ public partial class DemoBootstrap
     static readonly int[] LocoPrices = {
         300, 800, 1500, 3200, 6800, 14000, 28000, 65000, 280000,
         360000, 450000, 540000, 620000, 780000,
-        960000, 1280000
+        960000, 1280000,
+        340000, 380000, 430000, 520000, 500000, 470000,
+        480000, 540000, 530000, 580000, 600000, 560000,
+        510000, 680000, 610000, 820000, 740000, 790000
     };
     int LocoPrice(int index) { return LocoPrices[Mathf.Clamp(index, 0, LocoPrices.Length - 1)]; }
     void PurchaseLoco(int index, int count = 1)
@@ -1423,7 +1472,8 @@ public partial class DemoBootstrap
         count = Mathf.Clamp(count, 1, 99);
         if (!techDone.Contains(LocoKey(index)))
         {
-            Toast(index >= 9 ? "该车型所属 20/21 世纪科技树暂未开放" : "请先在 19 世纪科技树解锁对应机车节点");
+            int era = LocoEra(index);
+            Toast(!IsTechEraUnlocked(era) ? "该车型所属 21 世纪科技树暂未开放" : $"请先在 {19 + era} 世纪科技树解锁对应机车节点");
             return;
         }
         int unitPrice = LocoPrice(index);

@@ -346,12 +346,29 @@ public partial class DemoBootstrap
         new CompanyTechNode { key = "co_inst_4_75", eraGroup = 0, year = 1896, branch = 4, title = "股息透支", periodLabel = "1896 年 · 十九世纪制度推演", desc = "以借款支付股息掏空偿债资金。将教训列为后续合规制度的必修前置。", effectSummary = "历史教训：债券偿付压力短期 +2%（跨境银团授信掌握后解除）", effKind = "BondDue", effVal = 0.02f, resolvedBy = "co_fin_4", parents = new[] { "co_inst_3_54", "co_inst_2_63" } }
     };
 
+    static CompanyTechNode[] cachedAllCompanyTechNodes;
+    static CompanyTechNode[] AllCompanyTechNodes
+    {
+        get
+        {
+            if (cachedAllCompanyTechNodes == null)
+            {
+                int a = CompanyTechNodes.Length, b = CompanyTechNodesEra20.Length;
+                cachedAllCompanyTechNodes = new CompanyTechNode[a + b];
+                Array.Copy(CompanyTechNodes, 0, cachedAllCompanyTechNodes, 0, a);
+                Array.Copy(CompanyTechNodesEra20, 0, cachedAllCompanyTechNodes, a, b);
+            }
+            return cachedAllCompanyTechNodes;
+        }
+    }
+
     void EnsureCoTechIndexBuilt()
     {
         if (coTechByKey.Count > 0) return;
-        for (int i = 0; i < CompanyTechNodes.Length; i++)
+        var allCo = AllCompanyTechNodes;
+        for (int i = 0; i < allCo.Length; i++)
         {
-            var n = CompanyTechNodes[i];
+            var n = allCo[i];
             coTechByKey[n.key] = n;
         }
     }
@@ -384,7 +401,8 @@ public partial class DemoBootstrap
     int CoTechEraNodeCount(int era)
     {
         int c = 0;
-        for (int i = 0; i < CompanyTechNodes.Length; i++) if (CompanyTechNodes[i].eraGroup == era) c++;
+        var allCo = AllCompanyTechNodes;
+        for (int i = 0; i < allCo.Length; i++) if (allCo[i].eraGroup == era) c++;
         return c;
     }
 
@@ -392,8 +410,9 @@ public partial class DemoBootstrap
     {
         EnsureCompanyTechMigrated();
         int c = 0;
-        for (int i = 0; i < CompanyTechNodes.Length; i++)
-            if (CompanyTechNodes[i].eraGroup == era && companyTechDone.Contains(CompanyTechNodes[i].key)) c++;
+        var allCo = AllCompanyTechNodes;
+        for (int i = 0; i < allCo.Length; i++)
+            if (allCo[i].eraGroup == era && companyTechDone.Contains(allCo[i].key)) c++;
         return c;
     }
 
@@ -408,7 +427,7 @@ public partial class DemoBootstrap
     }
 
     bool HasCoTech(string key) => companyTechDone.Contains(key);
-    int CoTechTotalCount() => CoTechEraNodeCount(0);
+    int CoTechTotalCount() => CoTechEraNodeCount(0) + CoTechEraNodeCount(1);
     bool CanUnlockCoTech(CompanyTechNode node)
     {
         if (node == null || HasCoTech(node.key)) return false;
@@ -420,6 +439,14 @@ public partial class DemoBootstrap
     int CoTechCoinCost(CompanyTechNode node)
     {
         if (node == null || node.key == "co_charter_1801") return 0;
+        if (node.eraGroup == 1)
+        {
+            float t1 = Mathf.Clamp01((node.year - 1900f) / 99f);
+            float mult1 = node.branch == 4 ? 0.72f : 1f;
+            float raw1 = 140000f * Mathf.Pow(22f, t1) * mult1;
+            int step1 = raw1 >= 500000f ? 10000 : 5000;
+            return Mathf.Clamp(Mathf.RoundToInt(raw1 / step1) * step1, 140000, 3500000);
+        }
         float t = Mathf.Clamp01((node.year - 1800f) / 99f);
         float mult = node.branch == 4 ? 0.65f : 1f;
         float raw = 200f * Mathf.Pow(5000f, t) * mult;
@@ -429,6 +456,13 @@ public partial class DemoBootstrap
     int CoTechRpCost(CompanyTechNode node)
     {
         if (node == null || node.key == "co_charter_1801") return 0;
+        if (node.eraGroup == 1)
+        {
+            if (node.key == "co20_root_1900") return 40;
+            float t1 = Mathf.Clamp01((node.year - 1900f) / 99f);
+            float raw1 = (45f + 245f * Mathf.Pow(t1, 1.35f)) * (node.branch == 4 ? 0.8f : 1f);
+            return Mathf.Clamp(Mathf.RoundToInt(raw1 / 5f) * 5, 40, 300);
+        }
         float t = Mathf.Clamp01((node.year - 1800f) / 99f);
         return Mathf.Clamp(Mathf.RoundToInt(1f + t * 14f), 1, 15);
     }
@@ -479,11 +513,11 @@ public partial class DemoBootstrap
     int CoTechExtraSeats() => (HasCoTech("co_hr_2") ? 1 : 0) + (HasCoTech("co_hr_4") ? 1 : 0);
     float CoTechPartnerConMitigation() => HasCoTech("co_hr_4") ? 0.90f : 1f;
     float CoTechTrainXpMult() => (CoTechLegacyMult("co_hr_1", 0.04f) * CoTechLegacyMult("co_hr_3", 0.04f) * CoTechLegacyMult("co_pension_1868", 0.04f)) * CoTechEffectMult("TrainXp");
-    float CoTechTrainCostMult() => Mathf.Max(0.32f, (CoTechLegacyMult("co_hr_3", -0.04f) * CoTechLegacyMult("co_pension_1868", -0.04f)) * CoTechEffectMult("TrainCost"));
+    float CoTechTrainCostMult() => Mathf.Max(0.32f, (CoTechLegacyMult("co_hr_3", -0.04f) * CoTechLegacyMult("co_pension_1868", -0.04f)) * CoTechEffectMult("TrainCost") * CoTechEffectMult("Cost"));
     float CoTechOpenCostMult() => Mathf.Max(0.35f, (CoTechLegacyMult("co_charter_1801", -0.03f) * CoTechLegacyMult("co_booth_1826", -0.04f) * CoTechLegacyMult("co_re_1", -0.04f) * (HasCoTech("co_woosung_1876") && !HasCoTech("co_audit_1885") ? 1.03f : 1f)) * CoTechEffectMult("OpenCost"));
     float CoTechCommercialMult() => (CoTechLegacyMult("co_re_1", 0.04f) * CoTechLegacyMult("co_hotel_1854", 0.04f) * CoTechLegacyMult("co_re_2", 0.04f) * CoTechLegacyMult("co_re_4", 0.04f)) * CoTechEffectMult("Commercial");
     float CoTechSceneryDemandMult() => (CoTechLegacyMult("co_hotel_1854", 0.04f) * CoTechLegacyMult("co_re_3", 0.04f)) * CoTechEffectMult("SceneryDemand");
-    float CoTechStationCapMult() => CoTechLegacyMult("co_re_4", 0.04f) * CoTechEffectMult("StationCap");
+    float CoTechStationCapMult() => CoTechLegacyMult("co_re_4", 0.04f) * CoTechEffectMult("StationCap") * CoTechEffectMult("Capacity");
     float CoTechTrackBuildMult() => Mathf.Max(0.35f, (CoTechLegacyMult("co_stock_1821", -0.04f) * CoTechLegacyMult("co_fin_1", -0.04f) * CoTechLegacyMult("co_audit_1885", -0.04f)) * CoTechEffectMult("TrackBuild"));
     float CoTechMaintMult() => Mathf.Max(0.32f, (CoTechLegacyMult("co_fin_1", -0.04f) * (HasCoTech("co_mania_1845") && !HasCoTech("co_fin_2") ? 1.03f : 1f) * CoTechLegacyMult("co_waybill_1871", -0.04f) * CoTechLegacyMult("co_fin_4", -0.04f)) * CoTechEffectMult("Maint"));
     float CoTechBondCapMult() => CoTechLegacyMult("co_fin_2", 0.04f) * CoTechEffectMult("BondCap");
@@ -491,7 +525,7 @@ public partial class DemoBootstrap
     int CoTechContractCap() => HasCoTech("co_fin_3") ? 3 : 2;
     float CoTechContractBonusMult() => CoTechLegacyMult("co_fin_3", 0.04f);
     float CoTechSpeedMult() => CoTechLegacyMult("co_ops_1", 0.04f) * CoTechEffectMult("Speed");
-    float CoTechRpMult() => (CoTechLegacyMult("co_ops_1", 0.04f) * CoTechLegacyMult("co_kaiping_1881", 0.04f)) * CoTechEffectMult("Rp");
+    float CoTechRpMult() => (CoTechLegacyMult("co_ops_1", 0.04f) * CoTechLegacyMult("co_kaiping_1881", 0.04f)) * CoTechEffectMult("Rp") * CoTechEffectMult("Tech");
     float CoTechTransferMult() => Mathf.Max(0.38f, (CoTechLegacyMult("co_rch_1842", -0.04f) * CoTechLegacyMult("co_ops_2", -0.04f)) * CoTechEffectMult("Transfer"));
     float CoTechRevenueMult() => (CoTechLegacyMult("co_fare_act_1844", 0.03f) * CoTechLegacyMult("co_ops_2", 0.04f) * CoTechLegacyMult("co_rateact_1887", 0.04f) * CoTechLegacyMult("co_fin_4", 0.04f)) * CoTechEffectMult("Revenue");
     float CoTechTourismLineMult() => CoTechLegacyMult("co_ops_3", 0.04f) * CoTechEffectMult("Tourism");
@@ -781,10 +815,11 @@ public partial class DemoBootstrap
         }
 
         historyAnimated.Clear();
-        for (int i = 0; i < CompanyTechNodes.Length; i++)
+        var allCo = AllCompanyTechNodes;
+        for (int i = 0; i < allCo.Length; i++)
         {
-            var cand = CompanyTechNodes[i];
-            if (cand.eraGroup == 0 && IsCoTechVisible(cand)) historyAnimated.Add(cand.key);
+            var cand = allCo[i];
+            if (cand.eraGroup == currentTechEra && IsCoTechVisible(cand)) historyAnimated.Add(cand.key);
         }
 
         BeginUndo("解锁企业治理科技");

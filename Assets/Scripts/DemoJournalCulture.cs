@@ -456,8 +456,7 @@ public partial class DemoBootstrap
                     mapRect.anchoredPosition = mapWheelZoom.ClampPosition(mapRect.anchoredPosition + delta, z);
                 }
             }
-            if (!trafficHeatmapMode) ToggleTrafficHeatmap();
-            else { RefreshAllLines(); RefreshStationDots(); }
+            RefreshAllLines(); RefreshStationDots();
             Vector2 at = mid;
             if (mapRect != null && root != null)
             {

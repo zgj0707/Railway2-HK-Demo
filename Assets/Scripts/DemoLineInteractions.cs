@@ -56,9 +56,9 @@ public partial class DemoBootstrap
         {
             BeginUndo("热力快捷增班");
             line.dispatch[slot] = Mathf.Min(line.trains, line.dispatch[slot] + 1);
-            hasForecastSignature = false; operatingRates.Clear();
+            operatingRates.Clear();
             RecalcIncome(); EndUndo(); RefreshHUD();
-            Toast(line.name + " 本时段发车增至 " + line.dispatch[slot] + " 班");
+            ShowForecastDelayToast();
             return;
         }
         if (line.trains >= 8) { OpenLineFleet(line, () => GoHome()); return; }
@@ -71,9 +71,9 @@ public partial class DemoBootstrap
                 BeginUndo("热力快捷调车");
                 MoveLineFleetVehicle(line, v, true);
                 line.dispatch[slot] = line.trains;
-                hasForecastSignature = false; operatingRates.Clear();
+                operatingRates.Clear();
                 RecalcIncome(); EndUndo(); RefreshHUD();
-                Toast("已将空闲机车「" + LocoNames[Mathf.Clamp(v.node, 0, LocoNames.Length - 1)] + "」调入 " + line.name);
+                ShowForecastDelayToast();
                 return;
             }
         }
@@ -99,7 +99,7 @@ public partial class DemoBootstrap
             var hHit = hits[i];
             int ha = hHit.line.st[hHit.seg], hb = hHit.line.st[hHit.seg + 1];
             float load = SegmentLoadRatio(hHit.line, ha, hb);
-            bool showBoost = trafficHeatmapMode || load >= 0.72f;
+            bool showBoost = load >= 0.72f;
             heights[i] = showBoost ? 236f : 172f;
             total += heights[i];
         }
@@ -116,7 +116,7 @@ public partial class DemoBootstrap
             if (!lines.Contains(line)) continue;
             int a = line.st[hit.seg], b = line.st[hit.seg + 1];
             float load = SegmentLoadRatio(line, a, b);
-            bool showBoost = trafficHeatmapMode || load >= 0.72f;
+            bool showBoost = load >= 0.72f;
             float bh = heights[i];
             float y = cursorTop - bh;
             cursorTop = y - gap;
@@ -262,6 +262,7 @@ public partial class DemoBootstrap
         float extra = pathHeight - 48;
         float h = 1180f + extra;
         var p = OpenPopup("", h, 960, "line_info_" + line.id);
+        panelForecastRefresh = () => { if (activePanel != null && activePanelKey == "line_info_" + line.id) OpenLineInfo(line, seg); };
         BuildLineNameEditor(p.transform, line, h);
         Img(Rect("LineColor", p.transform, 36, h - 124, 888, 8), line.color, spriteRound).raycastTarget = false;
 
@@ -270,8 +271,9 @@ public partial class DemoBootstrap
         for (int i = 0; i < line.recent.Count; i++) recentSum += line.recent[i];
 
         var forecast = ForecastFor(line);
-        StatBox(p.transform, "预计日收入", Mathf.RoundToInt(forecast.gross) + "", 34, h - 300, 430, 150, Gold);
-        StatBox(p.transform, "预计日利润", Mathf.RoundToInt(forecast.Profit) + "", 496, h - 300, 430, 150, Matcha);
+        string pendingTag = pendingForecastMask != 0 ? " 测算中" : "";
+        StatBox(p.transform, "预计日收入" + pendingTag, Mathf.RoundToInt(forecast.gross) + "", 34, h - 300, 430, 150, Gold);
+        StatBox(p.transform, "预计日利润" + pendingTag, Mathf.RoundToInt(forecast.Profit) + "", 496, h - 300, 430, 150, Matcha);
         StatBox(p.transform, "客 流", Mathf.RoundToInt(LinePassengerFlow(line)) + "", 34, h - 470, 430, 150, Indigo);
         StatBox(p.transform, "单向区段运力", Mathf.RoundToInt(LineCapacity(line)) + " 人次/日", 496, h - 470, 430, 150, Sakura);
 

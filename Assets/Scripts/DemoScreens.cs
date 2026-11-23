@@ -8,6 +8,8 @@ public partial class DemoBootstrap
     GameObject pageRoot;
     RectTransform pageContentRect;
     Action pageBack;
+    Action pageForecastRefresh;
+    Action panelForecastRefresh;
     string activePageKey = "";
     float PgH => pageContentRect ? Mathf.Max(1400f, pageContentRect.rect.height) : PageSafeHeight;
 
@@ -146,6 +148,7 @@ public partial class DemoBootstrap
     void ClosePage(bool syncAudio)
     {
         refreshHistoryTree = null; incrementalHistoryPage = null;
+        pageForecastRefresh = null;
         CaptureScrollPositions();
         StopPageAnim();
         bool hadHeavyPage = pageRoot != null && (activePageKey == "fleet_shop" || activePageKey == "company" || activePageKey == "scenery" || activePageKey == "line_info" || activePageKey == "tech");
@@ -357,7 +360,8 @@ public partial class DemoBootstrap
             linesRegionFilter = idx >= 0 ? idx : 0;
         }
 
-        var pg = OpenPage("线路", "在地图按住车站拖向下一站即可开线；自端点拖出为延线，自中间站拖出则开新线。", "PageArt/line_watercolor");
+        var pg = OpenPage("线路", "在地图按住车站拖向下一站即可开线；自端点拖出为延线，自中间站拖出则开新线。", "PageArt/line_watercolor", "lines_overview");
+        pageForecastRefresh = () => { if (pageRoot != null && activePageKey == "lines_overview") OpenLinesScreen(); };
         AttachPageCurrencyBadge(false);
         StatBox(pg.transform, "预计日利润", FormatSignedNumber(income), 28, PgH-400, 320, 210, Gold);
         StatBox(pg.transform, "已连通", ConnectedCount() + "/" + stations.Count, 380, PgH-400, 320, 210, Matcha);
@@ -457,11 +461,13 @@ public partial class DemoBootstrap
         var pg = OpenPage(line.name, "沿线客流 · 运力配属 · 日盈亏总览", "PageArt/line_watercolor", "line_screen_" + line.id);
         AttachPageCurrencyBadge(false);
         pageBack = back ?? OpenLinesScreen;
+        string pendingTag = pendingForecastMask != 0 ? " 测算中" : "";
         StatBox(pg.transform, "客流", Mathf.RoundToInt(LinePassengerFlow(line)) + "", 28, PgH-440, 320, 200, Matcha);
         StatBox(pg.transform, "单向区段运力", Mathf.RoundToInt(LineCapacity(line)) + " 人次/日", 380, PgH-440, 320, 200, Indigo);
-        StatBox(pg.transform, "预计日利润", Mathf.RoundToInt(LineDaily(line)) + "", 732, PgH-440, 320, 200, Gold);
+        StatBox(pg.transform, "预计日利润" + pendingTag, Mathf.RoundToInt(LineDaily(line)) + "", 732, PgH-440, 320, 200, Gold);
 
         Action refreshSelf = () => OpenLineScreen(id, back);
+        pageForecastRefresh = () => { if (pageRoot != null && activePageKey == "line_screen_" + line.id) OpenLineScreen(id, back); };
 
         var assignedGroups = FleetGroupsByLine(line.id);
         var idleGroups = FleetGroupsByLine(0);
@@ -475,7 +481,7 @@ public partial class DemoBootstrap
         float skinH = 84f;
         float fleetHeaderH = 92f;
         float fleetBodyH = lineScreenFleetExpanded
-            ? (16f + 46f + 132f + assignedGroups.Count * 144f + 56f + (idleGroups.Count == 0 ? 100f : idleEras.Count * 46f + idleGroups.Count * 144f) + 12f)
+            ? (16f + 46f + (line.hasBaseTrain ? 132f : 0f) + assignedGroups.Count * 144f + 56f + (idleGroups.Count == 0 ? 100f : idleEras.Count * 46f + idleGroups.Count * 144f) + 12f)
             : 0f;
         float opsHeaderH = 92f;
         float opsBodyH = lineScreenOpsExpanded ? (16f + 140f + 44f + opRows * 124f + 12f) : 0f;
@@ -520,10 +526,20 @@ public partial class DemoBootstrap
         {
             y -= 16f;
             Txt(content, "本线已配属车辆", 24, Ink, 12, y - 38f, width - 24f, 36f, TextAnchor.MiddleLeft); y -= 46f;
-            var basicCard = Rect("InlineBaseVehicle", content, 0, y - 122f, width, 122f); Rounded(basicCard, CardBg);
-            Txt(basicCard.transform, "线路基础车辆 ×1", 26, Ink, 22, 68f, width - 44f, 38f, TextAnchor.MiddleLeft);
-            Txt(basicCard.transform, "基础编制固定保留；其余配属机车可随时撤回车库。", 21, InkSoft, 22, 18f, width - 44f, 34f, TextAnchor.MiddleLeft);
-            y -= 132f;
+            if (line.hasBaseTrain)
+            {
+                var basicCard = Rect("InlineBaseVehicle", content, 0, y - 122f, width, 122f); Rounded(basicCard, CardBg);
+                bool canWithdrawBase = line.trains > 1;
+                float textW = canWithdrawBase ? (width - 250f) : (width - 44f);
+                Txt(basicCard.transform, "线路基础车辆 ×1", 26, Ink, 22, 68f, textW, 38f, TextAnchor.MiddleLeft);
+                Txt(basicCard.transform, canWithdrawBase ? "本线不止 1 辆车，可撤下基础车辆腾出编组。" : "当前仅此 1 列，调入其他机车后可撤下。", 21, InkSoft, 22, 18f, textW, 34f, TextAnchor.MiddleLeft);
+                if (canWithdrawBase)
+                {
+                    var wb = Btn(basicCard.transform, "WithdrawBase", "撤回", 23, width - 204f, 26f, 182f, 70f, Paper2, () => WithdrawBaseTrain(line, refreshSelf));
+                    TInk(wb, Ink);
+                }
+                y -= 132f;
+            }
 
             foreach (var group in assignedGroups)
             {
@@ -971,11 +987,12 @@ public partial class DemoBootstrap
             var name = Txt(card.transform, LocoNames[index], 31, Ink, textX, 138, infoWidth, 44, TextAnchor.MiddleLeft); name.resizeTextForBestFit = true; name.resizeTextMinSize = 20; name.resizeTextMaxSize = ScaledFontSize(31);
             var stats = Txt(card.transform, LocoYears[index] + " · " + FormatLocoRealStats(index), 22, InkSoft, textX, 94, infoWidth, 36, TextAnchor.MiddleLeft);
             stats.resizeTextForBestFit = true; stats.resizeTextMinSize = 16; stats.resizeTextMaxSize = ScaledFontSize(22);
-            bool eraClosed = tab == 2 && !unlocked && index >= 9;
+            int locoEra = LocoEra(index);
+            bool eraClosed = tab == 2 && !unlocked && !IsTechEraUnlocked(locoEra);
             string state = tab == 1 ? (assigned == null ? "未配置" : "已配置至 " + assigned.name)
                 : unlocked ? "已解锁"
-                : eraClosed ? "20/21世纪暂未开放"
-                : "19世纪科技树未解锁";
+                : eraClosed ? "21世纪暂未开放"
+                : $"{19 + locoEra}世纪科技树未解锁";
             Txt(card.transform, state, 22, eraClosed ? new Color(0.56f, 0.45f, 0.34f) : InkSoft, textX, 48, infoWidth, 32, TextAnchor.MiddleLeft);
             bool canRetire = tab == 1 && assigned == null;
             if (canRetire)
@@ -1047,6 +1064,17 @@ public partial class DemoBootstrap
     }
 
     static readonly string[] DispatchNames = { "早高峰 06–10", "日间 10–16", "晚高峰 16–20", "夜间 20–06" };
+    void SetAllDispatchToTrains(Line line)
+    {
+        if (line == null || !lines.Contains(line)) return;
+        if (!PathTouchesRegion(line.st, currentRegion)) { Toast("请先切换到该线路所在地区调整调度"); return; }
+        if (!techDone.Contains("dispatch_basic")) { Toast("请先研究铁路时刻表"); return; }
+        BeginUndo("全时段满班");
+        for (int i = 0; i < line.dispatch.Length; i++) line.dispatch[i] = line.trains;
+        RecalcIncome(); EndUndo(); RefreshHUD();
+        OpenLineOperations(line);
+        ShowForecastDelayToast();
+    }
     void SetLineDispatch(Line line, int slot, int amount, Action onDone = null)
     {
         if (!PathTouchesRegion(line.st, currentRegion)) { Toast("请先切换到该线路所在地区调整调度"); return; }
@@ -1063,6 +1091,7 @@ public partial class DemoBootstrap
         else line.dispatch[slot]=amount;
         RecalcIncome(); EndUndo(); RefreshHUD();
         if (onDone != null) onDone(); else OpenLineOperations(line);
+        ShowForecastDelayToast();
     }
     void ChangeLineFare(Line line, float delta, Action onDone = null)
     {
@@ -1071,22 +1100,30 @@ public partial class DemoBootstrap
         BeginUndo("调整票价"); line.fare = Mathf.Clamp(Mathf.Round((line.fare + delta)*10f)/10f,0.5f,3f);
         RecalcIncome(); EndUndo(); RefreshHUD();
         if (onDone != null) onDone(); else OpenLineOperations(line);
+        ShowForecastDelayToast();
     }
     void OpenLineOperations(Line line)
     {
         if (line == null || !lines.Contains(line)) { OpenLinesScreen(); return; }
-        var page = OpenPage("票价与调度", "定价权衡客座率与营收；分时调车削减闲置损耗。", "PageArt/line_watercolor");
+        var page = OpenPage("票价与调度", "定价权衡客座率与营收；分时调车削减闲置损耗。", "PageArt/line_watercolor", "line_ops_" + line.id);
         pageBack = () => OpenLineScreen(line.id);
+        pageForecastRefresh = () => { if (pageRoot != null && activePageKey == "line_ops_" + line.id) OpenLineOperations(line); };
         var forecast = ForecastFor(line);
+        string pendingTag = pendingForecastMask != 0 ? "（测算中…）" : "";
         Txt(page.transform, line.name + " · 配属 " + line.trains + " 列 · 当前开行 " + RunningTrains(line) + " 列", 28, Ink, 32, PgH-300, 1000, 45, TextAnchor.MiddleLeft);
-        Txt(page.transform, "预计日收入 ¥" + Mathf.RoundToInt(forecast.gross) + "    成本 ¥" + Mathf.RoundToInt(forecast.vehicle+forecast.track+forecast.tax) + "    利润 ¥" + Mathf.RoundToInt(forecast.Profit), 24, InkSoft, 32, PgH-360, 1000, 45, TextAnchor.MiddleLeft);
+        Txt(page.transform, "预计日收入 ¥" + Mathf.RoundToInt(forecast.gross) + "    成本 ¥" + Mathf.RoundToInt(forecast.vehicle+forecast.track+forecast.tax) + "    利润 ¥" + Mathf.RoundToInt(forecast.Profit) + pendingTag, 24, InkSoft, 32, PgH-360, 1000, 45, TextAnchor.MiddleLeft);
         var fare = Rect("Fare",page.transform,28,PgH-535,W-56,145); Rounded(fare,new Color(1,1,1,0.94f));
         Txt(fare.transform, "起步票价  ¥" + line.fare.ToString("0.0") + " / 人", 30, Ink, 26, 74, 570, 44, TextAnchor.MiddleLeft);
         Txt(fare.transform, techDone.Contains("fare_policy") ? "起步价叠加跨站里程费 · 票款按 10:1 计入金币" : "研究「客运票价制度」后可自主调价", 22, InkSoft, 26, 22, 660, 38, TextAnchor.MiddleLeft);
         var fm=Btn(fare.transform,"FareMinus","−",35,720,30,110,80,Paper2,()=>ChangeLineFare(line,-0.1f));TInk(fm,Ink);
         var fp=Btn(fare.transform,"FarePlus","+",35,850,30,110,80,Paper2,()=>ChangeLineFare(line,0.1f));TInk(fp,Ink);
         bool basic=techDone.Contains("dispatch_basic"), peak=techDone.Contains("dispatch_peak");
-        Txt(page.transform, !basic ? "研究「铁路时刻表」解锁统一调度" : !peak ? "统一调度已就绪；研究「分时列车计划」可分时段增减" : "分时调度 · 高峰与夜间独立发班", 24, InkSoft, 32, PgH-590, 1000, 38, TextAnchor.MiddleLeft);
+        Txt(page.transform, !basic ? "研究「铁路时刻表」解锁统一调度" : !peak ? "统一调度已就绪；研究「分时列车计划」可分时段增减" : "分时调度 · 高峰与夜间独立发班", 24, InkSoft, 32, PgH-590, 720, 38, TextAnchor.MiddleLeft);
+        if (basic)
+        {
+            var fullDispatchBtn = Btn(page.transform, "FullDispatch", "全时段满班", 22, W - 248, PgH - 596, 220, 48, Indigo, () => SetAllDispatchToTrains(line));
+            TInk(fullDispatchBtn, Color.white);
+        }
         int rows=peak?4:1;
         for(int i=0;i<rows;i++) {
             int slot=i; var row=Rect("DispatchSlot"+i,page.transform,28,PgH-740-i*130,W-56,115); Rounded(row,new Color(1,1,1,0.94f));
@@ -1130,8 +1167,7 @@ public partial class DemoBootstrap
         if (assign)
         {
             if (vehicle.lineId != 0) return "该机车已配属其他线路";
-            int assigned = 0; foreach (var item in researchVehicles) if (item.lineId == line.id) assigned++;
-            if (line.trains >= 8 || assigned >= 7) return "该线路最多配属 8 列车";
+            if (line.trains >= 8) return line.hasBaseTrain ? "该线路已满 8 列，可先撤下基础车辆再调入" : "该线路最多配属 8 列车";
         }
         else if (vehicle.lineId != line.id) return "该机车已不在本线";
         return null;
@@ -1155,7 +1191,7 @@ public partial class DemoBootstrap
         vehicle.lineId = assign ? line.id : 0;
         SyncLineFleet(line);
         if (assign) ApplyPendingLineFleetDispatch(line);
-        hasForecastSignature = false; operatingRates.Clear();
+        operatingRates.Clear();
         return true;
     }
     void ChangeLineFleetVehicle(Line line, ResearchVehicle vehicle, bool assign, Action onDone = null)
@@ -1166,7 +1202,48 @@ public partial class DemoBootstrap
         MoveLineFleetVehicle(line, vehicle, assign);
         RecalcIncome(); EndUndo(); RefreshHUD();
         if (onDone != null) onDone(); else OpenLineFleet(line);
-        Toast(assign ? "机车已调入本线" : "机车已返回车库，调度已同步调整");
+        ShowForecastDelayToast();
+    }
+    void FillLineFleetVehicles(Line line, int model, Action onDone = null)
+    {
+        if (line == null || !lines.Contains(line)) return;
+        if (!PathTouchesRegion(line.st, currentRegion)) { Toast("请先切换到该线路所在地区调整机车"); return; }
+        int slotsLeft = 8 - line.trains;
+        if (slotsLeft <= 0) { Toast(line.hasBaseTrain ? "该线路已满 8 列，可先撤下基础车辆再调入" : "该线路最多配属 8 列车"); return; }
+
+        BeginUndo("批量调入机车");
+        int moved = 0;
+        for (int i = 0; i < researchVehicles.Count && moved < slotsLeft; i++)
+        {
+            var v = researchVehicles[i];
+            if (v.lineId == 0 && v.node == model)
+            {
+                v.lineId = line.id;
+                moved++;
+            }
+        }
+        if (moved <= 0)
+        {
+            pendingUndo = null;
+            Toast("暂无可用同型机车");
+            return;
+        }
+        SyncLineFleet(line);
+        RecalcIncome(); EndUndo(); RefreshHUD();
+        if (onDone != null) onDone(); else OpenLineFleet(line);
+        ShowForecastDelayToast();
+    }
+    void WithdrawBaseTrain(Line line, Action onDone = null)
+    {
+        if (line == null || !lines.Contains(line)) return;
+        if (!PathTouchesRegion(line.st, currentRegion)) { Toast("请先切换到该线路所在地区调整机车"); return; }
+        if (!line.hasBaseTrain || line.trains <= 1) { Toast("线路不止 1 辆车时才能撤下基础车辆"); return; }
+        BeginUndo("撤回基础车辆");
+        line.hasBaseTrain = false;
+        SyncLineFleet(line);
+        RecalcIncome(); EndUndo(); RefreshHUD();
+        if (onDone != null) onDone(); else OpenLineFleet(line);
+        ShowForecastDelayToast();
     }
     sealed class FleetModelGroup
     {
@@ -1185,9 +1262,9 @@ public partial class DemoBootstrap
         }
         return new List<FleetModelGroup>(groups.Values);
     }
-    static int LineFleetEra(int node) => node < 9 ? 0 : node < 14 ? 1 : 2;
-    static float LineFleetListHeight(int assigned, int models, int eras)
-        => 24f + 60f + 150f + assigned * 166f + 72f + (models == 0 ? 130f : eras * 54f + models * 166f) + 24f;
+    static int LineFleetEra(int node) => LocoEra(node);
+    static float LineFleetListHeight(bool hasBaseTrain, int assigned, int models, int eras)
+        => 24f + 60f + (hasBaseTrain ? 150f : 0f) + assigned * 166f + 72f + (models == 0 ? 130f : eras * 54f + models * 166f) + 24f;
     static int LocoRealCapacity(int node) => Mathf.RoundToInt(4000f * FleetCapacityTraits[Mathf.Clamp(node, 0, FleetCapacityTraits.Length - 1)]);
     static int LocoRealDailyMaint(int node) => Mathf.RoundToInt(55f * FleetMaintenanceTraits[Mathf.Clamp(node, 0, FleetMaintenanceTraits.Length - 1)]);
     static int LocoRealSpeedKmh(int node) => Mathf.RoundToInt(80f * FleetSpeedTraits[Mathf.Clamp(node, 0, FleetSpeedTraits.Length - 1)]);
@@ -1208,12 +1285,23 @@ public partial class DemoBootstrap
         var assignedGroups = FleetGroupsByLine(line.id);
         var groups = FleetGroupsByLine(0); var eras = new HashSet<int>();
         foreach (var group in groups) eras.Add(LineFleetEra(group.node));
-        var content = FleetScroll(page.transform, 168, PgH - 340, LineFleetListHeight(assignedGroups.Count, groups.Count, eras.Count), scrollKey: "line:fleet:" + line.id);
+        var content = FleetScroll(page.transform, 168, PgH - 340, LineFleetListHeight(line.hasBaseTrain, assignedGroups.Count, groups.Count, eras.Count), scrollKey: "line:fleet:" + line.id);
         float width = content.sizeDelta.x, y = content.sizeDelta.y - 24f;
         Txt(content, "分组一 · 本线已配属车辆", 28, Ink, 16, y - 46, width - 32, 44, TextAnchor.MiddleLeft); y -= 60;
-        var basic = Rect("BaseVehicle", content, 0, y - 140, width, 140); Rounded(basic, CardBg);
-        Txt(basic.transform, "线路基础车辆 ×1", 29, Ink, 24, 82, width - 48, 42, TextAnchor.MiddleLeft);
-        Txt(basic.transform, "基础编制固定保留；其余配属机车可随时撤回车库。", 23, InkSoft, 24, 24, width - 48, 40, TextAnchor.MiddleLeft); y -= 150;
+        if (line.hasBaseTrain)
+        {
+            var basic = Rect("BaseVehicle", content, 0, y - 140, width, 140); Rounded(basic, CardBg);
+            bool canWithdrawBase = line.trains > 1;
+            float textW = canWithdrawBase ? (width - 270f) : (width - 48f);
+            Txt(basic.transform, "线路基础车辆 ×1", 29, Ink, 24, 82, textW, 42, TextAnchor.MiddleLeft);
+            Txt(basic.transform, canWithdrawBase ? "本线不止 1 辆车，可撤下基础车辆腾出编组。" : "当前仅此 1 列，调入其他机车后可撤下。", 23, InkSoft, 24, 24, textW, 40, TextAnchor.MiddleLeft);
+            if (canWithdrawBase)
+            {
+                var withdrawBase = Btn(basic.transform, "WithdrawBaseVehicle", "撤回", 25, width - 218, 32, 194, 76, Paper2, () => WithdrawBaseTrain(line));
+                TInk(withdrawBase, Ink);
+            }
+            y -= 150;
+        }
         foreach (var group in assignedGroups)
         {
             var item = group.first; int model = group.node;
@@ -1233,9 +1321,20 @@ public partial class DemoBootstrap
             if (era != previousEra) { Txt(content, eraNames[era], 24, Indigo, 20, y - 44, width - 40, 38, TextAnchor.MiddleLeft); y -= 54; previousEra = era; }
             var item = group.first;
             var card = Rect("IdleModel" + group.node, content, 0, y - 156, width, 156); Rounded(card, CardBg);
-            var title = Txt(card.transform, LocoNames[group.node] + " · 可用 " + group.count + " 辆", 29, Ink, 24, 94, width - 270, 44, TextAnchor.MiddleLeft); FitSingleLine(title, 29);
-            var stats = Txt(card.transform, LineFleetVehicleStats(group.node), 23, InkSoft, 24, 30, width - 270, 44, TextAnchor.MiddleLeft); FitSingleLine(stats, 23);
-            var assign = Btn(card.transform, "AssignVehicle", "调入本线", 25, width - 218, 39, 194, 76, Indigo, () => ChangeLineFleetVehicle(line, item, true)); TInk(assign, Color.white);
+            bool canBatchFill = group.count > 1 && (8 - line.trains) > 1;
+            float idleTextW = canBatchFill ? (width - 390f) : (width - 270f);
+            var title = Txt(card.transform, LocoNames[group.node] + " · 可用 " + group.count + " 辆", 29, Ink, 24, 94, idleTextW, 44, TextAnchor.MiddleLeft); FitSingleLine(title, 29);
+            var stats = Txt(card.transform, LineFleetVehicleStats(group.node), 23, InkSoft, 24, 30, idleTextW, 44, TextAnchor.MiddleLeft); FitSingleLine(stats, 23);
+            if (canBatchFill)
+            {
+                int modelNode = group.node;
+                var fillBtn = Btn(card.transform, "FillVehicle", "填满", 24, width - 356, 39, 134, 76, Matcha, () => FillLineFleetVehicles(line, modelNode)); TInk(fillBtn, Color.white);
+                var assignBtn = Btn(card.transform, "AssignVehicle", "调入", 24, width - 210, 39, 186, 76, Indigo, () => ChangeLineFleetVehicle(line, item, true)); TInk(assignBtn, Color.white);
+            }
+            else
+            {
+                var assignBtn = Btn(card.transform, "AssignVehicle", "调入", 25, width - 218, 39, 194, 76, Indigo, () => ChangeLineFleetVehicle(line, item, true)); TInk(assignBtn, Color.white);
+            }
             y -= 166;
         }
         var footer = Rect("LineFleetActions", page.transform, 0, 0, W, 148); Rounded(footer, CardBg);

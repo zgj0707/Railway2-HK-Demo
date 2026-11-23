@@ -251,21 +251,21 @@ public partial class DemoBootstrap
     void BuildSettingsArchiveTab(Transform parent)
     {
         const float pad = 40f, innerW = 860f, cardPad = 28f, cardInnerW = 804f;
-        var summaryCard = Rect("ArchiveSummaryCard", parent, pad, 710f, innerW, 240f);
+        var summaryCard = Rect("ArchiveSummaryCard", parent, pad, 696f, innerW, 250f);
         Rounded(summaryCard, Color.Lerp(CardBg, Indigo, 0.05f));
-        Txt(summaryCard.transform, $"{companyName} · 营运志档案", 28, Ink, cardPad, 182f, cardInnerW, 42f, TextAnchor.MiddleLeft);
-        Txt(summaryCard.transform, $"当前第 {day} 日 · 运营 {lines.Count} 条线路 · 已连 {DailyConnectedCount()} 站\n工程科技 {EraTechDoneCount(0)}/{EraTechNodeCount(0)} 项 · 企业治理 {CoTechEraDoneCount(0)}/{CoTechEraNodeCount(0)} 项 · 人才 {talents.Count} 名", 23, InkSoft, cardPad, 92f, cardInnerW, 82f, TextAnchor.UpperLeft);
-        Txt(summaryCard.transform, "☁ TapTap 云端状态：" + CloudSaveStatusSummary(), 22, Matcha, cardPad, 20f, cardInnerW, 38f, TextAnchor.MiddleLeft);
+        Txt(summaryCard.transform, $"{companyName} · 营运志档案", 29, Ink, cardPad, 188f, cardInnerW, 44f, TextAnchor.MiddleLeft);
+        Txt(summaryCard.transform, $"当前第 {day} 日 · 运营 {lines.Count} 条线路 · 已连 {DailyConnectedCount()} 站\n工程科技 {EraTechDoneCount(0)}/{EraTechNodeCount(0)} 项 · 企业治理 {CoTechEraDoneCount(0)}/{CoTechEraNodeCount(0)} 项 · 人才 {talents.Count} 名", 24, InkSoft, cardPad, 90f, cardInnerW, 86f, TextAnchor.UpperLeft);
+        Txt(summaryCard.transform, "游戏每 5 秒及关键操作时自动保存至本地档案", 23, Matcha, cardPad, 24f, cardInnerW, 40f, TextAnchor.MiddleLeft);
 
-        var storyCardBox = Rect("StoryControlCard", parent, pad, 466f, innerW, 224f);
+        var storyCardBox = Rect("StoryControlCard", parent, pad, 430f, innerW, 242f);
         Rounded(storyCardBox, Color.Lerp(CardBg, Gold, 0.07f));
-        Txt(storyCardBox.transform, "章节剧情与新手系统引导", 27, Ink, cardPad, 166f, cardInnerW, 42f, TextAnchor.MiddleLeft);
+        Txt(storyCardBox.transform, "章节剧情与新手系统引导", 28, Ink, cardPad, 180f, cardInnerW, 44f, TextAnchor.MiddleLeft);
         string guideStatus = tutorialSkipped ? "自由经营模式（全系统已开放）" : $"剧情进行中：第 {Mathf.Min(storyStage + 1, 5)}/5 章";
-        Txt(storyCardBox.transform, guideStatus, 23, Indigo, cardPad, 118f, cardInnerW, 38f, TextAnchor.MiddleLeft);
+        Txt(storyCardBox.transform, guideStatus, 24, Indigo, cardPad, 128f, cardInnerW, 40f, TextAnchor.MiddleLeft);
         float halfBtnW = (cardInnerW - 24f) * 0.5f;
-        var archiveBtn = Btn(storyCardBox.transform, "OpenStoryArchive", "剧情篇章回放", 24, cardPad, 22f, halfBtnW, 76f, Indigo, () => { ClosePanel(true); OpenStoryArchiveModal(); });
+        var archiveBtn = Btn(storyCardBox.transform, "OpenStoryArchive", "剧情篇章回放", 25, cardPad, 26f, halfBtnW, 80f, Indigo, () => { ClosePanel(true); OpenStoryArchiveModal(); });
         TInk(archiveBtn, Color.white);
-        var skipBtn = Btn(storyCardBox.transform, "ToggleGuideBtn", tutorialSkipped ? "已解锁全系统 ✓" : "跳过引导直通自由", 24, cardPad + halfBtnW + 24f, 22f, halfBtnW, 76f,
+        var skipBtn = Btn(storyCardBox.transform, "ToggleGuideBtn", tutorialSkipped ? "已解锁全系统 ✓" : "跳过引导直通自由", 24, cardPad + halfBtnW + 24f, 26f, halfBtnW, 80f,
             tutorialSkipped ? Paper2 : Gold, () => {
                 if (!tutorialSkipped)
                 {
@@ -275,70 +275,35 @@ public partial class DemoBootstrap
             });
         TInk(skipBtn, tutorialSkipped ? InkSoft : Color.white);
 
-        float curY = 28f;
-        var doneBtn = Btn(parent, "SettingsOk", "收起设置", 25, pad, curY, innerW, 74f, Paper2, ClosePanel);
+        float curY = 40f;
+        var doneBtn = Btn(parent, "SettingsOk", "收起设置", 26, pad, curY, innerW, 80f, Paper2, ClosePanel);
         TInk(doneBtn, Ink);
-        curY += 90f;
-
-        float cloudBtnW = (innerW - 20f) * 0.5f;
-        var cloudUpBtn = Btn(parent, "CloudUploadBtn", cloudSaveUploadInFlight ? "正在上传云端..." : "☁ 立即上传云存档", 24, pad, curY, cloudBtnW, 76f, Indigo, () => {
-            UploadTapTapCloudSave(true, (ok, reason) => {
-                if (ok) Toast("已同步至 TapTap 云存档（第 " + day + " 日）");
-                else Toast("云存档上传失败：" + reason);
-                if (activePanel && activePanelKey == "settings" && settingsTab == 2) OpenAudioSettings();
-            });
-            OpenAudioSettings();
-        });
-        TInk(cloudUpBtn, Color.white);
-        var cloudDownBtn = Btn(parent, "CloudFetchBtn", cloudSaveFetchInFlight ? "正在检索云端..." : "☁ 从 TapTap 云端恢复", 24, pad + cloudBtnW + 20f, curY, cloudBtnW, 76f, Matcha, () => {
-            FetchTapTapCloudSave((ok, rawJson, cloudDay, cloudTs) => {
-                if (!ok || string.IsNullOrEmpty(rawJson))
-                {
-                    Toast("TapTap 云端暂无可用存档");
-                    return;
-                }
-                SaveData preview = null;
-                try { preview = JsonUtility.FromJson<SaveData>(rawJson); } catch {}
-                if (preview == null || preview.version != 1)
-                {
-                    Toast("云端存档格式校验异常");
-                    return;
-                }
-                int cDay = Mathf.Max(1, Mathf.Max(cloudDay, preview.day));
-                int cLines = preview.lines != null ? preview.lines.Count : 0;
-                Confirm("恢复 TapTap 云端存档",
-                    $"云端档案：第 {cDay} 日 · {cLines} 条线路 · {FormatCoins(preview.coins)} 资金。\n确认下载并覆盖当前本机进度吗？",
-                    () => ApplyLoadedSaveJson(rawJson, "TapTap 云端存档", false));
-            });
-            OpenAudioSettings();
-        });
-        TInk(cloudDownBtn, Color.white);
-        curY += 92f;
+        curY += 98f;
 
 #if UNITY_EDITOR
         bool syncOn = DevTestSaveSyncEnabled;
         var syncBtn = Btn(parent, "DevTestSaveSyncToggle",
-            syncOn ? "[Editor] 同步写回仓库测试档：开" : "[Editor] 同步写回仓库测试档：关",
-            22, pad, curY, innerW, 64f, syncOn ? Indigo : Paper2, () => {
+            syncOn ? "[Editor开发] 持续写回仓库测试档：开" : "[Editor开发] 持续写回仓库测试档：关",
+            24, pad, curY, innerW, 74f, syncOn ? Indigo : Paper2, () => {
                 bool next = !DevTestSaveSyncEnabled;
                 DevTestSaveSyncEnabled = next;
                 OpenAudioSettings();
                 Toast(next ? "已开启同步：将持续写回仓库测试档" : "已关闭同步：仅读写本机存档");
             });
         TInk(syncBtn, syncOn ? Color.white : Ink);
-        curY += 78f;
+        curY += 90f;
 #endif
 
         if (HasBundledTestSave())
         {
-            var testBtn = Btn(parent, "LoadTestSave", "载入测试存档（" + DescribeBundledTestSave() + "）", 23, pad, curY, innerW, 72f, Gold, () => {
+            var testBtn = Btn(parent, "LoadTestSave", "载入测试存档（" + DescribeBundledTestSave() + "）", 24, pad, curY, innerW, 80f, Gold, () => {
                 Confirm("载入测试存档", "将覆盖当前本机进度，恢复至仓库内" + DescribeBundledTestSave() + "。是否继续？", () => { LoadBundledTestSave(); });
             });
             TInk(testBtn, Color.white);
-            curY += 86f;
+            curY += 98f;
         }
 
-        var resetBtn = Btn(parent, "ResetLocalSave", "开启新周目（清空本机存档）", 24, pad, curY, innerW, 74f, Vermilion, () => {
+        var resetBtn = Btn(parent, "ResetLocalSave", "开启新周目（清空本机存档）", 25, pad, curY, innerW, 82f, Vermilion, () => {
             Confirm("开启新周目", "确认从第 1 日序章《青湾初笛》重新开始体验完整剧情引导吗？当前本机进度将被重置。", () => {
 #if UNITY_EDITOR
                 // A new local run isolates its source without overwriting the user sync preference.
@@ -710,7 +675,6 @@ public partial class DemoBootstrap
             bottleneckNote = bnNote
         };
         hasYesterdayReport = true;
-        SubmitTapTapLeaderboardScore(true);
     }
 
     void OpenDailyBriefingPopup()

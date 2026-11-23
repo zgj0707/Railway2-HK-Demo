@@ -40,6 +40,7 @@ public partial class DemoBootstrap : MonoBehaviour
     [Serializable] public class Line {
         public int id; public string name; public Color color; public int skin = -1; public List<int> st = new List<int>();
         public int trains = 1;
+        public bool hasBaseTrain = true;
         public int[] dispatch = { 1, 1, 1, 1 }; public float fare = 1.5f;
         public float todayGross, todayMaintenance, todayTrack;
         public List<int> recent = new List<int>(); // 最近几个结算日的实收
@@ -77,6 +78,8 @@ public partial class DemoBootstrap : MonoBehaviour
     int panelOpenedFrame = -1;
     string activePanelKey = "";
     Text toastTxt; float toastTimer;
+    bool toastTrackingForecast;
+    float forecastStartUnscaledTime, lastForecastDuration = 0.8f;
     bool dragging;
     List<int> draft = new List<int>();
     readonly List<float> draftSegNeeds = new List<float>();
@@ -89,7 +92,6 @@ public partial class DemoBootstrap : MonoBehaviour
     readonly List<Image> odArcDashImgs = new List<Image>();
     readonly List<RectTransform> odArcMarkers = new List<RectTransform>();
     int odFocusStation = -1;
-    bool trafficHeatmapMode;
     float draftPreviewNeed = 0.5f;
     Color draftPreviewColor = new Color(0.95f, 0.58f, 0.32f, 0.90f);
     [Serializable]
@@ -104,9 +106,11 @@ public partial class DemoBootstrap : MonoBehaviour
     bool hasYesterdayReport;
 
     // 主题与 IAA 激励状态
-    GameObject paperBgGo, topBarGo, stationFilterGo, solarTermRailGo, alertRailGo, alertRailBadge, speedBoardGo, noticeBoardGo, noticeUnreadDot, lineLoadLegendGo;
+    GameObject paperBgGo, topBarGo, stationFilterGo, solarTermRailGo, alertRailGo, alertRailBadge, speedBoardGo, noticeBoardGo, quickUpgradeGo, noticeUnreadDot, lineLoadLegendGo;
     Text solarTermRailTitle, solarTermRailSub, alertRailSub;
     int lastReadNoticeDay = -1;
+    const string CurrentPatchNoteVersion = "2026.11.23";
+    string readPatchNoteVersion = "";
     bool ringsDirty = true;
     bool trainsDirty = true;
     int lastDisplayedRp = int.MinValue;
@@ -251,7 +255,6 @@ public partial class DemoBootstrap : MonoBehaviour
         if (!string.IsNullOrEmpty(savedRegion) && savedRegion != currentRegion && RegionUnlocked(savedRegion)) SwitchRegion(savedRegion);
         saveReady = true;
         EnsureTapTapSdkBridge();
-        CheckTapTapCloudSaveOnStartup(restored);
         if (saveBlocked) Toast("存档读取失败，原存档已保留");
         Debug.Log("COASTAL RAIL READY");
     }
@@ -560,6 +563,10 @@ public partial class DemoBootstrap : MonoBehaviour
         hb.GetComponentInChildren<Text>().color = InkSoft;
         Img(Rect("StampTop", hb.transform, 10, 61, 66, 5), Matcha, spriteRound).raycastTarget = false;
         SoftShadow(hb.gameObject);
+        var mb = Btn(bar.transform, "MetroMap", "线路图", 27, 220, -32, 108, 68, CardBg, OpenMetroMapScreen);
+        mb.GetComponentInChildren<Text>().color = Indigo;
+        Img(Rect("StampTop", mb.transform, 10, 61, 88, 5), Vermilion, spriteRound).raycastTarget = false;
+        SoftShadow(mb.gameObject);
         lastDisplayedMinute = -1; lastDisplayedDay = -1;
         lastHudCoinsText = ""; lastHudIncomeText = ""; lastHudDiamonds = int.MinValue; lastHudProgress = int.MinValue;
     }
@@ -1227,6 +1234,20 @@ public partial class DemoBootstrap : MonoBehaviour
         noticeUnreadDot.SetActive(HasUnreadBulletins());
         var noticeBtn = noticeGo.AddComponent<Button>(); noticeBtn.targetGraphic = noticeGo.GetComponent<Image>();
         noticeBtn.onClick.AddListener(() => { if (!dragging) OpenNoticeBoard(); });
+
+        // 右侧公告栏下方：一键升级入口
+        var upgGo = Rect("QuickUpgrade", root, 960, 926, 112, 104);
+        quickUpgradeGo = upgGo;
+        Rounded(upgGo, CardBg); SoftShadow(upgGo);
+        var upgRibbon = Rect("Ribbon", upgGo.transform, 106, 0, 6, 104);
+        Img(upgRibbon, Gold, spriteWhite).raycastTarget = false;
+        Txt(upgGo.transform, "升级", 27, Ink, 4, 50, 98, 42, TextAnchor.MiddleCenter);
+        var upgTag = Rect("Tag", upgGo.transform, 12, 12, 86, 30);
+        Rounded(upgTag, new Color(Paper2.r, Paper2.g, Paper2.b, 0.78f));
+        upgTag.GetComponent<Image>().raycastTarget = false;
+        Txt(upgTag.transform, "一键", 20, InkSoft, 0, 0, 86, 30, TextAnchor.MiddleCenter);
+        var upgBtn = upgGo.AddComponent<Button>(); upgBtn.targetGraphic = upgGo.GetComponent<Image>();
+        upgBtn.onClick.AddListener(() => { if (!dragging) OpenQuickUpgradeBubble(); });
     }
 
     void BuildBottomNav()
@@ -1263,35 +1284,35 @@ public partial class DemoBootstrap : MonoBehaviour
         lineLoadLegendGo = legend;
         Rounded(legend, new Color(CardBg.r, CardBg.g, CardBg.b, 0.94f));
         SoftShadow(legend);
-        var btn = legend.AddComponent<Button>();
-        btn.targetGraphic = legend.GetComponent<Image>();
-        btn.onClick.AddListener(ToggleTrafficHeatmap);
+        legend.GetComponent<Image>().raycastTarget = false;
 
-        float labelW = Mathf.Round(w * 0.24f);
-        string titleLabel = trafficHeatmapMode ? "热力 · 点还原" : "配色 · 点切热力";
-        var titleTxt = Txt(legend.transform, titleLabel, 24, trafficHeatmapMode ? Vermilion : Ink, 16f, 0f, labelW - 14f, h, TextAnchor.MiddleLeft);
+        float textW = Mathf.Round(w * 0.54f);
+        var titleTxt = Txt(legend.transform, "越堵的线路色相越偏红", 24, Ink, 20f, 0f, textW, h, TextAnchor.MiddleLeft);
         FitSingleLine(titleTxt, 24);
+        titleTxt.raycastTarget = false;
 
-        string[] itemTexts = trafficHeatmapMode
-            ? new[] { "闲 <35%", "忙 72%+", "爆 95%+" }
-            : new[] { "畅通", "忙 78%+", "挤 98%+" };
-        Color[] itemColors = trafficHeatmapMode
-            ? new[] { new Color(0.20f, 0.64f, 0.56f, 0.92f), new Color(0.96f, 0.72f, 0.18f, 0.96f), new Color(0.95f, 0.28f, 0.22f, 0.98f) }
-            : new[] { Indigo, new Color(0.96f, 0.72f, 0.18f, 0.96f), new Color(0.95f, 0.28f, 0.22f, 0.98f) };
-        float itemsLeft = labelW + 6f;
+        string[] itemTexts = { "畅通", "偏忙", "拥堵" };
+        Color[] itemColors =
+        {
+            new Color(0.28f, 0.56f, 0.72f, 0.92f),
+            new Color(0.94f, 0.56f, 0.22f, 0.96f),
+            new Color(0.95f, 0.24f, 0.20f, 0.98f)
+        };
+        float itemsLeft = textW + 18f;
         float itemW = (w - itemsLeft - 14f) / itemTexts.Length;
         for (int i = 0; i < itemTexts.Length; i++)
         {
             float ix = itemsLeft + i * itemW;
-            var trackSlot = Rect("LegendTrack" + i, legend.transform, ix + 4f, (h - 12f) * 0.5f, 30f, 12f);
-            var outer = Img(trackSlot, new Color(Ink.r, Ink.g, Ink.b, 0.30f), spriteRound);
+            var trackSlot = Rect("LegendTrack" + i, legend.transform, ix + 2f, (h - 12f) * 0.5f, 26f, 12f);
+            var outer = Img(trackSlot, new Color(Ink.r, Ink.g, Ink.b, 0.26f), spriteRound);
             outer.type = Image.Type.Sliced; outer.raycastTarget = false;
-            var core = Rect("Core", trackSlot.transform, 2f, 2f, 26f, 8f);
+            var core = Rect("Core", trackSlot.transform, 2f, 2f, 22f, 8f);
             var coreIm = Img(core, itemColors[i], spriteRound);
             coreIm.type = Image.Type.Sliced; coreIm.raycastTarget = false;
 
-            var txt = Txt(legend.transform, itemTexts[i], 24, Ink, ix + 40f, 0f, itemW - 44f, h, TextAnchor.MiddleLeft);
-            FitSingleLine(txt, 24);
+            var txt = Txt(legend.transform, itemTexts[i], 22, InkSoft, ix + 32f, 0f, itemW - 34f, h, TextAnchor.MiddleLeft);
+            FitSingleLine(txt, 22);
+            txt.raycastTarget = false;
         }
     }
 
@@ -1423,6 +1444,8 @@ public partial class DemoBootstrap : MonoBehaviour
             speedBoardGo.GetComponent<RectTransform>().anchoredPosition = new Vector2(rightRailX, Mathf.Min(railMax - 118f, railMidY + 324f));
         if (noticeBoardGo)
             noticeBoardGo.GetComponent<RectTransform>().anchoredPosition = new Vector2(rightRailX, Mathf.Min(railMax - 236f, railMidY + 202f));
+        if (quickUpgradeGo)
+            quickUpgradeGo.GetComponent<RectTransform>().anchoredPosition = new Vector2(rightRailX, Mathf.Min(railMax - 354f, railMidY + 84f));
 
         if (mapRect && mapWheelZoom)
         {
@@ -2014,7 +2037,7 @@ public partial class DemoBootstrap : MonoBehaviour
     void SyncLineTrainVisuals(Line line, LineVisual lv)
     {
         if (!trainLayer) return;
-        int desired = Mathf.Max(0, RunningTrains(line));
+        int desired = RunningTrains(line) > 0 ? 1 : 0;
         while (lv.trains.Count > desired)
         {
             int last = lv.trains.Count - 1;
@@ -2065,29 +2088,18 @@ public partial class DemoBootstrap : MonoBehaviour
     {
         return SegmentBaseVisualOffset(line, segIdx, region) * overlayZoom;
     }
-    void ToggleTrafficHeatmap()
+    static Color CongestionShiftedColor(Color baseCol, float load)
     {
-        trafficHeatmapMode = !trafficHeatmapMode;
-        PlayClickSfx();
-        if (lineLoadLegendGo) Destroy(lineLoadLegendGo);
-        BuildLineLoadLegend();
-        ApplyResponsiveLayout(false);
-        UpdateLineTrafficColors();
-        MarkRingsDirty();
-        UpdateRings();
-        Toast(trafficHeatmapMode ? "已开启客流热力图（再次点击恢复原色）" : "已恢复线路常规配色");
-    }
-
-    static Color HeatmapColorForLoad(float load)
-    {
-        Color idle = new Color(0.46f, 0.53f, 0.57f, 0.42f);
-        Color jade = new Color(0.20f, 0.64f, 0.56f, 0.90f);
-        Color amber = new Color(0.96f, 0.72f, 0.18f, 0.95f);
-        Color hot = new Color(0.95f, 0.25f, 0.20f, 0.98f);
-        if (load <= 0.05f) return idle;
-        if (load < 0.35f) return Color.Lerp(idle, jade, Mathf.Clamp01((load - 0.05f) / 0.30f));
-        if (load < 0.72f) return Color.Lerp(jade, amber, Mathf.Clamp01((load - 0.35f) / 0.37f));
-        return Color.Lerp(amber, hot, Mathf.Clamp01((load - 0.72f) / 0.23f));
+        if (load <= 0.30f) return baseCol;
+        float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01((load - 0.30f) / 0.70f));
+        Color.RGBToHSV(baseCol, out float h, out float s, out float v);
+        float targetHue = h > 0.5f ? 1f : 0.01f;
+        float shiftedHue = Mathf.Repeat(Mathf.Lerp(h, targetHue, t), 1f);
+        float shiftedSat = Mathf.Lerp(s, 0.84f, t);
+        float shiftedVal = Mathf.Lerp(v, 0.92f, t);
+        Color shifted = Color.HSVToRGB(shiftedHue, shiftedSat, shiftedVal);
+        shifted.a = Mathf.Lerp(baseCol.a, 0.98f, t);
+        return shifted;
     }
 
     void UpdateLineTrafficColors()
@@ -2102,12 +2114,7 @@ public partial class DemoBootstrap : MonoBehaviour
                 if (!img) continue;
                 string key = line.id + ":" + Mathf.Min(seg.from, seg.to) + ":" + Mathf.Max(seg.from, seg.to);
                 float load = traffic.lineSegLoad.TryGetValue(key, out float val) ? val : 0f;
-                if (trafficHeatmapMode)
-                    img.color = HeatmapColorForLoad(load);
-                else if (load >= 0.78f)
-                    img.color = load >= 0.98f ? new Color(0.95f, 0.28f, 0.22f, 0.96f) : new Color(0.96f, 0.72f, 0.18f, 0.92f);
-                else
-                    img.color = seg.baseCoreColor;
+                img.color = CongestionShiftedColor(seg.baseCoreColor, load);
             }
         }
     }
@@ -2277,7 +2284,8 @@ public partial class DemoBootstrap : MonoBehaviour
         TickResearch(dt);
         TickProgressiveForecasts();
         TickFloaters(dt);
-        bool mapVisible = pageRoot == null && sceneryViewer == null;
+        UpdateMetroMapOverlay();
+        bool mapVisible = pageRoot == null && sceneryViewer == null && metroMapPageRoot == null;
         if (mapVisible && (timeSpeed > 0 || trainsDirty)) UpdateTrains(dt * timeSpeed / 6f);
         if (mapVisible && odArcDashImgs.Count > 0)
         {
@@ -2352,7 +2360,27 @@ public partial class DemoBootstrap : MonoBehaviour
         else if (!dragging && mapVisible) UpdateRings();
         if (Input.GetMouseButtonUp(0) && dragging) EndDraw();
         if (Input.GetMouseButtonUp(0) && lineInsertActive) EndLineInsert(Input.mousePosition);
-        if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0 && toastGo) toastGo.SetActive(false); }
+        if (toastTrackingForecast && toastGo && toastGo.activeSelf && toastTxt)
+        {
+            if (pendingForecastMask != 0)
+            {
+                int remSlots = CountMaskBits(pendingForecastMask);
+                int doneSlots = Mathf.Clamp(4 - remSlots, 0, 3);
+                float elapsed = Mathf.Max(0f, Time.unscaledTime - forecastStartUnscaledTime);
+                float estTotal = doneSlots > 0
+                    ? Mathf.Max(lastForecastDuration, elapsed * (4f / (doneSlots + 0.35f)))
+                    : Mathf.Max(lastForecastDuration, elapsed + 0.4f);
+                float remain = Mathf.Max(0.1f, estTotal - elapsed);
+                toastTxt.text = $"运力更新有延迟（约 {remain:0.0}s）";
+            }
+            else
+            {
+                toastTrackingForecast = false;
+                toastTxt.text = "运力已更新";
+                toastTimer = 1.0f;
+            }
+        }
+        if (toastTimer > 0) { toastTimer -= dt; if (toastTimer <= 0 && toastGo) { toastTrackingForecast = false; toastGo.SetActive(false); } }
     }
 
     void TickDragEdgeAutoPan(float dt)
@@ -2533,14 +2561,14 @@ public partial class DemoBootstrap : MonoBehaviour
             else if (i < stations.Count && stations[i].built && !stations[i].closed && StationInRegion(i, currentRegion) && StationLineCount(i) > 0)
             {
                 float ratio = StationWaitRatio(i);
-                float loss = trafficHeatmapMode ? StationLossRatio(i) : 0f;
+                float loss = StationLossRatio(i);
                 if (ratio >= 1.0f) { stationRings[i].color = new Color(0.92f, 0.28f, 0.22f, pulse); pulsingRingIndices.Add(i); }
                 else if (ratio >= 0.72f)
                 {
                     stationRings[i].color = new Color(0.95f, 0.68f, 0.18f, qualityTier >= 2 ? warmPulse : 0.48f);
                     if (qualityTier >= 2) pulsingRingIndices.Add(i);
                 }
-                else if (trafficHeatmapMode && loss >= 0.28f) stationRings[i].color = new Color(0.45f, 0.38f, 0.86f, 0.56f);
+                else if (loss >= 0.28f) stationRings[i].color = new Color(0.45f, 0.38f, 0.86f, 0.56f);
                 else stationRings[i].color = new Color(1, 1, 1, 0);
             }
             else
@@ -2674,9 +2702,9 @@ public partial class DemoBootstrap : MonoBehaviour
 
     // ---------- income ----------
     float TechMult() { return Mathf.Max(0.1f, 1f + ResearchBonus()); }
-    void RecalcIncome()
+    void RecalcIncome(bool immediate = false)
     {
-        RebuildForecasts(true);
+        RebuildForecasts(!immediate);
         traffic = trafficSlots[DispatchSlot()];
         RebuildOperatingRates();
         float total = 0;
@@ -2915,6 +2943,7 @@ public partial class DemoBootstrap : MonoBehaviour
         activePanel = null; scrim = null; panelShadow = null;
         activePanelKey = "";
         panelOpenedFrame = -1;
+        panelForecastRefresh = null;
         ClearStationOdArcs();
         if (!dragging && draft.Count > 0) CancelDraft();
         var onClosed = panelClosed; panelClosed = null;
@@ -2971,6 +3000,7 @@ public partial class DemoBootstrap : MonoBehaviour
     // ---------- helpers ----------
     void Toast(string msg)
     {
+        toastTrackingForecast = false;
         if (toastGo) Destroy(toastGo);
         GetSafeMarginsInRoot(out float safeL, out float safeR, out _, out _);
         float safeW = Mathf.Max(320f, RootW - safeL - safeR);
@@ -2983,6 +3013,24 @@ public partial class DemoBootstrap : MonoBehaviour
         toastTxt = Txt(toastGo.transform, msg, 24, new Color(1,0.97f,0.9f), 16, 8, 588, 52, TextAnchor.MiddleCenter);
         toastTimer = 2.2f;
     }
+    void ShowForecastDelayToast()
+    {
+        if (pendingForecastMask == 0)
+        {
+            Toast("运力已更新");
+            return;
+        }
+        float est = Mathf.Max(0.2f, lastForecastDuration - Mathf.Max(0f, Time.unscaledTime - forecastStartUnscaledTime));
+        Toast($"运力更新有延迟（约 {est:0.0}s）");
+        toastTrackingForecast = true;
+        toastTimer = 15f;
+    }
+    static int CountMaskBits(int mask)
+    {
+        int c = 0;
+        while (mask != 0) { c += mask & 1; mask >>= 1; }
+        return c;
+    }
     void Confirm(string title, string body, Action ok, Action cancel = null)
     {
         float bodyHeight = Mathf.Clamp(MeasureTextHeight(body, 26, 792) + 10, 44, H - 440);
@@ -2991,6 +3039,130 @@ public partial class DemoBootstrap : MonoBehaviour
         Btn(p.transform, "Ok", "确 认", 32, 34, 36, 380, 92, Vermilion, () => { ClosePanel(); ok(); });
         var no = Btn(p.transform, "No", "取 消", 32, 446, 36, 380, 92, new Color(0.92f,0.89f,0.83f), () => { ClosePanel(); if (cancel != null) cancel(); });
         TInk(no, Ink);
+    }
+
+    List<int> CollectRedCapacityStationsInRegion()
+    {
+        var list = new List<int>();
+        for (int i = 0; i < stations.Count; i++)
+        {
+            var st = stations[i];
+            if (st == null || !st.built || st.closed || st.level >= 10) continue;
+            if (!StationInRegion(i, currentRegion) || StationLineCount(i) <= 0) continue;
+            if (StationWaitRatio(i) >= 1.0f) list.Add(i);
+        }
+        return list;
+    }
+
+    List<Line> CollectBoostableCongestedLinesInRegion()
+    {
+        var list = new List<Line>();
+        int slot = DispatchSlot();
+        for (int li = 0; li < lines.Count; li++)
+        {
+            var line = lines[li];
+            if (line == null || !PathTouchesRegion(line.st, currentRegion)) continue;
+            if (line.dispatch[slot] >= line.trains) continue;
+
+            bool isCongested = false;
+            for (int si = 0; si < line.st.Count - 1; si++)
+            {
+                if (SegmentLoadRatio(line, line.st[si], line.st[si + 1]) >= 0.78f)
+                {
+                    isCongested = true;
+                    break;
+                }
+            }
+            if (isCongested) list.Add(line);
+        }
+        return list;
+    }
+
+    void AttachAdBadge(Transform parent, float x, float y)
+    {
+        var badge = Rect("AdBadge", parent, x, y, 58f, 30f);
+        Rounded(badge, Gold);
+        badge.GetComponent<Image>().raycastTarget = false;
+        var t = Txt(badge.transform, "AD", 18, Color.white, 0, 0, 58f, 30f, TextAnchor.MiddleCenter);
+        t.fontStyle = FontStyle.Bold;
+        t.raycastTarget = false;
+    }
+
+    void OpenQuickUpgradeBubble()
+    {
+        CloseLineBubble();
+        var redStations = CollectRedCapacityStationsInRegion();
+        var hotLines = CollectBoostableCongestedLinesInRegion();
+
+        var p = OpenBubble("一键升级", 420f, 760f, new Vector2(W * 0.5f, H * 0.5f), "quick_upgrade");
+
+        // 功能 1：一键升级红色容量城市（AD）
+        var card1 = Rect("UpgradeRedCard", p.transform, 28f, 206f, 704f, 124f);
+        Rounded(card1, Paper2);
+        Txt(card1.transform, "一键升级红色容量城市", 26, Ink, 20f, 66f, 430f, 40f, TextAnchor.MiddleLeft);
+        string sub1 = redStations.Count > 0 ? $"当前区域 {redStations.Count} 座红色爆满城市可免费升 1 级" : "当前区域暂无红色容量爆满城市";
+        Txt(card1.transform, sub1, 20, InkSoft, 20f, 18f, 450f, 36f, TextAnchor.MiddleLeft);
+        var btn1 = Btn(card1.transform, "BtnUpgradeRed", redStations.Count > 0 ? "立即升级" : "暂无目标", 23, 494f, 24f, 190f, 76f,
+            redStations.Count > 0 ? Vermilion : new Color(0.75f, 0.72f, 0.68f), () =>
+            {
+                if (redStations.Count == 0) { Toast("当前区域暂无可升级的红色容量城市"); return; }
+                ClosePanel(true);
+                RequestTapTapRewardedAd("quick_upgrade_red_stations", "一键升级红色容量城市", () =>
+                {
+                    var targets = CollectRedCapacityStationsInRegion();
+                    if (targets.Count == 0) { Toast("当前暂无需要升级的红色容量城市"); return; }
+                    for (int i = 0; i < targets.Count; i++)
+                    {
+                        stations[targets[i]].level = Mathf.Min(10, stations[targets[i]].level + 1);
+                    }
+                    RefreshStationDots();
+                    MarkRingsDirty();
+                    RecalcIncome();
+                    RefreshHUD();
+                    SaveGame();
+                    ShowForecastDelayToast();
+                });
+            });
+        TInk(btn1, Color.white);
+        AttachAdBadge(card1.transform, 622f, 88f);
+
+        // 功能 2：一键为高拥堵线路增班（不调度机车）（AD）
+        var card2 = Rect("BoostHotLineCard", p.transform, 28f, 58f, 704f, 124f);
+        Rounded(card2, Paper2);
+        Txt(card2.transform, "一键高拥堵线路增班", 26, Ink, 20f, 66f, 430f, 40f, TextAnchor.MiddleLeft);
+        string sub2 = hotLines.Count > 0 ? $"当前 {hotLines.Count} 条高拥堵线路有空闲配车可增班" : "暂无可增班的高拥堵线路（不调度机车）";
+        Txt(card2.transform, sub2, 20, InkSoft, 20f, 18f, 450f, 36f, TextAnchor.MiddleLeft);
+        var btn2 = Btn(card2.transform, "BtnBoostHot", hotLines.Count > 0 ? "立即增班" : "暂无目标", 23, 494f, 24f, 190f, 76f,
+            hotLines.Count > 0 ? Indigo : new Color(0.75f, 0.72f, 0.68f), () =>
+            {
+                if (hotLines.Count == 0) { Toast("暂无可增班的高拥堵线路（不调度机车）"); return; }
+                ClosePanel(true);
+                RequestTapTapRewardedAd("quick_boost_congested_lines", "一键高拥堵线路增班", () =>
+                {
+                    var targets = CollectBoostableCongestedLinesInRegion();
+                    if (targets.Count == 0) { Toast("暂无可增班的高拥堵线路"); return; }
+                    int slot = DispatchSlot();
+                    bool hasPeak = techDone.Contains("dispatch_peak");
+                    for (int i = 0; i < targets.Count; i++)
+                    {
+                        var l = targets[i];
+                        if (!hasPeak)
+                        {
+                            for (int s = 0; s < l.dispatch.Length; s++) l.dispatch[s] = l.trains;
+                        }
+                        else
+                        {
+                            l.dispatch[slot] = l.trains;
+                        }
+                    }
+                    RecalcIncome();
+                    RefreshHUD();
+                    SaveGame();
+                    ShowForecastDelayToast();
+                });
+            });
+        TInk(btn2, Color.white);
+        AttachAdBadge(card2.transform, 622f, 88f);
     }
 
     GameObject Rect(string name, Transform parent, float x, float y, float w, float h)
@@ -3462,6 +3634,7 @@ public partial class DemoBootstrap : MonoBehaviour
         if (alertRailGo) Destroy(alertRailGo);
         if (speedBoardGo) Destroy(speedBoardGo);
         if (noticeBoardGo) Destroy(noticeBoardGo);
+        if (quickUpgradeGo) Destroy(quickUpgradeGo);
         if (dock) Destroy(dock);
         if (undoButton) Destroy(undoButton.gameObject);
         if (lineLoadLegendGo) Destroy(lineLoadLegendGo);

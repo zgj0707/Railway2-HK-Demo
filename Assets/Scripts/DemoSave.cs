@@ -79,7 +79,7 @@ public partial class DemoBootstrap
     }
     [Serializable] sealed class SavedStation { public string key, customName; public int level, trafficEvent; public bool built, closed; public float riderBonus; public int facLevel; }
     [Serializable] sealed class SavedScenery { public string key; public bool found, unlocked; }
-    [Serializable] sealed class SavedLine { public int id, trains, todayRevenue; public int skin = -1; public string name; public Color color; public List<string> stations; public int[] dispatch; public float fare, todayGross, todayMaintenance, todayTrack; public List<int> recent; }
+    [Serializable] sealed class SavedLine { public int id, trains, todayRevenue; public int skin = -1; public bool baseRemoved; public string name; public Color color; public List<string> stations; public int[] dispatch; public float fare, todayGross, todayMaintenance, todayTrack; public List<int> recent; }
     [Serializable] sealed class SavedVehicle { public int node, lineId; }
     [Serializable] sealed class SavedFrozenLine { public int lineId; public float[] revenue, demand, served, peak; public bool[] valid; }
     [Serializable] sealed class SaveData {
@@ -105,6 +105,7 @@ public partial class DemoBootstrap
         public List<SavedTalent> talentPool = new List<SavedTalent>();
         public int nextTalentId = 1, lastTalentRefreshDay = -1;
         public int lastReadNoticeDay = -1;
+        public string readPatchNoteVersion = "";
         public List<string> memorialPlaques = new List<string>();
         public List<string> memorialTickets = new List<string>();
         public int retiredVehiclesCount;
@@ -589,7 +590,7 @@ public partial class DemoBootstrap
         var restoredLines = new List<Line>(); var ids = new HashSet<int>();
         foreach (var record in data.lines) {
             if(record == null || record.stations == null || record.stations.Count < 2 || record.dispatch == null || record.dispatch.Length != 4 || !ids.Add(record.id)) continue;
-            var line = new Line { id=record.id, name=record.name, color=record.color, skin=record.skin, trains=record.trains, dispatch=record.dispatch, fare=record.fare, todayRevenue=record.todayRevenue, todayGross=record.todayGross, todayMaintenance=record.todayMaintenance, todayTrack=record.todayTrack, recent=record.recent ?? new List<int>() };
+            var line = new Line { id=record.id, name=record.name, color=record.color, skin=record.skin, trains=record.trains, hasBaseTrain=!record.baseRemoved, dispatch=record.dispatch, fare=record.fare, todayRevenue=record.todayRevenue, todayGross=record.todayGross, todayMaintenance=record.todayMaintenance, todayTrack=record.todayTrack, recent=record.recent ?? new List<int>() };
             bool valid = true;
             foreach (string key in record.stations) {
                 if(!byKey.TryGetValue(key,out int index)) { valid = false; break; }
@@ -678,6 +679,7 @@ public partial class DemoBootstrap
         nextTalentId = Mathf.Max(1, data.nextTalentId);
         lastTalentRefreshDay = data.lastTalentRefreshDay;
         lastReadNoticeDay = data.lastReadNoticeDay;
+        readPatchNoteVersion = data.readPatchNoteVersion ?? "";
         earnedPlaques.Clear();
         if (data.memorialPlaques != null) foreach (string pk in data.memorialPlaques) if (!string.IsNullOrEmpty(pk) && !earnedPlaques.Contains(pk)) earnedPlaques.Add(pk);
         earnedMemorialTickets.Clear();
@@ -704,7 +706,7 @@ public partial class DemoBootstrap
     }
     SaveData CaptureSaveData()
     {
-        var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=(previewRestoreTheme >= 0 ? previewRestoreTheme : currentTheme), companyName=companyName, companySeal=companySeal, companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, bondPrincipal=bondPrincipal, bondDailyDue=bondDailyDue, bondsRepaid=bondsRepaid, bondSubsidized=bondSubsidized, consultantId=consultantId, consultantDaysLeft=consultantDaysLeft, economyCycle=economyCycle, nextEconomyCycle=nextEconomyCycle, turboDaysLeft=turboDaysLeft, autoDispatchDaysLeft=autoDispatchDaysLeft, lastAwardDay=lastAwardDay, lastPolicyDay=lastPolicyDay, lastAdSubsidyDay=lastAdSubsidyDay, dailyTaskClaimedDay=dailyTaskClaimedDay, storyStage=storyStage, tutorialSkipped=tutorialSkipped, nextTalentId=nextTalentId, lastTalentRefreshDay=lastTalentRefreshDay, lastReadNoticeDay=lastReadNoticeDay, retiredVehiclesCount=retiredVehiclesCount, lastDisplayedSolarTerm=lastDisplayedSolarTerm, nextContractId=nextContractId, hasYesterdayReport=(hasYesterdayReport && yesterdayReport != null), yesterdayReport=(hasYesterdayReport && yesterdayReport != null ? CopyDailyReport(yesterdayReport) : null) };
+        var data=new SaveData { coins=coins, diamonds=diamonds, rp=rp, day=day, clock=dayClock, researchClock=researchClock, speed=timeSpeed, nextId=nextLineId, dailyBaseline=dailyStationBaseline, macau=macauUnlocked, guangdong=guangdongUnlocked, loan=loanOutstanding, music=musicEnabled, region=currentRegion, theme=(previewRestoreTheme >= 0 ? previewRestoreTheme : currentTheme), companyName=companyName, companySeal=companySeal, companyPolicy=companyPolicy, bondDaysLeft=bondDaysLeft, bondPrincipal=bondPrincipal, bondDailyDue=bondDailyDue, bondsRepaid=bondsRepaid, bondSubsidized=bondSubsidized, consultantId=consultantId, consultantDaysLeft=consultantDaysLeft, economyCycle=economyCycle, nextEconomyCycle=nextEconomyCycle, turboDaysLeft=turboDaysLeft, autoDispatchDaysLeft=autoDispatchDaysLeft, lastAwardDay=lastAwardDay, lastPolicyDay=lastPolicyDay, lastAdSubsidyDay=lastAdSubsidyDay, dailyTaskClaimedDay=dailyTaskClaimedDay, storyStage=storyStage, tutorialSkipped=tutorialSkipped, nextTalentId=nextTalentId, lastTalentRefreshDay=lastTalentRefreshDay, lastReadNoticeDay=lastReadNoticeDay, readPatchNoteVersion=readPatchNoteVersion, retiredVehiclesCount=retiredVehiclesCount, lastDisplayedSolarTerm=lastDisplayedSolarTerm, nextContractId=nextContractId, hasYesterdayReport=(hasYesterdayReport && yesterdayReport != null), yesterdayReport=(hasYesterdayReport && yesterdayReport != null ? CopyDailyReport(yesterdayReport) : null) };
         foreach (var kv in frozenTraffic)
         {
             if (kv.Key == null || kv.Value == null) continue;
@@ -729,7 +731,7 @@ public partial class DemoBootstrap
         foreach (var t in talentPool) data.talentPool.Add(CopySaveTalent(t));
         foreach(var s in stations) data.stations.Add(new SavedStation { key=StationSaveKey(s), customName=string.IsNullOrEmpty(s.customName) ? "" : s.customName, level=s.level, trafficEvent=s.trafficEvent, built=s.built, closed=s.closed, riderBonus=s.riderBonus, facLevel=s.facLevel });
         foreach(var s in sceneries) data.scenery.Add(new SavedScenery { key=ScenerySaveKey(s), found=s.found, unlocked=s.unlocked });
-        foreach(var l in lines) { var record=new SavedLine { id=l.id, name=l.name, color=l.color, skin=l.skin, trains=l.trains, dispatch=(int[])l.dispatch.Clone(), fare=l.fare, todayGross=l.todayGross, todayMaintenance=l.todayMaintenance, todayTrack=l.todayTrack, todayRevenue=l.todayRevenue, recent=new List<int>(l.recent), stations=new List<string>() }; foreach(int i in l.st) record.stations.Add(StationSaveKey(stations[i])); data.lines.Add(record); }
+        foreach(var l in lines) { var record=new SavedLine { id=l.id, name=l.name, color=l.color, skin=l.skin, trains=l.trains, baseRemoved=!l.hasBaseTrain, dispatch=(int[])l.dispatch.Clone(), fare=l.fare, todayGross=l.todayGross, todayMaintenance=l.todayMaintenance, todayTrack=l.todayTrack, todayRevenue=l.todayRevenue, recent=new List<int>(l.recent), stations=new List<string>() }; foreach(int i in l.st) record.stations.Add(StationSaveKey(stations[i])); data.lines.Add(record); }
         foreach(var v in researchVehicles) data.vehicles.Add(new SavedVehicle { node=v.node, lineId=v.lineId });
         data.tech.AddRange(techDone); data.story.AddRange(storySeen); data.skins.AddRange(ownedLineSkins);
         data.themes.AddRange(ownedThemes);
@@ -772,7 +774,6 @@ public partial class DemoBootstrap
 #if UNITY_EDITOR
             if (DevTestSaveSyncEnabled) WriteDevTestSaveToDisk(data);
 #endif
-            TryAutoSyncTapTapCloudSave(false);
         } catch(Exception e) { Debug.LogError("本地存档保存失败：" + e.Message); }
     }
     void TickAutosave()
@@ -809,7 +810,6 @@ public partial class DemoBootstrap
                 }
 #endif
                 saveDirty = false; saveDebounceTimer = 0f; autosaveTimer = 0f;
-                TryAutoSyncTapTapCloudSave(false);
             }
             catch (Exception e) { Debug.LogError("本地存档保存失败：" + e.Message); }
             pendingAutosavePayload = null;
